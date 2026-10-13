@@ -1,0 +1,77 @@
+{
+ "_about": "Every number the page's sound needs (the page holds none of its own). Each recipe is a list of layers: an oscillator sweeping `from` to `to` Hz, or the core's white noise through a filter. Times are in seconds after the sound starts. `gaps` is the least time between two plays of the same sound. `wind` is the rush of air that rises with speed: a band of noise from `low` to `high` Hz.",
+ "master": 0.5,
+ "floor": 0.0001,
+ "tail": 0.05,
+ "noise_seconds": 2,
+ "seed": 2026,
+ "gap": 0.05,
+ "gaps": {"land": 0.12, "thud": 0.15, "squeak": 0.12, "chicken": 0.2, "clap": 0.15},
+ "wind": {"low": 300, "high": 2400, "q": 0.6, "gain": 0.5, "smooth": 0.08},
+ "recipes": {
+  "start": [
+   {"type": "osc", "wave": "triangle", "from": 660, "to": 660, "at": 0, "attack": 0.005, "dur": 0.09, "gain": 0.25},
+   {"type": "osc", "wave": "triangle", "from": 990, "to": 990, "at": 0.08, "attack": 0.005, "dur": 0.12, "gain": 0.25}
+  ],
+  "jump": [
+   {"type": "noise", "filter": "highpass", "freq": 1800, "q": 0.7, "at": 0, "attack": 0.003, "dur": 0.08, "gain": 0.12}
+  ],
+  "land": [
+   {"type": "noise", "filter": "lowpass", "freq": 500, "q": 0.8, "at": 0, "attack": 0.004, "dur": 0.12, "gain": 0.35},
+   {"type": "osc", "wave": "sine", "from": 120, "to": 60, "at": 0, "attack": 0.004, "dur": 0.12, "gain": 0.25}
+  ],
+  "thud": [
+   {"type": "osc", "wave": "sine", "from": 140, "to": 45, "at": 0, "attack": 0.003, "dur": 0.22, "gain": 0.5},
+   {"type": "noise", "filter": "lowpass", "freq": 700, "q": 0.7, "at": 0, "attack": 0.003, "dur": 0.15, "gain": 0.3}
+  ],
+  "boost": [
+   {"type": "osc", "wave": "sawtooth", "from": 200, "to": 900, "at": 0, "attack": 0.01, "dur": 0.35, "gain": 0.12},
+   {"type": "noise", "filter": "bandpass", "freq": 1500, "q": 1.2, "at": 0, "attack": 0.02, "dur": 0.4, "gain": 0.3}
+  ],
+  "pit": [
+   {"type": "noise", "filter": "lowpass", "freq": 900, "q": 0.5, "at": 0, "attack": 0.01, "dur": 0.45, "gain": 0.5},
+   {"type": "osc", "wave": "sine", "from": 300, "to": 90, "at": 0, "attack": 0.01, "dur": 0.4, "gain": 0.25}
+  ],
+  "finish": [
+   {"type": "osc", "wave": "triangle", "from": 523, "to": 523, "at": 0, "attack": 0.01, "dur": 0.16, "gain": 0.3},
+   {"type": "osc", "wave": "triangle", "from": 659, "to": 659, "at": 0.12, "attack": 0.01, "dur": 0.16, "gain": 0.3},
+   {"type": "osc", "wave": "triangle", "from": 784, "to": 784, "at": 0.24, "attack": 0.01, "dur": 0.4, "gain": 0.3}
+  ],
+  "record": [
+   {"type": "osc", "wave": "triangle", "from": 523, "to": 523, "at": 0, "attack": 0.01, "dur": 0.14, "gain": 0.3},
+   {"type": "osc", "wave": "triangle", "from": 659, "to": 659, "at": 0.1, "attack": 0.01, "dur": 0.14, "gain": 0.3},
+   {"type": "osc", "wave": "triangle", "from": 784, "to": 784, "at": 0.2, "attack": 0.01, "dur": 0.14, "gain": 0.3},
+   {"type": "osc", "wave": "triangle", "from": 1047, "to": 1047, "at": 0.3, "attack": 0.01, "dur": 0.6, "gain": 0.35},
+   {"type": "noise", "filter": "highpass", "freq": 4000, "q": 0.5, "at": 0.3, "attack": 0.05, "dur": 0.8, "gain": 0.15}
+  ],
+  "clap": [
+   {"type": "noise", "filter": "bandpass", "freq": 1400, "q": 1.5, "at": 0, "attack": 0.002, "dur": 0.07, "gain": 0.45}
+  ],
+  "noodle": [
+   {"type": "osc", "wave": "sine", "from": 180, "to": 110, "at": 0, "attack": 0.01, "dur": 0.25, "gain": 0.4},
+   {"type": "noise", "filter": "lowpass", "freq": 400, "q": 1.0, "at": 0, "attack": 0.01, "dur": 0.2, "gain": 0.3}
+  ],
+  "boing": [
+   {"type": "osc", "wave": "sine", "from": 160, "to": 420, "at": 0, "attack": 0.005, "dur": 0.3, "gain": 0.45}
+  ],
+  "squeak": [
+   {"type": "osc", "wave": "square", "from": 1400, "to": 2200, "at": 0, "attack": 0.01, "dur": 0.12, "gain": 0.15},
+   {"type": "osc", "wave": "square", "from": 2200, "to": 1300, "at": 0.11, "attack": 0.01, "dur": 0.14, "gain": 0.12}
+  ],
+  "cheer": [
+   {"type": "noise", "filter": "bandpass", "freq": 900, "q": 0.4, "at": 0, "attack": 0.08, "dur": 0.8, "gain": 0.35},
+   {"type": "osc", "wave": "sawtooth", "from": 440, "to": 520, "at": 0.05, "attack": 0.05, "dur": 0.6, "gain": 0.08}
+  ],
+  "chicken": [
+   {"type": "osc", "wave": "sawtooth", "from": 700, "to": 1500, "at": 0, "attack": 0.02, "dur": 0.18, "gain": 0.2},
+   {"type": "osc", "wave": "sawtooth", "from": 1500, "to": 380, "at": 0.16, "attack": 0.02, "dur": 0.55, "gain": 0.22},
+   {"type": "noise", "filter": "bandpass", "freq": 1100, "q": 3.0, "at": 0.16, "attack": 0.02, "dur": 0.5, "gain": 0.12}
+  ],
+  "join": [
+   {"type": "osc", "wave": "sine", "from": 880, "to": 1320, "at": 0, "attack": 0.01, "dur": 0.18, "gain": 0.2}
+  ],
+  "leave": [
+   {"type": "osc", "wave": "sine", "from": 1320, "to": 660, "at": 0, "attack": 0.01, "dur": 0.18, "gain": 0.18}
+  ]
+ }
+}

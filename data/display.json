@@ -1,0 +1,6 @@
+{
+ "_about": "Numbers the page uses to present, none of them game rules: the haze colour the gym fades into (and the canvas clears to), the shader pass number for the hands, and how often the page writes what is kept to browser storage (in frames).",
+ "haze": [0.86, 0.88, 0.90],
+ "hands_pass": 2,
+ "save_every": 120
+}

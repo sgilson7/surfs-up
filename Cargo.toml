@@ -1,0 +1,15 @@
+[workspace]
+resolver = "2"
+members = ["crates/core", "crates/shim"]
+
+# Speed over size: the movement loop and rollback resimulation run in this
+# module every frame.
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+
+# The core's tests surf whole runs; unoptimised float maths makes them slow
+# enough to stop being run.
+[profile.test]
+opt-level = 2

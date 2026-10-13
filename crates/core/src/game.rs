@@ -1,0 +1,1370 @@
+//! The game: the clock, your surfer, the ghosts, the room, what you hold,
+//! what the screen shows, and what is kept between visits. The page calls
+//! `advance` once a display frame with the clock, the held keys and the
+//! mouse movement, and draws what comes back.
+
+use crate::camera::Camera;
+use crate::map::Map;
+use crate::mesh::{self, FLOATS_PER_VERTEX};
+use crate::models::{hands, kid, thing, Held, Look, Xf};
+use crate::movement::{Body, Cmd, Mover, B_BACK, B_DUCK, B_FORWARD, B_JUMP, B_LEFT, B_RIGHT, B_USE};
+use crate::online::{
+    self, clean_name, Ghost, Peer, RunRecord, LIVE_BATCH, MAX_PEERS, PROTOCOL, SNAPSHOT_EVERY,
+};
+use crate::run::{start_zone, Phase, Stats, Surfer, Tick, Zone};
+use crate::trace::Scratch;
+use crate::vec3::{angle_vectors, v3, wrap180, V3};
+use serde_json::{json, Value};
+
+/// Source's m_yaw and m_pitch: degrees of turn per mouse count at sensitivity 1.
+const DEG_PER_COUNT: f32 = 0.022;
+/// The most ticks one frame may run, so a stalled tab does not try to catch up forever.
+const MAX_CATCH_UP: u32 = 8;
+/// How long a banner stays up, in ticks.
+const BANNER_TICKS: u32 = 64 * 4;
+
+/// Medal times in ticks (64 a second). Provisional until the course has been
+/// played by people (BRIEF.md: a decision that stays with the person).
+pub const GYM_RECORD: u32 = 64 * 80;
+pub const GOLD: u32 = 64 * 100;
+pub const SILVER: u32 = 64 * 130;
+pub const BRONZE: u32 = 64 * 180;
+
+/// How each held thing is earned.
+pub fn requirement(h: Held) -> (&'static str, Option<u32>) {
+    match h {
+        Held::Prayer => ("start", None),
+        Held::Noodle => ("finish", None),
+        Held::Kickball => ("bronze", Some(BRONZE)),
+        Held::Duck => ("silver", Some(SILVER)),
+        Held::FoamFinger => ("gold", Some(GOLD)),
+        Held::Chicken => ("best", None),
+    }
+}
+
+pub fn format_time(ticks: u32) -> String {
+    let ms = ticks as u64 * 1000 / 64;
+    let m = ms / 60000;
+    let s = (ms / 1000) % 60;
+    let r = ms % 1000;
+    format!("{m}:{s:02}.{r:03}")
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Mode {
+    Title,
+    Play,
+    Pause,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct Settings {
+    pub name: String,
+    pub sens: f32,
+    pub fov: f32,
+    pub live: bool,
+    pub ghosts: bool,
+    pub own_ghost: bool,
+    pub volume: f32,
+    pub seed: u32,
+}
+
+impl Default for Settings {
+    fn default() -> Settings {
+        Settings {
+            name: "Surfer".into(),
+            sens: 2.0,
+            fov: 90.0,
+            live: true,
+            ghosts: true,
+            own_ghost: true,
+            volume: 0.7,
+            seed: 0,
+        }
+    }
+}
+
+/// A sound or a moment the page should know about.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Event {
+    pub sound: &'static str,
+    pub gain: f32,
+}
+
+pub struct Room {
+    pub code: String,
+    pub host: bool,
+    pub peers: Vec<Peer>,
+}
+
+pub struct Game {
+    map: Map,
+    zone: Zone,
+    scratch: Scratch,
+    world: (Vec<f32>, usize),
+    pub mode: Mode,
+    pub settings: Settings,
+    // the clock
+    acc_ms: f64,
+    last_ms: Option<f64>,
+    pub tick: u64,
+    alpha: f32,
+    // you
+    pub me: Surfer,
+    prev_body: Body,
+    yaw: f32,
+    pitch: f32,
+    buttons: u8,
+    recording: Option<(Body, Cmd, Vec<Cmd>)>,
+    pub held: Held,
+    pub unlocked: Vec<Held>,
+    squeeze: u32,
+    sway: (f32, f32),
+    bob_phase: f32,
+    last_stats: Option<Stats>,
+    pub best: Option<RunRecord>,
+    pub finishes: u32,
+    banner: Option<(String, Value, u32)>,
+    events: Vec<Event>,
+    // others
+    ghosts: Vec<Ghost>,
+    pub room: Option<Room>,
+    outbox: Vec<(Option<String>, String)>,
+    live_batch: Vec<Cmd>,
+    live_first: u64,
+    /// The surfer's state before the batch being gathered.
+    live_before: (Body, Cmd, Phase),
+    live_batches: u32,
+    /// A newcomer needs our exact state with the next batch.
+    live_force: bool,
+    msg_counter: u32,
+    // the screen
+    css: (f32, f32),
+    camera: Option<Camera>,
+    /// This frame's other surfers and ghosts (and how many vertices are
+    /// opaque), and your hands, built once a frame in `advance`.
+    frame_others: (Vec<f32>, u32),
+    frame_hands: Vec<f32>,
+}
+
+impl Game {
+    pub fn new(map_bytes: &[u8], saved: &str) -> Result<Game, String> {
+        let map = Map::parse(map_bytes)?;
+        let zone = start_zone(&map);
+        let world = mesh::world(&map);
+        let me = Surfer::at_start(&map);
+        let mut g = Game {
+            zone,
+            scratch: Scratch::default(),
+            world,
+            mode: Mode::Title,
+            settings: Settings::default(),
+            acc_ms: 0.0,
+            last_ms: None,
+            tick: 0,
+            alpha: 0.0,
+            prev_body: me.body,
+            yaw: map.spawn_yaw,
+            pitch: 0.0,
+            me,
+            buttons: 0,
+            recording: None,
+            held: Held::Prayer,
+            unlocked: vec![Held::Prayer],
+            squeeze: 0,
+            sway: (0.0, 0.0),
+            bob_phase: 0.0,
+            last_stats: None,
+            best: None,
+            finishes: 0,
+            banner: None,
+            events: Vec::new(),
+            ghosts: Vec::new(),
+            room: None,
+            outbox: Vec::new(),
+            live_batch: Vec::new(),
+            live_first: 0,
+            live_before: (Body::at(V3::default()), Cmd::default(), Phase::Start),
+            live_batches: 0,
+            live_force: true,
+            msg_counter: 0,
+            css: (1.0, 1.0),
+            camera: None,
+            frame_others: (Vec::new(), 0),
+            frame_hands: Vec::new(),
+            map,
+        };
+        g.load(saved);
+        g.rebuild_ghosts();
+        Ok(g)
+    }
+
+    // ---- what is kept between visits ------------------------------------
+
+    fn load(&mut self, saved: &str) {
+        let Ok(v) = serde_json::from_str::<Value>(saved) else {
+            return;
+        };
+        let s = &mut self.settings;
+        if let Some(n) = v["name"].as_str() {
+            s.name = clean_name(n);
+        }
+        if let Some(x) = v["sens"].as_f64() {
+            s.sens = (x as f32).clamp(0.1, 20.0);
+        }
+        if let Some(x) = v["fov"].as_f64() {
+            s.fov = (x as f32).clamp(70.0, 120.0);
+        }
+        if let Some(x) = v["volume"].as_f64() {
+            s.volume = (x as f32).clamp(0.0, 1.0);
+        }
+        s.live = v["live"].as_bool().unwrap_or(true);
+        s.ghosts = v["ghosts"].as_bool().unwrap_or(true);
+        s.own_ghost = v["own_ghost"].as_bool().unwrap_or(true);
+        s.seed = v["seed"].as_u64().unwrap_or(0) as u32;
+        if let Some(list) = v["unlocked"].as_array() {
+            for id in list.iter().filter_map(|x| x.as_str()) {
+                if let Some(h) = Held::from_id(id) {
+                    if !self.unlocked.contains(&h) {
+                        self.unlocked.push(h);
+                    }
+                }
+            }
+        }
+        if let Some(h) = v["held"].as_str().and_then(Held::from_id) {
+            if self.unlocked.contains(&h) {
+                self.held = h;
+            }
+        }
+        self.finishes = v["finishes"].as_u64().unwrap_or(0) as u32;
+        if let Ok(r) = RunRecord::from_json(&v["best"]) {
+            self.best = Some(r);
+        }
+    }
+
+    pub fn saved(&self) -> String {
+        let s = &self.settings;
+        json!({
+            "name": s.name, "sens": s.sens, "fov": s.fov, "volume": s.volume,
+            "live": s.live, "ghosts": s.ghosts, "own_ghost": s.own_ghost, "seed": s.seed,
+            "unlocked": self.unlocked.iter().map(|h| h.id()).collect::<Vec<_>>(),
+            "held": self.held.id(),
+            "finishes": self.finishes,
+            "best": self.best.as_ref().map(|b| b.to_json()).unwrap_or(Value::Null),
+        })
+        .to_string()
+    }
+
+    // ---- menus ------------------------------------------------------------
+
+    pub fn play(&mut self) {
+        if self.mode == Mode::Title {
+            self.respawn();
+        }
+        self.mode = Mode::Play;
+        self.last_ms = None;
+    }
+
+    pub fn pause(&mut self) {
+        if self.mode == Mode::Play {
+            self.mode = Mode::Pause;
+            self.buttons = 0;
+        }
+    }
+
+    pub fn to_title(&mut self) {
+        self.mode = Mode::Title;
+        self.leave_online();
+    }
+
+    fn respawn(&mut self) {
+        self.me = Surfer::at_start(&self.map);
+        self.me.snap_yaw = None;
+        self.prev_body = self.me.body;
+        self.recording = None;
+        self.yaw = self.map.spawn_yaw;
+        self.pitch = 0.0;
+    }
+
+    pub fn set_name(&mut self, name: &str) {
+        self.settings.name = clean_name(name);
+        self.say_hello(None);
+    }
+
+    /// The next shirt colour.
+    pub fn cycle_shirt(&mut self) {
+        self.settings.seed = (self.settings.seed + 1) % crate::models::SHIRTS.len() as u32;
+        self.say_hello(None);
+    }
+
+    pub fn hold(&mut self, id: &str) -> bool {
+        match Held::from_id(id) {
+            Some(h) if self.unlocked.contains(&h) => {
+                self.held = h;
+                self.say_hello(None);
+                true
+            }
+            _ => false,
+        }
+    }
+
+    /// Cycle to the next thing you have (the scroll wheel or Q).
+    pub fn next_held(&mut self) {
+        let have: Vec<Held> = Held::ALL
+            .iter()
+            .copied()
+            .filter(|h| self.unlocked.contains(h))
+            .collect();
+        let i = have.iter().position(|h| *h == self.held).unwrap_or(0);
+        self.held = have[(i + 1) % have.len()];
+        self.say_hello(None);
+    }
+
+    pub fn set_setting(&mut self, key: &str, value: f64) {
+        let s = &mut self.settings;
+        match key {
+            "sens" => s.sens = (value as f32).clamp(0.1, 20.0),
+            "fov" => s.fov = (value as f32).clamp(70.0, 120.0),
+            "volume" => s.volume = (value as f32).clamp(0.0, 1.0),
+            "live" => s.live = value != 0.0,
+            "ghosts" => s.ghosts = value != 0.0,
+            "own_ghost" => s.own_ghost = value != 0.0,
+            _ => {}
+        }
+        if key == "ghosts" || key == "own_ghost" {
+            self.rebuild_ghosts();
+        }
+    }
+
+    // ---- the clock --------------------------------------------------------
+
+    /// One display frame: the page's clock in ms, the held actions, and the
+    /// mouse movement since the last frame in CSS pixels.
+    pub fn advance(&mut self, now_ms: f64, buttons: u32, dx: f64, dy: f64) {
+        let tick_ms = 1000.0 / 64.0;
+        let elapsed = match self.last_ms {
+            Some(l) => (now_ms - l).clamp(0.0, tick_ms * MAX_CATCH_UP as f64),
+            None => 0.0,
+        };
+        self.last_ms = Some(now_ms);
+        let playing = self.mode == Mode::Play;
+        if playing {
+            self.buttons = buttons as u8;
+            let k = self.settings.sens * DEG_PER_COUNT;
+            let turn = dx as f32 * k;
+            self.yaw = wrap180(self.yaw - turn);
+            self.pitch = (self.pitch + dy as f32 * k).clamp(-89.0, 89.0);
+            // the hands trail the view a little
+            self.sway.0 = (self.sway.0 + turn * 0.12).clamp(-6.0, 6.0);
+            self.sway.1 = (self.sway.1 - dy as f32 * k * 0.12).clamp(-5.0, 5.0);
+        }
+        self.acc_ms += elapsed;
+        let mut ran = 0;
+        while self.acc_ms >= tick_ms && ran < MAX_CATCH_UP {
+            self.acc_ms -= tick_ms;
+            self.step_tick(playing);
+            ran += 1;
+        }
+        if self.acc_ms > tick_ms {
+            self.acc_ms = 0.0;
+        }
+        self.alpha = (self.acc_ms / tick_ms) as f32;
+        self.sway.0 *= 0.85;
+        self.sway.1 *= 0.85;
+        self.update_camera();
+        self.frame_others = self.others();
+        self.frame_hands = self.hands();
+    }
+
+    fn step_tick(&mut self, playing: bool) {
+        self.tick += 1;
+        self.prev_body = self.me.body;
+        let buttons = if playing { self.buttons } else { 0 };
+        let cmd = Cmd::new(buttons, self.yaw, self.pitch);
+        let was_use = self.me.last_cmd.has(B_USE);
+        if self.live_batch.is_empty() {
+            self.live_before = (self.me.body, self.me.last_cmd, self.me.phase);
+            self.live_first = self.tick;
+        }
+        let mut mv = Mover::new(&self.map);
+        mv.scratch = std::mem::take(&mut self.scratch);
+        let t = self.me.step(&mut mv, &self.zone, cmd);
+        // ghosts and live surfers move on the same tick
+        let started = t.started;
+        if started {
+            for g in &mut self.ghosts {
+                g.rewind();
+            }
+        }
+        let mut squeaks: Vec<(V3, Held)> = Vec::new();
+        if self.me.phase == Phase::Running || !started {
+            for g in &mut self.ghosts {
+                if self.me.phase == Phase::Running && g.step(&mut mv, &self.zone) {
+                    let h =
+                        Held::from_id(if g.mine { self.held.id() } else { "chicken" }).unwrap_or(Held::Duck);
+                    squeaks.push((g.surfer.body.origin, h));
+                }
+            }
+        }
+        let now = self.tick;
+        if let Some(room) = &mut self.room {
+            for p in &mut room.peers {
+                if let Some(l) = &mut p.live {
+                    l.tick(&mut mv, &self.zone, now);
+                    if l.squeezed {
+                        l.squeezed = false;
+                        squeaks.push((l.origin(), Held::from_id(&p.held).unwrap_or(Held::Prayer)));
+                    }
+                }
+            }
+        }
+        self.scratch = std::mem::take(&mut mv.scratch);
+        drop(mv);
+        for (at, h) in squeaks {
+            let d = (at - self.me.body.origin).length();
+            let gain = (1.0 - d / 3000.0).clamp(0.0, 1.0);
+            if gain > 0.0 && h != Held::Prayer {
+                self.events.push(Event {
+                    sound: squeak_sound(h),
+                    gain,
+                });
+            }
+        }
+        if let Some(y) = self.me.snap_yaw.take() {
+            self.yaw = y;
+            self.pitch = 0.0;
+        }
+        self.after_tick(cmd, t, was_use);
+        self.send_live(cmd);
+        if let Some(b) = &mut self.banner {
+            b.2 = b.2.saturating_sub(1);
+            if b.2 == 0 {
+                self.banner = None;
+            }
+        }
+    }
+
+    fn after_tick(&mut self, cmd: Cmd, t: Tick, was_use: bool) {
+        if let Some(r) = &mut self.recording {
+            r.2.push(cmd);
+        }
+        if t.started {
+            self.recording = Some((self.me.body, cmd, Vec::new()));
+            self.events.push(Event {
+                sound: "start",
+                gain: 0.6,
+            });
+        }
+        if cmd.has(B_USE) && !was_use {
+            self.squeeze = 12;
+            if self.held != Held::Prayer {
+                self.events.push(Event {
+                    sound: squeak_sound(self.held),
+                    gain: 1.0,
+                });
+            } else {
+                self.events.push(Event {
+                    sound: "clap",
+                    gain: 0.7,
+                });
+            }
+        }
+        self.squeeze = self.squeeze.saturating_sub(1);
+        if t.moved.jumped {
+            self.events.push(Event {
+                sound: "jump",
+                gain: 0.5,
+            });
+        }
+        if t.moved.landed {
+            self.events.push(Event {
+                sound: "land",
+                gain: 0.6,
+            });
+        }
+        if t.moved.impact > 300.0 {
+            self.events.push(Event {
+                sound: "thud",
+                gain: (t.moved.impact / 1500.0).min(1.0),
+            });
+        }
+        if t.boosted {
+            self.events.push(Event {
+                sound: "boost",
+                gain: 0.8,
+            });
+        }
+        if self.me.phase == Phase::Running {
+            self.last_stats = Some(self.me.stats);
+        }
+        if t.fell {
+            self.events.push(Event {
+                sound: "pit",
+                gain: 1.0,
+            });
+            self.show_banner("banner_fell", json!({}));
+        }
+        if let Some(e) = t.exited {
+            self.events.push(Event {
+                sound: "pit",
+                gain: 0.6,
+            });
+            self.show_banner("banner_early_exit", json!({ "door": e + 1 }));
+        }
+        if t.teleported {
+            self.recording = None;
+            self.prev_body = self.me.body;
+        }
+        if let Some((ending, ticks)) = t.finished {
+            self.finish(ending, ticks);
+        }
+    }
+
+    fn finish(&mut self, ending: u8, ticks: u32) {
+        self.finishes += 1;
+        let stats = self.last_stats.unwrap_or_default();
+        let Some((start, prev, cmds)) = self.recording.take() else {
+            return;
+        };
+        let run = RunRecord {
+            name: self.settings.name.clone(),
+            seed: self.settings.seed,
+            ticks,
+            ending,
+            start,
+            prev,
+            cmds,
+            sync: stats.sync_pct(),
+            strafes: stats.strafes,
+        };
+        let improved = self.best.as_ref().map(|b| ticks < b.ticks).unwrap_or(true);
+        let old_best = self.best.as_ref().map(|b| b.ticks);
+        if improved && run.cmds.len() as u32 == ticks {
+            self.best = Some(run.clone());
+            self.rebuild_ghosts();
+            // the run goes to the room once, whole
+            let text = json!({"t": "run", "run": run.to_json()}).to_string();
+            self.send(None, text);
+        }
+        let mut new_things = Vec::new();
+        for h in Held::ALL {
+            if self.unlocked.contains(&h) {
+                continue;
+            }
+            let earned = match requirement(h) {
+                (_, Some(limit)) => ticks <= limit,
+                ("finish", None) => true,
+                ("best", None) => ticks <= self.best_on_board_excluding_me(),
+                _ => false,
+            };
+            if earned {
+                self.unlocked.push(h);
+                new_things.push(h.id());
+            }
+        }
+        if let Some(last) = new_things.last() {
+            // a new thing goes straight into your hands
+            if let Some(h) = Held::from_id(last) {
+                self.held = h;
+                self.say_hello(None);
+            }
+        }
+        self.events.push(Event {
+            sound: if improved { "record" } else { "finish" },
+            gain: 1.0,
+        });
+        self.show_banner(
+            "banner_finish",
+            json!({
+                "time": format_time(ticks),
+                "pb": improved,
+                "was": old_best.map(format_time),
+                "sync": format!("{:.1}", stats.sync_pct()),
+                "strafes": stats.strafes,
+                "top": stats.top_speed as u32,
+                "new": new_things,
+            }),
+        );
+    }
+
+    /// The best time on the board that is not yours (the gym record counts).
+    fn best_on_board_excluding_me(&self) -> u32 {
+        let mut best = GYM_RECORD;
+        if let Some(room) = &self.room {
+            for p in &room.peers {
+                if let Some(r) = &p.best {
+                    best = best.min(r.ticks);
+                }
+            }
+        }
+        best
+    }
+
+    fn show_banner(&mut self, key: &str, args: Value) {
+        self.banner = Some((key.to_string(), args, BANNER_TICKS));
+    }
+
+    fn rebuild_ghosts(&mut self) {
+        self.ghosts.clear();
+        if !self.settings.ghosts {
+            return;
+        }
+        if self.settings.own_ghost {
+            if let Some(b) = &self.best {
+                self.ghosts.push(Ghost::new(b.clone(), true));
+            }
+        }
+        if let Some(room) = &self.room {
+            for p in &room.peers {
+                if let Some(r) = &p.best {
+                    self.ghosts.push(Ghost::new(r.clone(), false));
+                }
+            }
+        }
+    }
+
+    // ---- online -----------------------------------------------------------
+
+    /// Host a room. The page supplies a number (its clock) for the code.
+    pub fn host_online(&mut self, seed: f64) -> String {
+        const ALPHABET: &[u8] = b"ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+        let mut x = (seed as u64) ^ 0x9E37_79B9_7F4A_7C15;
+        let mut code = String::new();
+        for _ in 0..5 {
+            x ^= x << 13;
+            x ^= x >> 7;
+            x ^= x << 17;
+            code.push(ALPHABET[(x % ALPHABET.len() as u64) as usize] as char);
+        }
+        self.room = Some(Room {
+            code: code.clone(),
+            host: true,
+            peers: Vec::new(),
+        });
+        code
+    }
+
+    /// Join a room by its code; false if the text cannot be a code.
+    pub fn join_online(&mut self, code: &str) -> bool {
+        let t: String = code
+            .trim()
+            .to_ascii_uppercase()
+            .chars()
+            .filter(|c| !c.is_whitespace())
+            .collect();
+        let ok =
+            (t.is_empty() || (4..=12).contains(&t.len())) && t.chars().all(|c| c.is_ascii_alphanumeric());
+        if ok {
+            self.room = Some(Room {
+                code: t,
+                host: false,
+                peers: Vec::new(),
+            });
+        }
+        ok
+    }
+
+    pub fn leave_online(&mut self) {
+        if self.room.take().is_some() {
+            self.rebuild_ghosts();
+        }
+        self.outbox.clear();
+    }
+
+    pub fn room_code(&self) -> String {
+        self.room.as_ref().map(|r| r.code.clone()).unwrap_or_default()
+    }
+
+    pub fn net_peer(&mut self, id: &str, host: bool) {
+        let Some(room) = &mut self.room else { return };
+        if room.peers.iter().any(|p| p.id == id) {
+            return;
+        }
+        if room.peers.len() >= MAX_PEERS {
+            self.send(Some(id.to_string()), json!({"t": "full"}).to_string());
+            return;
+        }
+        room.peers.push(Peer::new(id, host));
+        self.say_hello(Some(id.to_string()));
+        // a newcomer gets our best run once, so they can race it at once
+        if let Some(b) = &self.best {
+            let text = json!({"t": "run", "run": b.to_json()}).to_string();
+            self.send(Some(id.to_string()), text);
+        }
+        // and our exact state with the next batch
+        self.live_force = true;
+        self.events.push(Event {
+            sound: "join",
+            gain: 0.6,
+        });
+    }
+
+    pub fn net_left(&mut self, id: &str) {
+        if let Some(room) = &mut self.room {
+            let before = room.peers.len();
+            room.peers.retain(|p| p.id != id);
+            if room.peers.len() != before {
+                self.rebuild_ghosts();
+                self.events.push(Event {
+                    sound: "leave",
+                    gain: 0.5,
+                });
+            }
+        }
+    }
+
+    pub fn net_error(&mut self, key: &str) {
+        self.show_banner("banner_net_error", json!({ "key": key }));
+    }
+
+    pub fn net_message(&mut self, id: &str, text: &str) {
+        let Ok(v) = serde_json::from_str::<Value>(text) else {
+            return;
+        };
+        if v["t"] == "part" {
+            let whole = self
+                .room
+                .as_mut()
+                .and_then(|r| r.peers.iter_mut().find(|p| p.id == id))
+                .and_then(|p| p.part(&v));
+            if let Some(w) = whole {
+                self.net_message(id, &w);
+            }
+            return;
+        }
+        let now = self.tick;
+        let mut mv = Mover::new(&self.map);
+        mv.scratch = std::mem::take(&mut self.scratch);
+        let mut ghosts_changed = false;
+        let mut full = false;
+        let mut newcomer_best: Option<u32> = None;
+        if let Some(room) = &mut self.room {
+            if let Some(p) = room.peers.iter_mut().find(|p| p.id == id) {
+                match v["t"].as_str().unwrap_or("") {
+                    "hi" => {
+                        if v["v"].as_u64() != Some(PROTOCOL as u64) {
+                            full = false;
+                        }
+                        p.name = clean_name(v["name"].as_str().unwrap_or(""));
+                        p.seed = v["seed"].as_u64().unwrap_or(0) as u32;
+                        let h = v["held"].as_str().unwrap_or("prayer");
+                        p.held = Held::from_id(h).map(|h| h.id()).unwrap_or("prayer").to_string();
+                    }
+                    "in" => {
+                        let _ = p.hear_live(&mut mv, &self.zone, &v, now);
+                    }
+                    "run" => {
+                        if let Ok(r) = RunRecord::from_json(&v["run"]) {
+                            let better = p.best.as_ref().map(|b| r.ticks < b.ticks).unwrap_or(true);
+                            if better {
+                                newcomer_best = Some(r.ticks);
+                                p.best = Some(r);
+                                ghosts_changed = true;
+                            }
+                        }
+                    }
+                    "full" => full = true,
+                    _ => {}
+                }
+            }
+        }
+        self.scratch = mv.scratch;
+        if ghosts_changed {
+            self.rebuild_ghosts();
+            if let Some(t) = newcomer_best {
+                let name = self
+                    .room
+                    .as_ref()
+                    .and_then(|r| r.peers.iter().find(|p| p.id == id))
+                    .map(|p| p.name.clone())
+                    .unwrap_or_default();
+                self.show_banner("banner_peer_run", json!({"name": name, "time": format_time(t)}));
+            }
+        }
+        if full {
+            self.show_banner("banner_room_full", json!({}));
+            self.room = None;
+        }
+    }
+
+    fn say_hello(&mut self, to: Option<String>) {
+        if self.room.is_none() {
+            return;
+        }
+        let text = json!({
+            "t": "hi", "v": PROTOCOL, "name": self.settings.name,
+            "seed": self.settings.seed, "held": self.held.id(),
+        })
+        .to_string();
+        self.send(to, text);
+    }
+
+    fn send(&mut self, to: Option<String>, text: String) {
+        if self.room.is_none() {
+            return;
+        }
+        self.msg_counter += 1;
+        let id = format!("m{}", self.msg_counter);
+        for part in online::split(text, &id) {
+            self.outbox.push((to.clone(), part));
+        }
+    }
+
+    fn send_live(&mut self, cmd: Cmd) {
+        let peers = self.room.as_ref().map(|r| r.peers.len()).unwrap_or(0);
+        if peers == 0 || !self.settings.live || self.mode == Mode::Title {
+            self.live_batch.clear();
+            self.live_force = true;
+            return;
+        }
+        self.live_batch.push(cmd);
+        if (self.live_batch.len() as u32) < LIVE_BATCH {
+            return;
+        }
+        // the exact state before this batch: twice a second, and at once for a newcomer
+        let due = self.live_force || self.live_batches.is_multiple_of(SNAPSHOT_EVERY / LIVE_BATCH);
+        let (b, c, ph) = self.live_before;
+        let state = if due { Some((&b, c, ph)) } else { None };
+        let text = online::live_message(self.live_first, &self.live_batch, state);
+        self.live_batch.clear();
+        self.live_batches += 1;
+        self.live_force = false;
+        self.outbox.push((None, text));
+    }
+
+    pub fn net_outbox(&mut self) -> String {
+        let out: Vec<Value> = self
+            .outbox
+            .drain(..)
+            .map(|(to, text)| json!([to, text]))
+            .collect();
+        Value::Array(out).to_string()
+    }
+
+    // ---- what the page draws ----------------------------------------------
+
+    pub fn resize(&mut self, css_w: f32, css_h: f32, dpr: f32) -> [u32; 2] {
+        self.css = (css_w.max(1.0), css_h.max(1.0));
+        let scale = dpr.clamp(0.5, 2.0);
+        [
+            (css_w * scale).round().max(1.0) as u32,
+            (css_h * scale).round().max(1.0) as u32,
+        ]
+    }
+
+    fn eye_body(&self) -> (V3, f32) {
+        let a = self.alpha;
+        let o = self.prev_body.origin.lerp(self.me.body.origin, a);
+        let eye = self.prev_body.eye() + (self.me.body.eye() - self.prev_body.eye()) * a;
+        (o, eye)
+    }
+
+    fn update_camera(&mut self) {
+        let (o, eye) = self.eye_body();
+        let (yaw, pitch) = if self.mode == Mode::Title {
+            // the title: a slow look around the start
+            ((self.tick as f32 * 0.05) % 360.0, 8.0)
+        } else {
+            (self.yaw, self.pitch)
+        };
+        let at = if self.mode == Mode::Title {
+            self.map.spawn + v3(0.0, 0.0, 120.0)
+        } else {
+            o + v3(0.0, 0.0, eye)
+        };
+        self.camera = Some(Camera::new(
+            at,
+            pitch,
+            yaw,
+            self.settings.fov,
+            self.css.0 / self.css.1,
+        ));
+    }
+
+    pub fn world_vertices(&self) -> &[f32] {
+        &self.world.0
+    }
+
+    /// [opaque vertex count, total vertex count] of the world.
+    pub fn world_counts(&self) -> [u32; 2] {
+        [
+            self.world.1 as u32,
+            (self.world.0.len() / FLOATS_PER_VERTEX) as u32,
+        ]
+    }
+
+    /// The matrix (16), the eye (3), the clock in seconds (1), the speed (1).
+    pub fn view(&self) -> Vec<f32> {
+        let Some(c) = &self.camera else {
+            return vec![0.0; 21];
+        };
+        let mut v = c.matrix().to_vec();
+        v.extend([
+            c.eye.x,
+            c.eye.y,
+            c.eye.z,
+            self.tick as f32 / 64.0,
+            self.me.body.velocity.length(),
+        ]);
+        v
+    }
+
+    /// Other surfers (opaque) then ghosts (see-through), and how many of
+    /// the vertices are opaque.
+    fn others(&self) -> (Vec<f32>, u32) {
+        let mut out = Vec::new();
+        let a = self.alpha;
+        if let Some(room) = &self.room {
+            for p in &room.peers {
+                if let Some(l) = &p.live {
+                    let o = l.prev_origin.lerp(l.origin(), a);
+                    let yaw = l.shown.last_cmd.yaw_deg();
+                    let lean = lean_of(l.shown.last_cmd);
+                    kid(
+                        &mut out,
+                        o,
+                        yaw,
+                        lean,
+                        l.shown.body.ducked,
+                        &Look::from_seed(p.seed),
+                        false,
+                    );
+                    held_on_kid(&mut out, o, yaw, &p.held, false);
+                }
+            }
+        }
+        let opaque = (out.len() / FLOATS_PER_VERTEX) as u32;
+        for g in &self.ghosts {
+            if g.done() && self.me.phase == Phase::Running {
+                continue;
+            }
+            let o = g.prev_origin.lerp(g.surfer.body.origin, a);
+            let yaw = g.yaw();
+            kid(
+                &mut out,
+                o,
+                yaw,
+                lean_of(g.surfer.last_cmd),
+                g.surfer.body.ducked,
+                &Look::from_seed(g.run.seed),
+                true,
+            );
+        }
+        (out, opaque)
+    }
+
+    fn hands(&self) -> Vec<f32> {
+        let mut out = Vec::new();
+        if self.mode == Mode::Title {
+            return out;
+        }
+        let Some(c) = &self.camera else { return out };
+        let cam = Xf::new(c.eye, c.forward, -c.right, c.up);
+        let speed = self.me.body.velocity.length2d();
+        let bob = if self.me.body.on_ground && speed > 20.0 {
+            let (s, _) = crate::vec3::sin_cos_deg((self.tick as f64 * 9.0) % 360.0);
+            s as f32 * 0.4 * (speed / 250.0).min(1.0)
+        } else {
+            0.0
+        };
+        let squeeze = (self.squeeze as f32 / 12.0).clamp(0.0, 1.0);
+        let look = Look::from_seed(self.settings.seed);
+        hands(
+            &mut out,
+            &cam,
+            self.held,
+            squeeze,
+            self.sway,
+            bob + self.bob_phase,
+            look.skin,
+            look.shirt,
+        );
+        out
+    }
+
+    /// Name tags: where each other surfer's name goes on the screen.
+    pub fn labels(&self) -> String {
+        let mut out = Vec::new();
+        let Some(c) = &self.camera else { return "[]".into() };
+        let (w, h) = self.css;
+        let a = self.alpha;
+        if let Some(room) = &self.room {
+            for p in &room.peers {
+                if let Some(l) = &p.live {
+                    let o = l.prev_origin.lerp(l.origin(), a) + v3(0.0, 0.0, 84.0);
+                    if let Some((x, y, d)) = c.project(o, w, h) {
+                        out.push(json!({"name": p.name, "x": x, "y": y, "far": d > 4000.0, "ghost": false}));
+                    }
+                }
+            }
+        }
+        for g in &self.ghosts {
+            if g.done() && self.me.phase == Phase::Running {
+                continue;
+            }
+            let o = g.prev_origin.lerp(g.surfer.body.origin, a) + v3(0.0, 0.0, 84.0);
+            if let Some((x, y, d)) = c.project(o, w, h) {
+                out.push(json!({"name": g.run.name, "x": x, "y": y, "far": d > 4000.0, "ghost": true, "mine": g.mine}));
+            }
+        }
+        Value::Array(out).to_string()
+    }
+
+    pub fn others_vertices(&self) -> &[f32] {
+        &self.frame_others.0
+    }
+
+    pub fn others_opaque(&self) -> u32 {
+        self.frame_others.1
+    }
+
+    pub fn hands_vertices(&self) -> &[f32] {
+        &self.frame_hands
+    }
+
+    pub fn hud(&self) -> String {
+        let s = &self.me.stats;
+        let running = self.me.phase == Phase::Running;
+        let speed = self.me.body.velocity.length2d();
+        let b = self.buttons;
+        let before = self.prev_body.velocity.length2d();
+        let trend = if speed > before + 0.5 {
+            "up"
+        } else if speed < before - 0.5 {
+            "down"
+        } else {
+            ""
+        };
+        json!({
+            "speed": speed as u32,
+            "trend": trend,
+            "fall": (-self.me.body.velocity.z).max(0.0) as u32,
+            "wind": (self.me.body.velocity.length() / 3000.0).min(1.0),
+            "running": running,
+            "time": if running { format_time(s.ticks) } else { format_time(0) },
+            "sync": if running { format!("{:.1}", s.sync_pct()) } else { "-".into() },
+            "gain": if running { format!("{:.1}", s.gain_pct()) } else { "-".into() },
+            "strafes": s.strafes,
+            "best": self.best.as_ref().map(|r| format_time(r.ticks)),
+            "keys": {
+                "w": b & B_FORWARD != 0, "a": b & B_LEFT != 0, "s": b & B_BACK != 0,
+                "d": b & B_RIGHT != 0, "jump": b & B_JUMP != 0, "duck": b & B_DUCK != 0,
+            },
+            "banner": self.banner.as_ref().map(|(k, a, _)| json!({"key": k, "args": a})),
+            "held": self.held.id(),
+            "people": self.room.as_ref().map(|r| r.peers.len() + 1).unwrap_or(1),
+        })
+        .to_string()
+    }
+
+    pub fn screen(&self) -> String {
+        let mode = match self.mode {
+            Mode::Title => "title",
+            Mode::Play => "play",
+            Mode::Pause => "pause",
+        };
+        let mut board: Vec<Value> = Vec::new();
+        board.push(json!({"name": "gym_record", "ticks": GYM_RECORD, "time": format_time(GYM_RECORD), "coach": true}));
+        if let Some(b) = &self.best {
+            board.push(json!({"name": self.settings.name, "ticks": b.ticks, "time": format_time(b.ticks), "me": true, "held": self.held.id(), "sync": format!("{:.1}", b.sync)}));
+        }
+        let mut people = vec![
+            json!({"name": self.settings.name, "me": true, "held": self.held.id(), "host": self.room.as_ref().map(|r| r.host).unwrap_or(false)}),
+        ];
+        if let Some(room) = &self.room {
+            for p in &room.peers {
+                people
+                    .push(json!({"name": p.name, "held": p.held, "host": p.host, "live": p.live.is_some()}));
+                if let Some(r) = &p.best {
+                    board.push(json!({"name": p.name, "ticks": r.ticks, "time": format_time(r.ticks), "held": p.held, "sync": format!("{:.1}", r.sync)}));
+                }
+            }
+        }
+        board.sort_by_key(|e| e["ticks"].as_u64().unwrap_or(u64::MAX));
+        for (i, e) in board.iter_mut().enumerate() {
+            e["place"] = json!(i + 1);
+        }
+        let items: Vec<Value> = Held::ALL
+            .iter()
+            .map(|h| {
+                let (need, limit) = requirement(*h);
+                json!({
+                    "id": h.id(), "need": need, "time": limit.map(format_time),
+                    "have": self.unlocked.contains(h), "held": *h == self.held,
+                })
+            })
+            .collect();
+        let s = &self.settings;
+        json!({
+            "mode": mode,
+            "room": self.room.as_ref().map(|r| r.code.clone()),
+            "host": self.room.as_ref().map(|r| r.host).unwrap_or(false),
+            "people": people,
+            "board": board,
+            "items": items,
+            "finishes": self.finishes,
+            "settings": {"name": s.name, "sens": format!("{:.2}", s.sens), "fov": s.fov as u32,
+                "live": s.live, "ghosts": s.ghosts, "own_ghost": s.own_ghost, "volume": s.volume,
+                "volume_pct": (s.volume * 100.0).round() as u32, "seed": s.seed,
+                "shirt": hex(Look::from_seed(s.seed).shirt)},
+        })
+        .to_string()
+    }
+
+    /// Sounds since the last call, drained.
+    pub fn events(&mut self) -> String {
+        let out: Vec<Value> = self
+            .events
+            .drain(..)
+            .map(|e| json!([e.sound, e.gain * self.settings.volume]))
+            .collect();
+        Value::Array(out).to_string()
+    }
+
+    /// Nudge a number setting by one step up or down (the page's +/- buttons).
+    pub fn nudge(&mut self, key: &str, up: bool) {
+        let s = &self.settings;
+        let (v, step) = match key {
+            "sens" => (s.sens, if s.sens < 1.0 { 0.05 } else { 0.1 }),
+            "fov" => (s.fov, 5.0),
+            "volume" => (s.volume, 0.1),
+            _ => return,
+        };
+        let nv = if up { v + step } else { v - step };
+        self.set_setting(key, ((nv * 100.0).round() / 100.0) as f64);
+    }
+
+    /// A developer's shortcut from the page's `?at=x,y,z,yaw,pitch`.
+    pub fn dev_at(&mut self, text: &str) {
+        let v: Vec<f32> = text
+            .split(',')
+            .filter_map(|t| t.trim().parse::<f32>().ok())
+            .collect();
+        if v.len() >= 3 {
+            let yaw = v.get(3).copied().unwrap_or(0.0);
+            let pitch = v.get(4).copied().unwrap_or(0.0);
+            self.dev_place(v[0], v[1], v[2], yaw, pitch);
+        }
+    }
+
+    /// A developer's shortcut: put the surfer at a point (the core ignores
+    /// it online). Used by the browser check to look at the course.
+    pub fn dev_place(&mut self, x: f32, y: f32, z: f32, yaw: f32, pitch: f32) {
+        if self.room.is_some() {
+            return;
+        }
+        self.me.body = Body::at(v3(x, y, z));
+        self.me.phase = Phase::Start;
+        self.prev_body = self.me.body;
+        self.yaw = yaw;
+        self.pitch = pitch;
+        self.recording = None;
+    }
+}
+
+fn hex(c: [f32; 3]) -> String {
+    let b = |x: f32| (x.clamp(0.0, 1.0) * 255.0).round() as u32;
+    format!("#{:02x}{:02x}{:02x}", b(c[0]), b(c[1]), b(c[2]))
+}
+
+fn squeak_sound(h: Held) -> &'static str {
+    match h {
+        Held::Prayer => "clap",
+        Held::Noodle => "noodle",
+        Held::Kickball => "boing",
+        Held::Duck => "squeak",
+        Held::FoamFinger => "cheer",
+        Held::Chicken => "chicken",
+    }
+}
+
+/// Lean into the strafe: left key leans left.
+fn lean_of(c: Cmd) -> f32 {
+    let mut l = 0.0;
+    if c.has(B_LEFT) {
+        l += 18.0;
+    }
+    if c.has(B_RIGHT) {
+        l -= 18.0;
+    }
+    l
+}
+
+/// The thing another surfer holds, out in their right hand.
+fn held_on_kid(out: &mut Vec<f32>, origin: V3, yaw: f32, id: &str, ghost: bool) {
+    let Some(h) = Held::from_id(id) else { return };
+    if h == Held::Prayer || ghost {
+        return;
+    }
+    let (f, r, _) = angle_vectors(0.0, yaw);
+    let at = origin + f * 4.0 + r * 30.0 + v3(0.0, 0.0, 44.0);
+    let frame = Xf::new(at, f, -r, v3(0.0, 0.0, 1.0)).scaled(1.3);
+    thing(out, &frame, h, 1.0, mesh::M_KID);
+}
+
+/// The numbers the page needs to lay out what the core returns: the vertex
+/// layout, the action bits, and the material numbers the shader paints. The
+/// page holds none of these itself.
+pub fn numbers() -> String {
+    use crate::mesh::*;
+    json!({
+        "floats_per_vertex": FLOATS_PER_VERTEX,
+        "stride": FLOATS_PER_VERTEX * 4,
+        "attributes": [["aPos", 3, 0], ["aNormal", 3, 12], ["aColor", 3, 24], ["aMat", 1, 36]],
+        "view": {"matrix": [0, 16], "eye": [16, 19], "time": 19, "speed": 20},
+        "actions": {
+            "forward": B_FORWARD, "back": B_BACK, "left": B_LEFT, "right": B_RIGHT,
+            "jump": B_JUMP, "duck": B_DUCK, "use": B_USE, "reset": crate::movement::B_RESET,
+        },
+        "materials": {"net": M_NET, "ghost": M_GHOST, "hand": M_HAND},
+        "tick_ms": 1000.0 / 64.0,
+    })
+    .to_string()
+}
+
+/// White noise for the page's sounds, from a seed (the page may not draw
+/// random numbers). A xorshift generator; values in [-1, 1].
+pub fn noise(samples: u32, seed: u32) -> Vec<f32> {
+    let mut x = seed as u64 | 1;
+    (0..samples.min(1 << 20))
+        .map(|_| {
+            x ^= x << 13;
+            x ^= x >> 7;
+            x ^= x << 17;
+            ((x >> 40) as f32 / (1u64 << 23) as f32) - 1.0
+        })
+        .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn game() -> Game {
+        Game::new(include_bytes!("../../../data/maps/surf_utopia.bin"), "").unwrap()
+    }
+
+    #[test]
+    fn times_read_like_a_surf_timer() {
+        assert_eq!(format_time(0), "0:00.000");
+        assert_eq!(format_time(64), "0:01.000");
+        assert_eq!(format_time(64 * 83 + 32), "1:23.500");
+    }
+
+    #[test]
+    fn the_game_starts_on_the_title_and_plays_from_the_start() {
+        let mut g = game();
+        assert_eq!(g.mode, Mode::Title);
+        g.play();
+        let mut t = 0.0;
+        for _ in 0..120 {
+            t += 16.0;
+            g.advance(t, 0, 0.0, 0.0);
+        }
+        assert!(g.me.body.on_ground);
+        assert!(g.tick > 100);
+        let v = g.view();
+        assert_eq!(v.len(), 21);
+        let hud: Value = serde_json::from_str(&g.hud()).unwrap();
+        assert_eq!(hud["running"], false);
+        let s: Value = serde_json::from_str(&g.screen()).unwrap();
+        assert_eq!(s["mode"], "play");
+        assert_eq!(s["items"].as_array().unwrap().len(), 6);
+        assert!(!g.hands_vertices().is_empty());
+    }
+
+    #[test]
+    fn the_mouse_turns_the_view_the_source_way() {
+        let mut g = game();
+        g.play();
+        g.advance(0.0, 0, 0.0, 0.0);
+        let y0 = g.yaw;
+        g.advance(16.0, 0, 100.0, 0.0);
+        // 100 counts at sensitivity 2: 4.4 degrees to the right (yaw falls)
+        assert!((wrap180(y0 - g.yaw) - 4.4).abs() < 1e-3);
+    }
+
+    fn finish_in(g: &mut Game, ticks: u32) {
+        let cmds = vec![Cmd::new(0, 0.0, 0.0); ticks as usize];
+        g.recording = Some((g.me.body, Cmd::default(), cmds));
+        g.finish(5, ticks);
+    }
+
+    #[test]
+    fn times_earn_things_to_hold_and_the_best_time_earns_the_chicken() {
+        let mut slow = game();
+        finish_in(&mut slow, BRONZE + 64);
+        assert_eq!(
+            slow.unlocked,
+            vec![Held::Prayer, Held::Noodle],
+            "finishing earns the noodle only"
+        );
+        assert_eq!(
+            slow.held,
+            Held::Noodle,
+            "a new thing goes straight into your hands"
+        );
+        let mut silver = game();
+        finish_in(&mut silver, SILVER);
+        assert!(silver.unlocked.contains(&Held::Duck) && !silver.unlocked.contains(&Held::FoamFinger));
+        let mut best = game();
+        finish_in(&mut best, GYM_RECORD - 1);
+        assert_eq!(
+            best.unlocked.len(),
+            Held::ALL.len(),
+            "beating the gym record earns everything"
+        );
+        assert_eq!(best.held, Held::Chicken);
+        assert_eq!(best.best.as_ref().map(|r| r.ticks), Some(GYM_RECORD - 1));
+    }
+
+    #[test]
+    fn what_is_kept_comes_back() {
+        let mut g = game();
+        g.set_name("  Pat  ");
+        g.set_setting("sens", 3.5);
+        g.unlocked.push(Held::Duck);
+        g.hold("duck");
+        let text = g.saved();
+        let h = Game::new(include_bytes!("../../../data/maps/surf_utopia.bin"), &text).unwrap();
+        assert_eq!(h.settings.name, "Pat");
+        assert_eq!(h.settings.sens, 3.5);
+        assert_eq!(h.held, Held::Duck);
+        // a thing you have not earned cannot be held
+        let mut k = game();
+        assert!(!k.hold("chicken"));
+    }
+
+    #[test]
+    fn two_games_meet_and_see_each_other_surf() {
+        let mut a = game();
+        let mut b = game();
+        a.host_online(42.0);
+        b.join_online(&a.room_code());
+        a.play();
+        b.play();
+        a.net_peer("b", false);
+        b.net_peer("a", true);
+        let mut t = 0.0;
+        for i in 0..400 {
+            t += 1000.0 / 64.0;
+            a.advance(t, if i > 100 { B_FORWARD as u32 } else { 0 }, 0.0, 0.0);
+            b.advance(t, 0, 0.0, 0.0);
+            let out_a: Value = serde_json::from_str(&a.net_outbox()).unwrap();
+            for m in out_a.as_array().unwrap() {
+                b.net_message("a", m[1].as_str().unwrap());
+            }
+            let out_b: Value = serde_json::from_str(&b.net_outbox()).unwrap();
+            for m in out_b.as_array().unwrap() {
+                a.net_message("b", m[1].as_str().unwrap());
+            }
+        }
+        let room = b.room.as_ref().unwrap();
+        let pa = &room.peers[0];
+        assert_eq!(pa.name, "Surfer");
+        let live = pa.live.as_ref().expect("b sees a surfing");
+        let gap = (live.origin() - a.me.body.origin).length();
+        assert!(gap < 64.0, "b draws a near where a is: {gap}");
+        assert!(b.others_opaque() > 0 && !b.others_vertices().is_empty());
+    }
+}

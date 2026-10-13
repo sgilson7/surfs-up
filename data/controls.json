@@ -1,0 +1,27 @@
+{
+ "_about": "Which key does which action (the core gives each its bit), and which keys are the page's own commands. Mouse buttons are Mouse0 (left) and Mouse2 (right); Wheel is the scroll wheel. Control is not used for ducking because Ctrl+W closes a browser tab.",
+ "actions": {
+  "KeyW": "forward",
+  "KeyS": "back",
+  "KeyA": "left",
+  "KeyD": "right",
+  "ArrowUp": "forward",
+  "ArrowDown": "back",
+  "ArrowLeft": "left",
+  "ArrowRight": "right",
+  "Space": "jump",
+  "Wheel": "jump",
+  "ShiftLeft": "duck",
+  "KeyC": "duck",
+  "Mouse0": "use",
+  "KeyE": "use",
+  "KeyR": "reset"
+ },
+ "commands": {
+  "Tab": "board",
+  "KeyQ": "next_held",
+  "KeyM": "mute",
+  "Escape": "pause",
+  "KeyP": "pause"
+ }
+}

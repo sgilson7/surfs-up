@@ -1,0 +1,11 @@
+# Licences
+
+The code is MIT (`LICENSE`). Every picture in `web/art/` is drawn by `tools/art.py` from TikZ written in this repository; every sound is synthesized by the page from `data/sounds.json`. No texture, model or sound from any game ships.
+
+**The map.** `data/maps/surf_utopia.bin` holds the brush geometry (planes), trigger volumes and start position of **surf_utopia_v3 by Panzerhandschuh**, read by `tools/extract_map.py` from the map file published on GameBanana (https://gamebanana.com/mods/72161, Team Fortress 2; the same course was ported to Counter-Strike: Source and Counter-Strike: Global Offensive, where the jail-less version is surf_utopia_njv). No texture, lightmap or model from the map is used: the look is redrawn as a school gym. This is a non-commercial fan recreation with credit to the author; whether that is acceptable to publish is a decision recorded for the person in `SECOND-ORDER.md`.
+
+**The movement** is a reimplementation, from the published Source SDK 2013 code and the community's documentation (`docs/RESEARCH-surf-movement.md` lists every source), of how Source moves a player. No Valve code is copied verbatim; function names follow Source's so that a reader can compare them.
+
+`web/net/vendor/trystero-nostr-0.25.4.js` is [Trystero](https://github.com/dmotz/trystero) by Dan Motzenbecker (MIT), bundled with its dependencies by esm.sh, the same file ptonkle's Ape Race and Sam's Floodline, Vagrancy, Ribbit King and Raiders of the Lost Mart vendor (`web/net/vendor/README.md`). `web/net/mesh.js` is ptonkle's Ape Race `web/online.js` (from his Mandible), used as the brief asks (ptonkle's repository carries no licence file, so his agreement is a worklist item in `SECOND-ORDER.md`).
+
+Counter-Strike is Valve's. Surfs Up! is not affiliated with Valve, with Panzerhandschuh, or with any surf server.

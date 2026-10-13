@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- Reference default, widened by one word as in Raiders of the Lost Mart:
+       connect-src adds wss: so the room-code path can reach the public Nostr
+       relays that introduce two browsers (web/net/). Nothing opens one until
+       a person hosts or joins. 'wasm-unsafe-eval' lets the page compile its
+       own WebAssembly module; form-action 'none' blocks form posts. -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self' wss:; style-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>Surfs Up!</title>
+  <meta name="description" content="CS-style surfing in the browser: surf_utopia rebuilt as a school gym, Source engine movement, ghosts, and up to eight friends online.">
+  <link rel="icon" href="art/icon.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body data-ready="false" data-mode="loading">
+  <canvas id="view"></canvas>
+
+  <div id="labels" aria-hidden="true"></div>
+
+  <section id="hud" hidden>
+    <div class="hud-top">
+      <div class="pair"><span class="k" data-copy="hud_time"></span><span class="v" id="h-time"></span></div>
+      <div class="pair"><span class="k" data-copy="hud_best"></span><span class="v" id="h-best"></span></div>
+    </div>
+    <div id="h-start" class="hint" data-copy="hud_start"></div>
+    <div id="crosshair"></div>
+    <div class="speedo">
+      <span id="h-speed" class="speed">0</span><span class="unit" data-copy="hud_speed"></span>
+    </div>
+    <div class="hud-stats">
+      <div class="pair"><span class="k" data-copy="hud_sync"></span><span class="v" id="h-sync"></span></div>
+      <div class="pair"><span class="k" data-copy="hud_strafes"></span><span class="v" id="h-strafes"></span></div>
+      <div class="pair"><span class="k" data-copy="hud_gain"></span><span class="v" id="h-gain"></span></div>
+    </div>
+    <div class="keys" aria-hidden="true">
+      <span id="k-w" class="key">W</span>
+      <span id="k-a" class="key">A</span><span id="k-s" class="key">S</span><span id="k-d" class="key">D</span>
+      <span id="k-jump" class="key wide">JUMP</span><span id="k-duck" class="key wide">DUCK</span>
+    </div>
+    <div class="held"><img id="h-held-icon" alt=""><span id="h-held"></span></div>
+    <div id="h-people" class="people-count"></div>
+    <div id="banner" class="banner" hidden></div>
+  </section>
+
+  <!-- the title -->
+  <section id="title" class="screen" hidden>
+    <div class="panel title-panel">
+      <img class="title-art" src="art/title.png" alt="Kids in gym clothes surfing a blue mat ramp over a foam pit">
+      <h1 data-copy="title"></h1>
+      <p class="tagline" data-copy="tagline"></p>
+      <label class="name-row"><span data-copy="your_name"></span><input id="name" maxlength="16" autocomplete="off" spellcheck="false"></label>
+      <div class="buttons">
+        <button id="t-play" class="big" data-copy="play"></button>
+        <button id="t-host" data-copy="host"></button>
+        <button id="t-join" data-copy="join"></button>
+      </div>
+      <div class="buttons small">
+        <button class="open-locker" data-copy="locker"></button>
+        <button class="open-help" data-copy="help"></button>
+        <button class="open-settings" data-copy="settings"></button>
+      </div>
+      <p class="build">surf_utopia · <span id="build"></span></p>
+    </div>
+  </section>
+
+  <!-- paused -->
+  <section id="pause" class="screen" hidden>
+    <div class="panel">
+      <h2 data-copy="paused"></h2>
+      <div class="buttons">
+        <button id="p-resume" class="big" data-copy="resume"></button>
+        <button id="p-restart" data-copy="restart"></button>
+        <button class="open-locker" data-copy="locker"></button>
+        <button class="open-settings" data-copy="settings"></button>
+        <button class="open-help" data-copy="help"></button>
+        <button id="p-host" data-copy="host"></button>
+        <button id="p-host-code" data-copy="host_code"></button>
+        <button id="p-title" data-copy="to_title"></button>
+      </div>
+      <div id="p-room" class="room" hidden>
+        <div><span data-copy="room"></span> <strong id="p-code"></strong></div>
+        <button id="p-copy" data-copy="copy_link"></button>
+        <button id="p-leave" data-copy="leave_room"></button>
+      </div>
+      <div id="p-invite" class="room" hidden>
+        <strong data-copy="invite_title"></strong>
+        <p class="hint-text" data-copy="invite_hint"></p>
+        <textarea id="inv-offer" rows="3" readonly></textarea>
+        <button id="inv-new" data-copy="invite_new"></button>
+        <label class="hint-text" for="inv-reply" data-copy="invite_reply"></label>
+        <textarea id="inv-reply" rows="3"></textarea>
+        <button id="inv-accept" data-copy="invite_accept"></button>
+        <p id="inv-error" class="error"></p>
+        <button id="p-leave-code" data-copy="leave_room"></button>
+      </div>
+    </div>
+    <div class="panel board-panel" id="p-board"></div>
+  </section>
+
+  <!-- the scoreboard, while Tab is held -->
+  <section id="board" class="screen overlay" hidden>
+    <div class="panel board-panel" id="b-board"></div>
+  </section>
+
+  <!-- the cubby: things to hold -->
+  <section id="locker" class="screen dialog" hidden>
+    <div class="panel wide">
+      <h2 data-copy="cubby_title"></h2>
+      <p class="hint-text" data-copy="cubby_hint"></p>
+      <div id="items" class="items"></div>
+      <button class="close" data-copy="close"></button>
+    </div>
+  </section>
+
+  <section id="settings" class="screen dialog" hidden>
+    <div class="panel">
+      <h2 data-copy="settings_title"></h2>
+      <div class="setting"><span data-copy="sens"></span><button class="nudge" data-key="sens" data-up="false">−</button><output id="s-sens"></output><button class="nudge" data-key="sens" data-up="true">+</button></div>
+      <div class="setting"><span data-copy="fov"></span><button class="nudge" data-key="fov" data-up="false">−</button><output id="s-fov"></output><button class="nudge" data-key="fov" data-up="true">+</button></div>
+      <div class="setting"><span data-copy="volume"></span><button class="nudge" data-key="volume" data-up="false">−</button><output id="s-volume"></output><button class="nudge" data-key="volume" data-up="true">+</button></div>
+      <div class="setting"><span data-copy="shirt"></span><button id="s-shirt" class="swatch"></button></div>
+      <label class="check"><input type="checkbox" id="s-live"><span data-copy="live"></span></label>
+      <p class="hint-text" data-copy="live_hint"></p>
+      <label class="check"><input type="checkbox" id="s-ghosts"><span data-copy="ghosts"></span></label>
+      <label class="check"><input type="checkbox" id="s-own-ghost"><span data-copy="own_ghost"></span></label>
+      <button class="close" data-copy="close"></button>
+    </div>
+  </section>
+
+  <section id="help" class="screen dialog" hidden>
+    <div class="panel wide">
+      <h2 data-copy="help_title"></h2>
+      <img class="help-art" src="art/how-to-surf.png" alt="A surfer on a ramp seen end-on, holding the key toward the ramp's high side">
+      <ol class="help-list">
+        <li data-copy="help_1"></li>
+        <li data-copy="help_2"></li>
+        <li data-copy="help_3"></li>
+        <li data-copy="help_4"></li>
+      </ol>
+      <p class="keys-line" data-copy="help_keys"></p>
+      <p class="tip" data-copy="help_tip"></p>
+      <button class="close" data-copy="close"></button>
+    </div>
+  </section>
+
+  <section id="join" class="screen dialog" hidden>
+    <div class="panel">
+      <h2 data-copy="join_title"></h2>
+      <p class="hint-text" data-copy="join_hint"></p>
+      <input id="room-code" maxlength="12" autocomplete="off" spellcheck="false">
+      <p id="join-error" class="error"></p>
+      <div class="buttons">
+        <button id="join-go" class="big" data-copy="join_go"></button>
+      </div>
+      <details id="join-paste" class="paste">
+        <summary data-copy="join_paste"></summary>
+        <p class="hint-text" data-copy="join_paste_hint"></p>
+        <textarea id="j-offer" rows="3"></textarea>
+        <button id="j-make" data-copy="join_make_reply"></button>
+        <label class="hint-text" for="j-reply" data-copy="your_reply"></label>
+        <textarea id="j-reply" rows="3" readonly></textarea>
+        <p id="j-error" class="error"></p>
+      </details>
+      <button class="close" data-copy="close"></button>
+    </div>
+  </section>
+
+  <div id="click-to-surf" class="click" hidden data-copy="click_to_surf"></div>
+  <p id="message" class="message" role="status"></p>
+
+  <noscript><p>Surfs Up! needs JavaScript and WebAssembly.</p></noscript>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
