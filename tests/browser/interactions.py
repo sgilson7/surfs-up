@@ -33,23 +33,32 @@ def run(page, check, engine):
     check("Clasped hands" in page.inner_text(".held"), "you start with clasped hands")
     check(page.is_visible("#h-start"), "the clock waits on the ledge")
 
+    # a slow machine (a CI runner draws without a GPU) runs the game slower
+    # than real time, so walk until the clock starts rather than for a set time
     page.keyboard.down("KeyW")
-    page.wait_for_timeout(2500)
+    page.wait_for_timeout(800)
     speed = page.inner_text("#h-speed")
+    for _ in range(100):
+        if page.inner_text("#h-time") != "0:00.000":
+            break
+        page.wait_for_timeout(100)
     page.keyboard.up("KeyW")
     check(speed not in ("", "0"), f"walking forward moves ({speed} u/s)")
     check(page.inner_text("#h-time") != "0:00.000", f"dropping off the ledge starts the clock ({page.inner_text('#h-time')})")
 
     # off the ledge with no keys held, you slide off the ridge into the pit
-    page.wait_for_timeout(6000)
+    page.wait_for_timeout(3000)
     page.keyboard.down("KeyR")
     page.wait_for_timeout(200)
     page.keyboard.up("KeyR")
-    page.wait_for_timeout(300)
+    for _ in range(50):
+        if page.inner_text("#h-time") == "0:00.000":
+            break
+        page.wait_for_timeout(100)
     check(page.inner_text("#h-time") == "0:00.000", "R sends you back to the start and stops the clock")
 
     page.keyboard.down("Tab")
-    page.wait_for_selector("#board:not([hidden])", timeout=3000)
+    page.wait_for_selector("#board:not([hidden])", timeout=10000)
     check("Coach Rita" in page.inner_text("#board"), "Tab shows the scoreboard with the gym record")
     page.keyboard.up("Tab")
 

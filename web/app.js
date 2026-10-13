@@ -101,7 +101,8 @@ async function start() {
   });
 
   function resize() {
-    renderer.resize(game.resize(window.innerWidth, window.innerHeight, window.devicePixelRatio || 1));
+    const scale = renderer.software ? display.software_scale : window.devicePixelRatio || 1;
+    renderer.resize(game.resize(window.innerWidth, window.innerHeight, scale));
   }
   window.addEventListener("resize", resize);
   resize();

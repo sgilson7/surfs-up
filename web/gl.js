@@ -25,6 +25,10 @@ function link(gl, vertexSource, fragmentSource) {
 export function makeRenderer(canvas, N, shaders, display) {
   const gl = canvas.getContext("webgl2", { antialias: true, powerPreference: "high-performance" });
   if (!gl) return null;
+  // a CPU drawing in place of a GPU: the page then draws fewer pixels
+  const info = gl.getExtension("WEBGL_debug_renderer_info");
+  const rendererName = info ? String(gl.getParameter(info.UNMASKED_RENDERER_WEBGL)) : "";
+  const software = display.software.some((n) => rendererName.includes(n));
   const program = link(gl, shaders.vertex, shaders.fragment);
   gl.useProgram(program);
   gl.enable(gl.DEPTH_TEST);
@@ -66,6 +70,7 @@ export function makeRenderer(canvas, N, shaders, display) {
   }
 
   return {
+    software,
     setWorld(vertices, counts) {
       gl.bindBuffer(gl.ARRAY_BUFFER, world);
       gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW);
