@@ -25,7 +25,12 @@ use crate::vec3::V3;
 use serde_json::{json, Value};
 
 /// Protocol version: two browsers with different versions do not play together.
-pub const PROTOCOL: u32 = 1;
+pub const PROTOCOL: u32 = 2;
+/// The movement rules a run was surfed under. A run replays to the same path
+/// only under the same rules, so a run from other rules is not replayed.
+/// 1: the first version. 2: teleports keep velocity, two air sub-steps a
+/// tick, no slow-rise air cut, CS2's snag offset (PLAN.md P10).
+pub const PHYSICS: u32 = 2;
 /// The room holds eight surfers: you and seven others.
 pub const MAX_PEERS: usize = 7;
 /// Inputs go out every this many ticks.
@@ -60,6 +65,7 @@ pub struct RunRecord {
 impl RunRecord {
     pub fn to_json(&self) -> Value {
         json!({
+            "phys": PHYSICS,
             "map": self.map,
             "sname": self.start_name,
             "stage": self.start_stage,
@@ -93,6 +99,9 @@ impl RunRecord {
             pitch: p[2].as_i64().unwrap_or(0) as i16,
         };
         let cmds = unpack_cmds(prev, v["cmds"].as_str().ok_or("run has no inputs")?)?;
+        if v["phys"].as_u64().unwrap_or(1) != PHYSICS as u64 {
+            return Err("a run from other movement rules".into());
+        }
         let ticks = v["ticks"].as_u64().ok_or("run has no time")? as u32;
         if cmds.len() != ticks as usize {
             return Err("a run's inputs do not match its time".into());

@@ -118,11 +118,10 @@ pub fn world(map: &Map, course: &Course) -> (Vec<f32>, usize) {
             if poly.is_empty() {
                 continue;
             }
-            // See-through walls are safety netting; a see-through floor (a
-            // grid you run on) is a maple floor and a see-through ramp a mat,
-            // like any other.
-            let see_through =
-                (b.kind == BrushKind::Window || s.hint == HINT_GLASS) && n.z < RAMP_TOP && !ramp;
+            // See-through walls and floors are safety netting, so you can see
+            // the pit and the next ramp through them as in the original; a
+            // see-through ramp is a mat like any other.
+            let see_through = (b.kind == BrushKind::Window || s.hint == HINT_GLASS) && !ramp;
             let (c, m) = if b.kind == BrushKind::Water {
                 (BALLS, M_BALLS)
             } else if see_through {

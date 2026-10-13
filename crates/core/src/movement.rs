@@ -42,6 +42,13 @@ pub struct Tuning {
     pub non_jump_velocity: f32,
     pub ground_normal_z: f32,
     pub up_surface_friction: f32,
+    /// Air acceleration steps a tick, the view turning between them. 1 is
+    /// Source 1; CS2 splits a tick at sub-tick input times (cs2kz's
+    /// competitive mode rounds those to half ticks, which is 2 here).
+    pub air_substeps: u32,
+    /// How far (units) a move that has hit a plane is aimed off it before the
+    /// next bump: CS2's fix for snagging on map geometry while surfing.
+    pub snag_offset: f32,
 }
 
 pub const TUNING: Tuning = Tuning {
@@ -62,7 +69,12 @@ pub const TUNING: Tuning = Tuning {
     duck_speed_scale: 0.34,
     non_jump_velocity: 140.0,
     ground_normal_z: 0.7,
-    up_surface_friction: 0.25,
+    // Source 1 cuts air acceleration to a quarter while rising slowly off a
+    // surface; CS2's November 2025 update fixed "slowly surfing up a ramp ...
+    // misidentified as a jump apex". This follows CS2.
+    up_surface_friction: 1.0,
+    air_substeps: 2,
+    snag_offset: 0.031_25,
 };
 
 pub const HULL_MINS: V3 = v3(-16.0, -16.0, 0.0);
@@ -220,7 +232,9 @@ impl<'a> Mover<'a> {
     }
 
     /// One tick of Source's PlayerMove for a walking player (FullWalkMove).
-    pub fn player_move(&mut self, b: &mut Body, cmd: Cmd) -> MoveEvents {
+    /// `prev` is the previous tick's command: its view is where this tick's
+    /// sub-steps turn from.
+    pub fn player_move(&mut self, b: &mut Body, cmd: Cmd, prev: Cmd) -> MoveEvents {
         let mut ev = MoveEvents::default();
         let dt = self.dt();
         // CheckStuck: a box that starts inside a solid is nudged out first;
@@ -275,7 +289,7 @@ impl<'a> Mover<'a> {
         if b.on_ground {
             self.walk_move(b, fwd, right, fmove, smove);
         } else {
-            self.air_move(b, fwd, right, fmove, smove);
+            self.air_move(b, cmd, prev, fmove, smove);
         }
         self.categorize_position(b);
         self.check_velocity(b);
@@ -293,6 +307,11 @@ impl<'a> Mover<'a> {
             ev.impact = lost;
         }
         ev
+    }
+
+    /// One tick with no turn since the last (tests and simple callers).
+    pub fn player_move_same(&mut self, b: &mut Body, cmd: Cmd) -> MoveEvents {
+        self.player_move(b, cmd, cmd)
     }
 
     fn duck(&mut self, b: &mut Body, cmd: Cmd) {
@@ -416,22 +435,37 @@ impl<'a> Mover<'a> {
     /// The heart of surfing: the 30 unit cap applies to the comparison, not to
     /// the acceleration.
     pub fn air_accelerate(&self, b: &mut Body, wishdir: V3, wishspeed: f32) {
+        self.air_accelerate_for(b, wishdir, wishspeed, self.dt());
+    }
+
+    fn air_accelerate_for(&self, b: &mut Body, wishdir: V3, wishspeed: f32, dt: f32) {
         let wishspd = wishspeed.min(self.t.air_wish_cap);
         let current = b.velocity.dot(wishdir);
         let add = wishspd - current;
         if add <= 0.0 {
             return;
         }
-        let mut a = self.t.air_accelerate * wishspeed * self.dt() * b.surface_friction;
+        let mut a = self.t.air_accelerate * wishspeed * dt * b.surface_friction;
         if a > add {
             a = add;
         }
         b.velocity += wishdir * a;
     }
 
-    fn air_move(&mut self, b: &mut Body, fwd: V3, right: V3, fmove: f32, smove: f32) {
-        let (wishdir, wishspeed) = self.wish(fwd, right, fmove, smove);
-        self.air_accelerate(b, wishdir, wishspeed);
+    /// Air acceleration in sub-steps, the view turning from last tick's yaw
+    /// to this tick's, then one move. Only yaw matters: the wish direction is
+    /// flattened.
+    fn air_move(&mut self, b: &mut Body, cmd: Cmd, prev: Cmd, fmove: f32, smove: f32) {
+        let n = self.t.air_substeps.max(1);
+        let from = prev.yaw_deg();
+        let turn = crate::vec3::wrap180(cmd.yaw_deg() - from);
+        let dt = self.dt() / n as f32;
+        for k in 1..=n {
+            let yaw = from + turn * (k as f32 / n as f32);
+            let (fwd, right, _) = angle_vectors(0.0, yaw);
+            let (wishdir, wishspeed) = self.wish(fwd, right, fmove, smove);
+            self.air_accelerate_for(b, wishdir, wishspeed, dt);
+        }
         b.velocity += b.base_velocity;
         self.try_player_move(b);
         b.velocity -= b.base_velocity;
@@ -529,7 +563,11 @@ impl<'a> Mover<'a> {
             if b.velocity.is_zero() {
                 break;
             }
-            let end = b.origin + b.velocity * time_left;
+            let mut end = b.origin + b.velocity * time_left;
+            if numplanes > 0 {
+                // aim a little off the plane already hit (CS2's snag fix)
+                end += planes[numplanes - 1] * self.t.snag_offset;
+            }
             let t = self.trace(b, b.origin, end);
             all_fraction += t.fraction;
             if t.all_solid {
@@ -747,7 +785,7 @@ mod tests {
         let mut mv = Mover::new(m);
         let mut b = Body::at(m.spawn);
         for _ in 0..128 {
-            mv.player_move(&mut b, Cmd::new(0, 0.0, 0.0));
+            mv.player_move_same(&mut b, Cmd::new(0, 0.0, 0.0));
         }
         assert!(b.on_ground, "{b:?}");
         assert!(b.velocity.length() < 0.01);
@@ -759,16 +797,39 @@ mod tests {
         let mut mv = Mover::new(m);
         let mut b = Body::at(m.spawn);
         for _ in 0..64 {
-            mv.player_move(&mut b, Cmd::new(0, 90.0, 0.0));
+            mv.player_move_same(&mut b, Cmd::new(0, 90.0, 0.0));
         }
         let start = b.origin;
         // walk along +y on the start platform (it is wide in y)
         for _ in 0..64 {
-            mv.player_move(&mut b, Cmd::new(B_FORWARD, 90.0, 0.0));
+            mv.player_move_same(&mut b, Cmd::new(B_FORWARD, 90.0, 0.0));
         }
         let s = b.velocity.length2d();
         assert!((s - 250.0).abs() < 1.0, "speed {s}");
         assert!(b.origin.y > start.y + 100.0);
+    }
+
+    #[test]
+    fn turning_in_the_air_gains_more_with_two_sub_steps() {
+        let m = utopia();
+        let mut gains = Vec::new();
+        for steps in [1, 2] {
+            let mut mv = Mover::new(m);
+            mv.t.air_substeps = steps;
+            let mut b = Body::at(v3(0.0, 0.0, 14500.0));
+            b.velocity = v3(600.0, 0.0, 0.0);
+            let mut prev = Cmd::new(B_LEFT, 0.0, 0.0);
+            let mut yaw = 0.0;
+            for _ in 0..32 {
+                // turn left at about the rate that keeps the wish square to the velocity
+                yaw += 2.8;
+                let cmd = Cmd::new(B_LEFT, yaw, 0.0);
+                mv.player_move(&mut b, cmd, prev);
+                prev = cmd;
+            }
+            gains.push(b.velocity.length2d() - 600.0);
+        }
+        assert!(gains[1] > gains[0] * 1.5, "half-tick steps gain more: {gains:?}");
     }
 
     #[test]

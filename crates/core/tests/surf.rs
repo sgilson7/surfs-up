@@ -50,7 +50,7 @@ fn a_ramp_is_never_ground_and_you_slide_down_it() {
     let start = c + n * 40.0 + v3(0.0, 0.0, 10.0);
     let mut b = Body::at(start);
     for tick in 0..96 {
-        mv.player_move(&mut b, Cmd::new(0, 0.0, 0.0));
+        mv.player_move_same(&mut b, Cmd::new(0, 0.0, 0.0));
         assert!(
             !b.on_ground,
             "tick {tick}: a ramp became ground at {:?}",
@@ -97,7 +97,7 @@ fn strafing_into_a_ramp_holds_you_on_it_and_builds_speed() {
     let key = if right.dot(n) < 0.0 { B_RIGHT } else { B_LEFT };
     let start_speed = b.velocity.length();
     for _ in 0..128 {
-        mv.player_move(&mut b, Cmd::new(key, yaw, 0.0));
+        mv.player_move_same(&mut b, Cmd::new(key, yaw, 0.0));
     }
     println!(
         "held {key} for 2 s: {:?} speed {} (from {start_speed})",

@@ -131,7 +131,7 @@ impl Surfer {
         let before = self.body.origin;
         let airborne = !self.body.on_ground;
         let vel_before = self.body.velocity;
-        out.moved = mv.player_move(&mut self.body, cmd);
+        out.moved = mv.player_move(&mut self.body, cmd, self.last_cmd);
         if self.phase == Phase::Running {
             self.tally(mv, cmd, airborne, vel_before, out.moved.jumped);
         }
@@ -210,9 +210,12 @@ impl Surfer {
             }
             Some((Role::Move, d)) => {
                 if let Some((p, yaw)) = map.destination(d) {
-                    // Source's trigger_teleport: the new place and facing, no velocity
+                    // Source's trigger_teleport (triggers.cpp, Source SDK 2013):
+                    // the new place and facing, and the velocity KEPT. Its
+                    // comment says so: "BUGBUG - This does not set the player's
+                    // velocity to zero!!!" Surf maps rely on it: a stage door
+                    // carries your speed into the next stage.
                     self.body.origin = p;
-                    self.body.velocity = ZERO;
                     self.body.base_velocity = ZERO;
                     self.body.pushed = false;
                     self.snap_yaw = Some(yaw);
@@ -408,6 +411,41 @@ mod tests {
         assert_eq!(s.phase, Phase::Running, "the clock keeps running after a fall");
         assert!(s.stats.ticks > ticks);
         assert_eq!(s.body.origin, red);
+    }
+
+    #[test]
+    fn a_stage_door_keeps_your_speed_as_source_does() {
+        let (m, c) = load("surf_kitsune");
+        let mut mv = Mover::new(&m);
+        let orange = m.name_index("orange").unwrap();
+        let door = m
+            .triggers
+            .iter()
+            .find(|t| t.kind == TriggerKind::Teleport(orange) && t.maxs.z - t.mins.z > 100.0)
+            .expect("stage 1's door to stage 2");
+        let mut s = Surfer::at_start(&m);
+        s.phase = Phase::Running;
+        s.body.origin = v3(
+            (door.mins.x + door.maxs.x) * 0.5,
+            door.mins.y - 20.0,
+            door.mins.z + 10.0,
+        );
+        s.body.velocity = v3(0.0, 1000.0, -100.0);
+        let mut through = false;
+        for _ in 0..8 {
+            let t = s.step(&mut mv, &c, Cmd::new(0, 90.0, 0.0));
+            if t.stage == Some(1) {
+                through = true;
+                break;
+            }
+        }
+        assert!(through, "through the door into stage 2");
+        assert!(
+            s.body.velocity.y > 950.0,
+            "the speed came along: {:?}",
+            s.body.velocity
+        );
+        assert_eq!(s.phase, Phase::Running);
     }
 
     #[test]

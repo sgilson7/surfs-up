@@ -1542,17 +1542,24 @@ mod tests {
     }
 
     #[test]
-    fn a_save_from_the_first_version_keeps_its_utopia_best() {
+    fn a_best_from_the_first_movement_rules_is_set_aside_and_the_rest_kept() {
         let mut g = game();
+        g.set_name("Pat");
         finish_in(&mut g, 64 * 200);
         let mut v: Value = serde_json::from_str(&g.saved()).unwrap();
+        // the first version: one best, on surf_utopia, with no rules stamp
         let mut old = v["bests"][0].clone();
         old.as_object_mut().unwrap().remove("map");
+        old.as_object_mut().unwrap().remove("phys");
         v["best"] = old;
         v.as_object_mut().unwrap().remove("bests");
         v.as_object_mut().unwrap().remove("map");
         let h = Game::new(MAPS, &v.to_string()).unwrap();
-        assert_eq!(h.bests.len(), 1);
-        assert_eq!(h.bests[0].map, "surf_utopia");
+        assert!(
+            h.bests.is_empty(),
+            "a run under other rules would not replay to the same path"
+        );
+        assert_eq!(h.settings.name, "Pat");
+        assert!(h.unlocked.contains(&Held::Noodle), "what you earned is kept");
     }
 }

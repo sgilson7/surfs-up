@@ -4,6 +4,7 @@
     "ending": 5,
     "map": "surf_utopia",
     "name": "Hana",
+    "phys": 2,
     "prev": [
       1,
       0,
