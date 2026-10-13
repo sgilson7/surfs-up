@@ -21,6 +21,14 @@ Stage 9. Written 13 October 2026.
 | `python3 tools/art.py` | wrote the title, icon, how-to-surf diagram and six item icons |
 | Tests broken on purpose and restored | the rampbug test (`PUSH_OFF = 0`), the chicken (`"best"` never earned); both failed, then passed |
 
+## Deployed
+
+| What | Result |
+| --- | --- |
+| GitHub Actions on `main` | `check` (Chromium, four browsers online) and `deploy` succeeded on the third push; the first two failed on CI timing (SECOND-ORDER rows 16 and 17) |
+| https://sgilson7.github.io/surfs-up/ | 200; `tests/browser/check.py` against the live origin passed in Chromium, Firefox and WebKit |
+| The website listing | website commit `0686179` "List Surfs Up!", published as build `1c9bad20` by `make deploy`: https://sgilson7.github.io/projects/surfs-up/ answers 200 and /projects/ links to it; `make check`, `make packet`, `make gate` and `make gate-live` passed; `testing/engines.py` drew all sixteen games in three engines. The website's source repository was not pushed, as earlier listings were not. |
+
 ## What was not checked
 
 - **Nobody has surfed the whole course in this build.** A scripted surfer rides the first ridge on both sides, and the course was looked at from points along its length, but no person or bot has finished a run. The finish doors (SECOND-ORDER row 11) and the medal times (row 12) rest on reading the map, not on playing it.
