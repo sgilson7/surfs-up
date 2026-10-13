@@ -79,8 +79,10 @@ def run(page, check, engine):
     check("surf_kitsune" in page.inner_text("#map-name"), "choosing surf_kitsune loads it")
     page.click("#t-play")
     page.wait_for_selector("body[data-mode='play']", state="attached", timeout=5000)
+    # 900 units to the door: on a CPU renderer (CI) the game runs slower than
+    # real time, so allow up to a minute
     page.keyboard.down("KeyW")
-    for _ in range(150):
+    for _ in range(600):
         if page.inner_text("#h-time") != "0:00.000":
             break
         page.wait_for_timeout(100)
