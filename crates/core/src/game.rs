@@ -20,7 +20,7 @@ use serde_json::{json, Value};
 /// Source's m_yaw and m_pitch: degrees of turn per mouse count at sensitivity 1.
 const DEG_PER_COUNT: f32 = 0.022;
 /// The most ticks one frame may run, so a stalled tab does not try to catch up forever.
-const MAX_CATCH_UP: u32 = 8;
+const MAX_CATCH_UP: u32 = 16;
 /// How long a banner stays up, in ticks.
 const BANNER_TICKS: u32 = 64 * 4;
 

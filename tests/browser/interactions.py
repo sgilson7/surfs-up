@@ -80,9 +80,9 @@ def run(page, check, engine):
     page.click("#t-play")
     page.wait_for_selector("body[data-mode='play']", state="attached", timeout=5000)
     # 900 units to the door: on a CPU renderer (CI) the game runs slower than
-    # real time, so allow up to a minute
+    # real time, so allow up to three minutes
     page.keyboard.down("KeyW")
-    for _ in range(600):
+    for _ in range(1800):
         if page.inner_text("#h-time") != "0:00.000":
             break
         page.wait_for_timeout(100)
