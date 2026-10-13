@@ -130,6 +130,10 @@ impl Game {
         self.inner.next_held()
     }
 
+    pub fn watch(&mut self) -> bool {
+        self.inner.watch()
+    }
+
     pub fn set_setting(&mut self, key: &str, value: f64) {
         self.inner.set_setting(key, value)
     }

@@ -32,6 +32,9 @@ Facts the pictures must get right, and where each is enforced:
   four and asserts FINGERS == 4.
 - The rubber chicken is the classic one: pale yellow, long neck, red comb,
   orange beak open, thin orange legs.
+- The kitsune set: a pinwheel has four blades in a \\foreach, each a
+  different colour (asserted in `pinwheel`); the fox plush has two ears,
+  a white tail tip and a white muzzle.
 - Repeatable: every random choice comes from a seeded random.Random.
 """
 import math, random, shutil, subprocess, sys, tempfile
@@ -315,6 +318,79 @@ def chicken_icon():
     return chicken(0.95, 0.75, 1.15, angle=-6), (S, S)
 
 
+PINWHEEL_COLOURS = ["red", "yellow", "stripeblue", "green"]
+
+
+def pinwheel():
+    b = "% the stick\n"
+    b += poly([(1.46, 0.15), (1.54, 0.15), (1.54, 1.85), (1.46, 1.85)], "walldark")
+    b += "% four folded paper blades, one colour each, round the pin\n"
+    assert len(set(PINWHEEL_COLOURS)) == 4
+    for k, c in enumerate(PINWHEEL_COLOURS):
+        a0 = math.radians(20 + 90 * k)
+        a1 = math.radians(20 + 90 * k + 90)
+        cx, cy = 1.5, 1.95
+        tip = (cx + 0.95 * math.cos(a0), cy + 0.95 * math.sin(a0))
+        side = (cx + 0.7 * math.cos(a1), cy + 0.7 * math.sin(a1))
+        mid = (cx + 0.5 * math.cos((a0 + a1) / 2), cy + 0.5 * math.sin((a0 + a1) / 2))
+        b += poly([(cx, cy), tip, mid], c)
+        b += poly([(cx, cy), mid, side], c, ",opacity=0.75")
+    b += circle(1.5, 1.95, 0.09, "white")
+    return b, (S, S)
+
+
+def ribbon():
+    b = "% the wand\n"
+    b += poly([(0.45, 0.3), (0.55, 0.25), (1.15, 1.45), (1.05, 1.5)], "white")
+    b += poly([(0.5, 0.27), (0.55, 0.25), (1.15, 1.45), (1.1, 1.47)], "walldark")
+    b += "% the ribbon, looping up and away\n"
+    b += "\\draw[pink,line width=5pt,line cap=round] (1.1,1.48) .. controls (2.6,1.2) and (2.4,2.5) .. (1.6,2.3) .. controls (0.9,2.1) and (1.6,2.95) .. (2.6,2.7);\n"
+    b += "\\draw[pinklit,line width=1.6pt,line cap=round] (1.2,1.5) .. controls (2.5,1.3) and (2.35,2.4) .. (1.65,2.25);\n"
+    return b, (S, S)
+
+
+def lantern():
+    b = "% the handle and tassel\n"
+    b += poly([(1.47, 2.4), (1.53, 2.4), (1.53, 2.9), (1.47, 2.9)], "ink")
+    b += poly([(1.42, 0.15), (1.58, 0.15), (1.55, 0.6), (1.45, 0.6)], "yellow")
+    b += "% the paper body, in two shades, with its ribs\n"
+    b += ellipse(1.5, 1.5, 0.95, 0.85, "red")
+    b += "\\fill[reddark] (1.5,0.65) arc (-90:90:0.95 and 0.85) -- cycle;\n"
+    b += "\\foreach \\y in {1.05,1.5,1.95} {\\fill[reddark] (0.6,\\y-0.025) rectangle (2.4,\\y+0.025);}\n"
+    b += rect(1.0, 2.25, 2.0, 2.45, "ink") + rect(1.0, 0.55, 2.0, 0.75, "ink")
+    return b, (S, S)
+
+
+def bell():
+    b = "% the wooden handle\n"
+    b += poly([(1.35, 1.7), (1.65, 1.7), (1.62, 2.85), (1.38, 2.85)], "wood")
+    b += poly([(1.5, 1.7), (1.65, 1.7), (1.62, 2.85), (1.5, 2.85)], "wooddark")
+    b += "% the brass bell, flaring to its lip, and the clapper\n"
+    b += circle(1.5, 0.45, 0.17, "yellowdark")
+    b += poly([(1.15, 1.75), (1.85, 1.75), (2.2, 0.75), (2.45, 0.55), (0.55, 0.55), (0.8, 0.75)], "yellow")
+    b += poly([(1.5, 1.75), (1.85, 1.75), (2.2, 0.75), (2.45, 0.55), (1.5, 0.55)], "yellowdark")
+    b += poly([(1.2, 1.6), (1.35, 1.6), (1.05, 0.75), (0.9, 0.75)], "yellowlit")
+    return b, (S, S)
+
+
+def fox():
+    b = "% the tail, curled up behind, white at the tip\n"
+    b += poly([(1.9, 0.5), (2.75, 0.9), (2.85, 1.7), (2.45, 1.75), (2.2, 1.0)], "orangedark")
+    b += poly([(2.85, 1.7), (2.45, 1.75), (2.6, 2.1)], "white")
+    b += "% the body, the white chest\n"
+    b += facet_ball(1.45, 1.0, 0.75, "orangelit", "orange", "orangedark")
+    b += ellipse(1.35, 0.95, 0.32, 0.45, "white")
+    b += "% the head: two ears, a white muzzle, eyes and nose\n"
+    for x0 in (1.0, 1.75):
+        b += poly([(x0, 2.35), (x0 + 0.25, 2.85), (x0 + 0.45, 2.3)], "orange")
+        b += poly([(x0 + 0.13, 2.6), (x0 + 0.25, 2.85), (x0 + 0.35, 2.6)], "ink")
+    b += facet_ball(1.47, 2.05, 0.55, "orangelit", "orange", "orangedark")
+    b += poly([(1.1, 1.95), (1.85, 1.95), (1.47, 1.55)], "white")
+    b += circle(1.47, 1.62, 0.07, "ink")
+    b += circle(1.27, 2.15, 0.06, "ink") + circle(1.67, 2.15, 0.06, "ink")
+    return b, (S, S)
+
+
 def how_to_surf():
     """A ramp seen end-on: the surfer on its right face, the ramp's top to the
     surfer's left, so the key to hold is A."""
@@ -361,6 +437,11 @@ PICTURES = {
     "items/duck": duck,
     "items/foam_finger": foam_finger,
     "items/chicken": chicken_icon,
+    "items/pinwheel": pinwheel,
+    "items/ribbon": ribbon,
+    "items/lantern": lantern,
+    "items/bell": bell,
+    "items/fox": fox,
 }
 DPI = {"title": 150, "icon": 81, "how-to-surf": 110}
 CLEAR = {"items"}

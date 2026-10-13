@@ -70,7 +70,7 @@ export function makeScreens(copy) {
       name.textContent = copy["thing_" + it.id];
       const need = document.createElement("span");
       need.className = "need";
-      need.textContent = it.held ? copy.holding : fill(copy["need_" + it.need], { time: it.time });
+      need.textContent = it.held ? copy.holding : fill(copy["need_" + it.need], { time: it.time, course: it.course });
       b.append(img, name, need);
       b.disabled = !it.have;
       b.addEventListener("click", () => onPick(it.id));

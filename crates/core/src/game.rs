@@ -4,13 +4,13 @@
 //! mouse movement, and draws what comes back.
 
 use crate::camera::Camera;
-use crate::course::{self, Course, Medals};
+use crate::course::{self, Course};
 use crate::map::Map;
 use crate::mesh::{self, FLOATS_PER_VERTEX};
 use crate::models::{hands, kid, thing, Held, Look, Xf};
 use crate::movement::{Body, Cmd, Mover, B_BACK, B_DUCK, B_FORWARD, B_JUMP, B_LEFT, B_RIGHT, B_USE};
 use crate::online::{
-    self, clean_name, Ghost, Peer, RunRecord, LIVE_BATCH, MAX_PEERS, PROTOCOL, SNAPSHOT_EVERY,
+    self, clean_name, Ghost, Live, Peer, RunRecord, LIVE_BATCH, MAX_PEERS, PROTOCOL, SNAPSHOT_EVERY,
 };
 use crate::run::{Phase, Stats, Surfer, Tick};
 use crate::trace::Scratch;
@@ -23,19 +23,6 @@ const DEG_PER_COUNT: f32 = 0.022;
 const MAX_CATCH_UP: u32 = 16;
 /// How long a banner stays up, in ticks.
 const BANNER_TICKS: u32 = 64 * 4;
-
-/// How each held thing is earned, against a course's medal times (in
-/// data/maps/maps.json; provisional until people have surfed the courses).
-pub fn requirement(h: Held, m: &Medals) -> (&'static str, Option<u32>) {
-    match h {
-        Held::Prayer => ("start", None),
-        Held::Noodle => ("finish", None),
-        Held::Kickball => ("bronze", Some(m.bronze)),
-        Held::Duck => ("silver", Some(m.silver)),
-        Held::FoamFinger => ("gold", Some(m.gold)),
-        Held::Chicken => ("best", None),
-    }
-}
 
 pub fn format_time(ticks: u32) -> String {
     let ms = ticks as u64 * 1000 / 64;
@@ -148,6 +135,10 @@ pub struct Game {
     /// opaque), and your hands, built once a frame in `advance`.
     frame_others: (Vec<f32>, u32),
     frame_hands: Vec<f32>,
+    /// Spectating: the room member whose eyes you see through, and the keys
+    /// held last frame (A and D switch on a press, as in Ape Race).
+    watching: Option<String>,
+    watch_keys: u8,
 }
 
 impl Game {
@@ -204,6 +195,8 @@ impl Game {
             camera: None,
             frame_others: (Vec::new(), 0),
             frame_hands: Vec::new(),
+            watching: None,
+            watch_keys: 0,
             map,
         };
         g.load(saved);
@@ -243,6 +236,7 @@ impl Game {
         self.respawn();
         self.me.snap_yaw = None;
         self.live_force = true;
+        self.watching = None;
         if let Some(room) = &mut self.room {
             for p in &mut room.peers {
                 p.live = None;
@@ -348,7 +342,71 @@ impl Game {
 
     pub fn to_title(&mut self) {
         self.mode = Mode::Title;
+        self.watching = None;
         self.leave_online();
+    }
+
+    // ---- spectating ---------------------------------------------------------
+
+    /// The room members surfing this course live, in the room's order.
+    fn watchable(&self) -> Vec<String> {
+        let Some(room) = &self.room else { return Vec::new() };
+        room.peers
+            .iter()
+            .filter(|p| p.live.is_some() && p.map == self.loaded)
+            .map(|p| p.id.clone())
+            .collect()
+    }
+
+    /// Start or stop watching. Starting ends your run and puts you back at
+    /// the start, so the clock waits for you; false if nobody can be watched.
+    pub fn watch(&mut self) -> bool {
+        if self.watching.take().is_some() {
+            return true;
+        }
+        let Some(first) = self.watchable().into_iter().next() else {
+            self.show_banner("banner_nobody_to_watch", json!({}));
+            return false;
+        };
+        self.respawn();
+        self.watching = Some(first);
+        self.watch_keys = self.buttons;
+        true
+    }
+
+    /// The watched surfer, if they are still here and live.
+    fn watched(&self) -> Option<(&Peer, &Live)> {
+        let id = self.watching.as_ref()?;
+        let p = self.room.as_ref()?.peers.iter().find(|p| &p.id == id)?;
+        Some((p, p.live.as_ref()?))
+    }
+
+    /// A press of A or D moves to the previous or next surfer, jump goes
+    /// back to surfing, and a surfer who leaves hands over to the next.
+    fn steer_watch(&mut self, buttons: u8) {
+        let pressed = buttons & !self.watch_keys;
+        self.watch_keys = buttons;
+        if pressed & B_JUMP != 0 {
+            self.watching = None;
+            return;
+        }
+        let list = self.watchable();
+        if list.is_empty() {
+            self.watching = None;
+            return;
+        }
+        let at = self
+            .watching
+            .as_ref()
+            .and_then(|w| list.iter().position(|id| id == w));
+        let n = list.len();
+        let i = match at {
+            None => 0,
+            Some(i) if pressed & B_RIGHT != 0 => (i + 1) % n,
+            Some(i) if pressed & B_LEFT != 0 => (i + n - 1) % n,
+            Some(i) => i,
+        };
+        self.watching = Some(list[i].clone());
     }
 
     fn respawn(&mut self) {
@@ -421,7 +479,13 @@ impl Game {
             None => 0.0,
         };
         self.last_ms = Some(now_ms);
-        let playing = self.mode == Mode::Play;
+        let was_watching = self.watching.is_some();
+        if self.mode == Mode::Play && was_watching {
+            self.steer_watch(buttons as u8);
+        }
+        // a spectator's own surfer waits at the start with no keys held (and
+        // the press that ends watching is not also a jump)
+        let playing = self.mode == Mode::Play && !was_watching;
         if playing {
             self.buttons = buttons as u8;
             let k = self.settings.sens * DEG_PER_COUNT;
@@ -604,6 +668,11 @@ impl Game {
             });
             self.show_banner("banner_early_exit", json!({ "door": e + 1 }));
         }
+        // the finish before the teleport that follows it, which ends the
+        // recording the finish keeps
+        if let Some((ending, ticks)) = t.finished {
+            self.finish(ending, ticks);
+        }
         if t.teleported {
             // a stage's fall or door keeps the run; a restart ends it
             if self.me.phase != Phase::Running {
@@ -611,47 +680,33 @@ impl Game {
             }
             self.prev_body = self.me.body;
         }
-        if let Some((ending, ticks)) = t.finished {
-            self.finish(ending, ticks);
-        }
     }
 
     fn finish(&mut self, ending: u8, ticks: u32) {
         self.finishes += 1;
         let stats = self.last_stats.unwrap_or_default();
-        let Some((start, cmds)) = self.recording.take() else {
-            return;
-        };
-        let run = RunRecord {
-            map: self.loaded.clone(),
-            start_name: start.name,
-            start_stage: start.stage,
-            name: self.settings.name.clone(),
-            seed: self.settings.seed,
-            ticks,
-            ending,
-            start: start.body,
-            prev: start.last_cmd,
-            cmds,
-            sync: stats.sync_pct(),
-            strafes: stats.strafes,
-        };
+        // no recording (a developer's shortcut onto the course) still
+        // earns things; only a recorded run can be a best
+        let recorded = self.recording.take();
         let improved = self.best().map(|b| ticks < b.ticks).unwrap_or(true);
         let old_best = self.best().map(|b| b.ticks);
-        if improved && run.cmds.len() as u32 == ticks {
-            self.bests.retain(|b| b.map != run.map);
-            self.bests.push(run.clone());
-            self.rebuild_ghosts();
-            // the run goes to the room once, whole
-            let text = json!({"t": "run", "run": run.to_json()}).to_string();
-            self.send(None, text);
+        if let Some((start, cmds)) = recorded {
+            self.keep_run(start, cmds, ticks, ending, stats, improved);
         }
         let mut new_things = Vec::new();
-        for h in Held::ALL {
+        // this course's set, earned against this course's medals
+        let things: Vec<(Held, &str)> = self
+            .course
+            .things
+            .iter()
+            .zip(course::TIERS)
+            .filter_map(|(id, tier)| Held::from_id(id).map(|h| (h, tier)))
+            .collect();
+        for (h, tier) in things {
             if self.unlocked.contains(&h) {
                 continue;
             }
-            let earned = match requirement(h, &self.course.medals) {
+            let earned = match (tier, self.course.medals.limit(tier)) {
                 (_, Some(limit)) => ticks <= limit,
                 ("finish", None) => true,
                 ("best", None) => ticks <= self.best_on_board_excluding_me(),
@@ -685,6 +740,40 @@ impl Game {
                 "new": new_things,
             }),
         );
+    }
+
+    /// A recorded run: kept as your best on this course if it is one, and
+    /// sent to the room once, whole.
+    fn keep_run(
+        &mut self,
+        start: Surfer,
+        cmds: Vec<Cmd>,
+        ticks: u32,
+        ending: u8,
+        stats: Stats,
+        improved: bool,
+    ) {
+        let run = RunRecord {
+            map: self.loaded.clone(),
+            start_name: start.name,
+            start_stage: start.stage,
+            name: self.settings.name.clone(),
+            seed: self.settings.seed,
+            ticks,
+            ending,
+            start: start.body,
+            prev: start.last_cmd,
+            cmds,
+            sync: stats.sync_pct(),
+            strafes: stats.strafes,
+        };
+        if improved && run.cmds.len() as u32 == ticks {
+            self.bests.retain(|b| b.map != run.map);
+            self.bests.push(run.clone());
+            self.rebuild_ghosts();
+            let text = json!({"t": "run", "run": run.to_json()}).to_string();
+            self.send(None, text);
+        }
     }
 
     /// The best time on this course's board that is not yours (the gym
@@ -982,6 +1071,21 @@ impl Game {
     }
 
     fn update_camera(&mut self) {
+        if self.mode != Mode::Title {
+            if let Some((_, l)) = self.watched() {
+                // through the watched surfer's eyes, where they look
+                let o = l.prev_origin.lerp(l.origin(), self.alpha);
+                let cmd = l.shown.last_cmd;
+                self.camera = Some(Camera::new(
+                    o + v3(0.0, 0.0, l.shown.body.eye()),
+                    cmd.pitch_deg(),
+                    cmd.yaw_deg(),
+                    self.settings.fov,
+                    self.css.0 / self.css.1,
+                ));
+                return;
+            }
+        }
         let (o, eye) = self.eye_body();
         let (yaw, pitch) = if self.mode == Mode::Title {
             // the title: a slow look around the start
@@ -1038,6 +1142,9 @@ impl Game {
         let a = self.alpha;
         if let Some(room) = &self.room {
             for p in &room.peers {
+                if self.watching.as_ref() == Some(&p.id) {
+                    continue;
+                }
                 if let Some(l) = &p.live {
                     let o = l.prev_origin.lerp(l.origin(), a);
                     let yaw = l.shown.last_cmd.yaw_deg();
@@ -1077,7 +1184,7 @@ impl Game {
 
     fn hands(&self) -> Vec<f32> {
         let mut out = Vec::new();
-        if self.mode == Mode::Title {
+        if self.mode == Mode::Title || self.watched().is_some() {
             return out;
         }
         let Some(c) = &self.camera else { return out };
@@ -1112,6 +1219,9 @@ impl Game {
         let a = self.alpha;
         if let Some(room) = &self.room {
             for p in &room.peers {
+                if self.watching.as_ref() == Some(&p.id) {
+                    continue;
+                }
                 if let Some(l) = &p.live {
                     let o = l.prev_origin.lerp(l.origin(), a) + v3(0.0, 0.0, 84.0);
                     if let Some((x, y, d)) = c.project(o, w, h) {
@@ -1145,12 +1255,20 @@ impl Game {
     }
 
     pub fn hud(&self) -> String {
-        let s = &self.me.stats;
-        let running = self.me.phase == Phase::Running;
+        // a spectator sees the watched surfer's numbers and keys
+        let watched = self.watched();
+        let (who, b, before) = match watched {
+            Some((_, l)) => (
+                &l.shown,
+                l.shown.last_cmd.buttons,
+                l.shown.body.velocity.length2d(),
+            ),
+            None => (&self.me, self.buttons, self.prev_body.velocity.length2d()),
+        };
+        let s = &who.stats;
+        let running = who.phase == Phase::Running;
         let stages = self.course.stages.len();
-        let speed = self.me.body.velocity.length2d();
-        let b = self.buttons;
-        let before = self.prev_body.velocity.length2d();
+        let speed = who.body.velocity.length2d();
         let trend = if speed > before + 0.5 {
             "up"
         } else if speed < before - 0.5 {
@@ -1161,14 +1279,15 @@ impl Game {
         json!({
             "speed": speed as u32,
             "trend": trend,
-            "fall": (-self.me.body.velocity.z).max(0.0) as u32,
+            "fall": (-who.body.velocity.z).max(0.0) as u32,
             "running": running,
             "time": if running { format_time(s.ticks) } else { format_time(0) },
             "sync": if running { format!("{:.1}", s.sync_pct()) } else { "-".into() },
             "gain": if running { format!("{:.1}", s.gain_pct()) } else { "-".into() },
             "strafes": s.strafes,
             "best": self.best().map(|r| format_time(r.ticks)),
-            "stage": if stages > 0 && running { Some(format!("{}/{}", self.me.stage + 1, stages)) } else { None },
+            "stage": if stages > 0 && running { Some(format!("{}/{}", who.stage + 1, stages)) } else { None },
+            "watching": watched.map(|(p, _)| p.name.clone()),
             "keys": {
                 "w": b & B_FORWARD != 0, "a": b & B_LEFT != 0, "s": b & B_BACK != 0,
                 "d": b & B_RIGHT != 0, "jump": b & B_JUMP != 0, "duck": b & B_DUCK != 0,
@@ -1209,16 +1328,19 @@ impl Game {
         for (i, e) in board.iter_mut().enumerate() {
             e["place"] = json!(i + 1);
         }
-        let items: Vec<Value> = Held::ALL
-            .iter()
-            .map(|h| {
-                let (need, limit) = requirement(*h, &self.course.medals);
-                json!({
-                    "id": h.id(), "need": need, "time": limit.map(format_time),
-                    "have": self.unlocked.contains(h), "held": *h == self.held,
-                })
-            })
-            .collect();
+        let mut items = vec![json!({
+            "id": Held::Prayer.id(), "need": "start", "time": null, "course": "",
+            "have": true, "held": self.held == Held::Prayer,
+        })];
+        for set in course::sets(&self.maps_json) {
+            for (id, tier) in set.things.iter().zip(course::TIERS) {
+                let Some(h) = Held::from_id(id) else { continue };
+                items.push(json!({
+                    "id": h.id(), "need": tier, "time": set.medals.limit(tier).map(format_time),
+                    "course": set.name, "have": self.unlocked.contains(&h), "held": h == self.held,
+                }));
+            }
+        }
         let maps: Vec<Value> = course::listed(&self.maps_json)
             .unwrap_or_default()
             .into_iter()
@@ -1244,6 +1366,7 @@ impl Game {
             "board": board,
             "items": items,
             "finishes": self.finishes,
+            "watching": self.watching.is_some(),
             "settings": {"name": s.name, "sens": format!("{:.2}", s.sens), "fov": s.fov as u32,
                 "live": s.live, "ghosts": s.ghosts, "own_ghost": s.own_ghost, "volume": s.volume,
                 "volume_pct": (s.volume * 100.0).round() as u32, "seed": s.seed,
@@ -1316,6 +1439,11 @@ fn squeak_sound(h: Held) -> &'static str {
         Held::Duck => "squeak",
         Held::FoamFinger => "cheer",
         Held::Chicken => "chicken",
+        Held::Pinwheel => "whirr",
+        Held::Ribbon => "swish",
+        Held::Lantern => "rustle",
+        Held::Bell => "ding",
+        Held::Fox => "yip",
     }
 }
 
@@ -1417,7 +1545,7 @@ mod tests {
         assert_eq!(hud["running"], false);
         let s: Value = serde_json::from_str(&g.screen()).unwrap();
         assert_eq!(s["mode"], "play");
-        assert_eq!(s["items"].as_array().unwrap().len(), 6);
+        assert_eq!(s["items"].as_array().unwrap().len(), Held::ALL.len());
         assert!(!g.hands_vertices().is_empty());
     }
 
@@ -1459,12 +1587,98 @@ mod tests {
         let mut best = game();
         finish_in(&mut best, m.record - 1);
         assert_eq!(
-            best.unlocked.len(),
-            Held::ALL.len(),
-            "beating the gym record earns everything"
+            best.unlocked,
+            vec![
+                Held::Prayer,
+                Held::Noodle,
+                Held::Kickball,
+                Held::Duck,
+                Held::FoamFinger,
+                Held::Chicken
+            ],
+            "beating the gym record earns all of utopia's set and none of kitsune's"
         );
         assert_eq!(best.held, Held::Chicken);
         assert_eq!(best.best().map(|r| r.ticks), Some(m.record - 1));
+    }
+
+    #[test]
+    fn running_through_a_finish_door_earns_the_noodle() {
+        let mut g = game();
+        g.play();
+        let door = g
+            .map
+            .triggers
+            .iter()
+            .find(|t| {
+                matches!(t.kind, crate::map::TriggerKind::Teleport(d)
+                    if matches!(g.course.role(t, d), course::Role::Finish(_)))
+            })
+            .expect("a finish door")
+            .clone();
+        // a run some way in, set down inside the door
+        g.me.phase = Phase::Running;
+        g.me.stats.ticks = g.course.medals.bronze + 64;
+        let cmds = vec![Cmd::new(0, 0.0, 0.0); g.me.stats.ticks as usize];
+        g.recording = Some((g.me.clone(), cmds));
+        g.me.body = Body::at((door.mins + door.maxs) * 0.5);
+        g.prev_body = g.me.body;
+        let mut t = 0.0;
+        for _ in 0..8 {
+            t += 1000.0 / 64.0;
+            g.advance(t, 0, 0.0, 0.0);
+        }
+        assert_eq!(g.finishes, 1, "the door finished the run");
+        assert!(
+            g.unlocked.contains(&Held::Noodle),
+            "a finish through the door earns the noodle ({:?})",
+            g.unlocked
+        );
+        assert!(g.best().is_some(), "and the run is kept as your best");
+    }
+
+    #[test]
+    fn kitsune_has_its_own_set() {
+        let mut g = game();
+        g.load_map("surf_kitsune", KITSUNE).unwrap();
+        let m = g.course.medals;
+        finish_in(&mut g, m.silver);
+        assert_eq!(
+            g.unlocked,
+            vec![Held::Prayer, Held::Pinwheel, Held::Ribbon, Held::Lantern],
+            "a silver time on kitsune earns its pinwheel, ribbon and lantern"
+        );
+        finish_in(&mut g, m.record - 1);
+        assert!(g.unlocked.contains(&Held::Fox) && g.unlocked.contains(&Held::Bell));
+        assert!(
+            !g.unlocked.contains(&Held::Noodle),
+            "utopia's set stays on utopia"
+        );
+        let screen: Value = serde_json::from_str(&g.screen()).unwrap();
+        let items = screen["items"].as_array().unwrap().len();
+        assert_eq!(
+            items,
+            Held::ALL.len(),
+            "the cubby shows both sets and the clasped hands"
+        );
+    }
+
+    #[test]
+    fn every_course_lists_a_full_set_of_real_things() {
+        let mut seen = Vec::new();
+        for set in course::sets(MAPS) {
+            assert_eq!(set.things.len(), course::TIERS.len(), "{}", set.id);
+            for id in &set.things {
+                let h = Held::from_id(id).unwrap_or_else(|| panic!("{}: no thing {id}", set.id));
+                assert!(!seen.contains(&h), "{id} is in one set only");
+                seen.push(h);
+            }
+        }
+        assert_eq!(
+            seen.len() + 1,
+            Held::ALL.len(),
+            "every thing but the clasped hands is in a set"
+        );
     }
 
     #[test]
@@ -1516,6 +1730,67 @@ mod tests {
         let gap = (live.origin() - a.me.body.origin).length();
         assert!(gap < 64.0, "b draws a near where a is: {gap}");
         assert!(b.others_opaque() > 0 && !b.others_vertices().is_empty());
+    }
+
+    #[test]
+    fn a_spectator_sees_through_the_watched_surfers_eyes() {
+        let mut a = game();
+        let mut b = game();
+        assert!(!b.watch(), "alone, there is nobody to watch");
+        a.host_online(42.0);
+        b.join_online(&a.room_code());
+        a.play();
+        b.play();
+        a.net_peer("b", false);
+        b.net_peer("a", true);
+        let mut t = 0.0;
+        let pass = |a: &mut Game, b: &mut Game, t: f64, a_keys: u32, b_keys: u32| {
+            a.advance(t, a_keys, 0.0, 0.0);
+            b.advance(t, b_keys, 0.0, 0.0);
+            let out_a: Value = serde_json::from_str(&a.net_outbox()).unwrap();
+            for m in out_a.as_array().unwrap() {
+                b.net_message("a", m[1].as_str().unwrap());
+            }
+            let out_b: Value = serde_json::from_str(&b.net_outbox()).unwrap();
+            for m in out_b.as_array().unwrap() {
+                a.net_message("b", m[1].as_str().unwrap());
+            }
+        };
+        for _ in 0..64 {
+            t += 1000.0 / 64.0;
+            pass(&mut a, &mut b, t, 0, 0);
+        }
+        assert!(b.watch(), "b can watch a");
+        let start = b.me.body.origin;
+        // a walks off; b holds W, which a spectator's own surfer ignores
+        for _ in 0..300 {
+            t += 1000.0 / 64.0;
+            pass(&mut a, &mut b, t, B_FORWARD as u32, B_FORWARD as u32);
+        }
+        assert_eq!(b.me.body.origin.x, start.x, "b's own surfer waits at the start");
+        let eye = b.camera.as_ref().unwrap().eye;
+        let a_eye = a.me.body.origin + v3(0.0, 0.0, a.me.body.eye());
+        assert!(
+            (eye - a_eye).length() < 64.0,
+            "b's camera is at a's eyes ({eye:?} vs {a_eye:?})"
+        );
+        let hud: Value = serde_json::from_str(&b.hud()).unwrap();
+        assert_eq!(hud["watching"], "Surfer");
+        assert_eq!(hud["keys"]["w"], true, "b sees a holding W");
+        assert!(hud["speed"].as_u64().unwrap() > 100, "and a's speed");
+        assert!(
+            b.hands_vertices().is_empty(),
+            "no hands of your own while watching"
+        );
+        // jump goes back to surfing
+        t += 1000.0 / 64.0;
+        pass(&mut a, &mut b, t, 0, B_JUMP as u32);
+        assert!(b.watching.is_none());
+        assert!(
+            b.me.body.velocity.z < 1.0,
+            "the press that stops watching is not a jump"
+        );
+        assert_eq!((b.me.body.origin.x, b.me.body.origin.y), (start.x, start.y));
     }
 
     #[test]

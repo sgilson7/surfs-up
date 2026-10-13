@@ -116,6 +116,7 @@ async function start() {
       save();
     }
     if (command === "mute" && down) toggleMute();
+    if (command === "watch" && down && shownMode === "play") game.watch();
     // Escape reaches the page only when the mouse is not captured (a
     // captured mouse is freed by the browser, which pauses below)
     if (command === "pause" && down) {
@@ -188,6 +189,11 @@ async function start() {
     if (e.key === "Enter") act(joinNow)();
   });
   on("p-resume", () => {
+    game.play();
+    input.capture();
+  });
+  on("p-watch", () => {
+    game.watch();
     game.play();
     input.capture();
   });
@@ -311,6 +317,8 @@ async function start() {
     el("p-host-code").hidden = Boolean(s.room);
     el("p-code").textContent = s.room || "";
     el("p-copy").hidden = !s.room;
+    el("p-watch").hidden = !s.room;
+    el("p-watch").textContent = copy[s.watching ? "stop_watching" : "watch"];
     if (document.activeElement !== el("name")) el("name").value = s.settings.name;
     screens.board(el("p-board"), s);
     screens.items(s, (id) => act(() => game.hold(id))());

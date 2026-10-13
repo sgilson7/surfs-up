@@ -50,3 +50,7 @@ surf_kitsune is the second course, picked on the title. `./scripts/check.sh` pas
 ## Fourth request (13 October 2026): take out the speed wind
 
 "the noise when you start getting fast is awful, take that out". The wind (filtered noise rising with speed) is removed from the core's HUD, `web/sound.js`, `web/app.js` and `data/sounds.json` (`SECOND-ORDER.md` row 27). `./scripts/check.sh`: BUILDER CHECK PASSED.
+
+## Fifth request (13 October 2026): things to hold, a kitsune set, spectating
+
+"unlocking the pool noodle and stuff doesn't seem to work at all, also add a new set you can unlock for kitsune" and "there should be a spectator mode like ape race to watch other people in your gym online". Unlocking was broken by the order of the finish and its teleport (row 28); each course now has its own set (row 29); V watches someone in your gym (row 30); the kitsune browser walk starts near the door (row 31). `./scripts/check.sh`: BUILDER CHECK PASSED.

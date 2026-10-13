@@ -21,6 +21,7 @@
   "Tab": "board",
   "KeyQ": "next_held",
   "KeyM": "mute",
+  "KeyV": "watch",
   "Escape": "pause",
   "KeyP": "pause"
  }

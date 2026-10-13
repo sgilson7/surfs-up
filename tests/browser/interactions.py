@@ -22,7 +22,7 @@ def run(page, check, engine):
     page.wait_for_selector("#locker:not([hidden])", timeout=5000)
     items = page.locator("#items .item").count()
     locked = page.locator("#items .item.locked").count()
-    check(items == 6 and locked == 5, f"the cubby has six things, five still to earn ({items}, {locked} locked)")
+    check(items == 11 and locked == 10, f"the cubby has eleven things, ten still to earn ({items}, {locked} locked)")
     check("Rubber chicken" in page.inner_text("#items"), "the rubber chicken is in the cubby")
     page.click("#locker .close")
 
@@ -69,7 +69,12 @@ def run(page, check, engine):
     page.wait_for_selector("body[data-mode='title']", state="attached", timeout=5000)
     check(page.input_value("#name") == "Tester", "your name is kept")
 
-    # the second course: surf_kitsune, nine stages, the clock from the red door
+    # the second course: surf_kitsune, nine stages, the clock from the red
+    # door. A CPU renderer (CI) draws kitsune's whole world slowly enough that
+    # the 900-unit walk from the spawn can outlast any fair wait, so the
+    # developer's ?at= shortcut sets the walker down 150 units short of the door.
+    page.goto(page.url.split("?")[0].split("#")[0] + "?at=0,-700,200,90")
+    page.wait_for_selector("body[data-mode='title']", state="attached", timeout=10000)
     check(page.locator("#maps .map-card").count() == 2, "two courses on the title")
     page.click("#maps .map-card:has-text('surf_kitsune')")
     for _ in range(100):
@@ -79,8 +84,7 @@ def run(page, check, engine):
     check("surf_kitsune" in page.inner_text("#map-name"), "choosing surf_kitsune loads it")
     page.click("#t-play")
     page.wait_for_selector("body[data-mode='play']", state="attached", timeout=5000)
-    # 900 units to the door: on a CPU renderer (CI) the game runs slower than
-    # real time, so allow up to three minutes
+    # the game still runs slower than real time there, so allow three minutes
     page.keyboard.down("KeyW")
     for _ in range(1800):
         if page.inner_text("#h-time") != "0:00.000":

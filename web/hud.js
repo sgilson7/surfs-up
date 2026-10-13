@@ -77,7 +77,9 @@ export function makeHud(copy) {
       el("h-sync").textContent = h.sync;
       el("h-strafes").textContent = h.strafes;
       el("h-gain").textContent = h.gain;
-      el("h-start").hidden = h.running;
+      el("h-start").hidden = h.running || Boolean(h.watching);
+      el("h-watch").hidden = !h.watching;
+      el("h-watch-name").textContent = h.watching ? fill(copy.hud_watching, { name: h.watching }) : "";
       for (const k of keys) el("k-" + k).classList.toggle("on", h.keys[k]);
       el("h-held").textContent = copy["thing_" + h.held];
       const icon = "art/items/" + h.held + ".png";

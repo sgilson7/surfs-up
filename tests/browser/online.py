@@ -172,6 +172,21 @@ def run(p, engine, origin):
         check("J1" in a and "J1" in b, f"watcher {k} draws J1 surfing ahead")
         check(a.get("J1") != b.get("J1"), f"watcher {k} sees J1 move ({a.get('J1')} -> {b.get('J1')})")
 
+    # spectating, as in Ape Race: V watches someone in the gym, Space stops
+    spectator = watchers[1]
+    spectator.bring_to_front()
+    if spectator.is_visible("#pause"):
+        spectator.click("#p-resume")
+    spectator.keyboard.press("KeyV")
+    spectator.wait_for_timeout(300)
+    shown = spectator.is_visible("#h-watch")
+    text = spectator.inner_text("#h-watch") if shown else ""
+    watching = COPY["hud_watching"].split("{")[0]
+    check(shown and watching in text, f"V watches someone in the gym ({text!r})")
+    spectator.keyboard.press("Space")
+    spectator.wait_for_timeout(300)
+    check(not spectator.is_visible("#h-watch"), "Space goes back to surfing")
+
     check(not seen["errors"], f"no page error {seen['errors'][:3]}")
     check(not seen["console"], f"no console error {seen['console'][:3]}")
     check(not seen["foreign"], f"no request off the origin {seen['foreign'][:3]}")

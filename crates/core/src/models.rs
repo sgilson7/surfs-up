@@ -313,16 +313,26 @@ pub enum Held {
     Duck,
     FoamFinger,
     Chicken,
+    Pinwheel,
+    Ribbon,
+    Lantern,
+    Bell,
+    Fox,
 }
 
 impl Held {
-    pub const ALL: [Held; 6] = [
+    pub const ALL: [Held; 11] = [
         Held::Prayer,
         Held::Noodle,
         Held::Kickball,
         Held::Duck,
         Held::FoamFinger,
         Held::Chicken,
+        Held::Pinwheel,
+        Held::Ribbon,
+        Held::Lantern,
+        Held::Bell,
+        Held::Fox,
     ];
     pub fn id(self) -> &'static str {
         match self {
@@ -332,6 +342,11 @@ impl Held {
             Held::Duck => "duck",
             Held::FoamFinger => "foam_finger",
             Held::Chicken => "chicken",
+            Held::Pinwheel => "pinwheel",
+            Held::Ribbon => "ribbon",
+            Held::Lantern => "lantern",
+            Held::Bell => "bell",
+            Held::Fox => "fox",
         }
     }
     pub fn from_id(id: &str) -> Option<Held> {
@@ -559,6 +574,133 @@ pub fn thing(out: &mut Vec<f32>, f: &Xf, held: Held, k: f32, m: f32) {
                     m,
                 );
             }
+        }
+        Held::Pinwheel => {
+            // a paper pinwheel on a stick; a squeeze spins it
+            bar(
+                out,
+                f,
+                v3(0.0, 0.0, -2.0),
+                v3(0.0, 0.0, 12.0),
+                0.3,
+                [0.85, 0.85, 0.88],
+                m,
+            );
+            let hub = f.at(v3(0.6, 0.0, 12.0)).roll((1.0 - k) * 360.0);
+            let colours = [
+                [0.86, 0.24, 0.22],
+                [0.98, 0.75, 0.18],
+                [0.18, 0.42, 0.90],
+                [0.25, 0.66, 0.40],
+            ];
+            for (i, col) in colours.iter().enumerate() {
+                let blade = hub.roll(i as f32 * 90.0);
+                cuboid(out, &blade, v3(0.0, 1.2, 2.4), v3(0.12, 1.2, 2.4), *col, m);
+                cuboid(out, &blade, v3(0.0, 0.5, 4.2), v3(0.12, 0.5, 0.6), *col, m);
+            }
+            ball(
+                out,
+                &hub,
+                v3(0.4, 0.0, 0.0),
+                v3(0.6, 0.6, 0.6),
+                [0.98, 0.98, 1.0],
+                m,
+            );
+        }
+        Held::Ribbon => {
+            // a rhythmic-gymnastics ribbon: a short wand and a pink ribbon
+            // trailing in loops; a squeeze flicks it higher
+            bar(
+                out,
+                f,
+                v3(0.0, 0.0, -1.0),
+                v3(1.0, 0.0, 8.0),
+                0.35,
+                [0.95, 0.95, 0.97],
+                m,
+            );
+            let pink = [0.95, 0.48, 0.58];
+            let lift = (1.0 - k) * 8.0;
+            let mut prev = v3(1.0, 0.0, 8.0);
+            for i in 1..12 {
+                let t = i as f32;
+                let side = if i % 2 == 0 { 3.5 } else { -3.5 };
+                let p = v3(
+                    1.0 + t * 0.4,
+                    side - t * 0.9,
+                    8.0 + t * (1.4 + lift * 0.08) - t * t * 0.09,
+                );
+                bar(out, f, prev, p, 0.4, pink, m);
+                prev = p;
+            }
+        }
+        Held::Lantern => {
+            // a round red paper lantern with black caps, a handle and a tassel
+            let red = [0.86, 0.22, 0.18];
+            let black = [0.1, 0.1, 0.12];
+            ball(out, &sq, v3(0.0, 0.0, 5.0), v3(3.6, 3.6, 4.2), red, m);
+            for z in [3.6f32, 6.4] {
+                bar(
+                    out,
+                    &sq,
+                    v3(-3.62, 0.0, z),
+                    v3(3.62, 0.0, z),
+                    0.18,
+                    [0.62, 0.12, 0.1],
+                    m,
+                );
+            }
+            cuboid(out, &sq, v3(0.0, 0.0, 9.2), v3(1.8, 1.8, 0.4), black, m);
+            cuboid(out, &sq, v3(0.0, 0.0, 0.8), v3(1.8, 1.8, 0.4), black, m);
+            bar(out, f, v3(0.0, 0.0, 9.6), v3(0.0, 0.0, 13.0), 0.2, black, m);
+            bar(
+                out,
+                f,
+                v3(0.0, 0.0, 0.4),
+                v3(0.0, 0.0, -2.5),
+                0.35,
+                [0.98, 0.75, 0.18],
+                m,
+            );
+        }
+        Held::Bell => {
+            // a brass hand bell on a wooden handle; a squeeze swings the clapper
+            let brass = [0.95, 0.74, 0.22];
+            let wood = [0.62, 0.40, 0.22];
+            bar(out, f, v3(0.0, 0.0, 5.0), v3(0.0, 0.0, 12.0), 0.7, wood, m);
+            cuboid(out, f, v3(0.0, 0.0, 4.4), v3(1.4, 1.4, 0.8), brass, m);
+            cuboid(out, f, v3(0.0, 0.0, 2.8), v3(2.3, 2.3, 1.0), brass, m);
+            cuboid(out, f, v3(0.0, 0.0, 1.1), v3(3.2, 3.2, 0.8), brass, m);
+            let swing = (1.0 - k) * 6.0;
+            ball(
+                out,
+                f,
+                v3(swing, 0.0, -0.4),
+                v3(0.9, 0.9, 0.9),
+                [0.7, 0.52, 0.16],
+                m,
+            );
+        }
+        Held::Fox => {
+            // a fox plush: orange, white muzzle and chest, black-tipped ears
+            // and nose, a big white-tipped tail
+            let orange = [0.95, 0.50, 0.16];
+            let white = [0.98, 0.96, 0.92];
+            let black = [0.08, 0.08, 0.1];
+            ball(out, &sq, v3(0.0, 0.0, 3.0), v3(3.0, 2.6, 3.0), orange, m);
+            ball(out, &sq, v3(1.6, 0.0, 2.4), v3(1.6, 1.8, 2.0), white, m);
+            ball(out, &sq, v3(0.6, 0.0, 7.6), v3(2.6, 2.6, 2.3), orange, m);
+            ball(out, &sq, v3(2.8, 0.0, 7.0), v3(1.4, 1.2, 1.0), white, m);
+            cuboid(out, &sq, v3(4.1, 0.0, 7.2), v3(0.35, 0.4, 0.35), black, m);
+            for side in [-1.0f32, 1.0] {
+                cuboid(out, &sq, v3(2.2, side * 1.1, 8.4), v3(0.3, 0.3, 0.35), black, m);
+                let ear = sq.at(v3(0.4, side * 1.5, 9.8)).roll(side * 18.0);
+                cuboid(out, &ear, v3(0.0, 0.0, 0.0), v3(0.5, 0.9, 1.3), orange, m);
+                cuboid(out, &ear, v3(0.0, 0.0, 1.3), v3(0.45, 0.6, 0.4), black, m);
+                cuboid(out, &sq, v3(1.5, side * 1.4, 0.4), v3(0.9, 0.7, 0.5), orange, m);
+            }
+            ball(out, &sq, v3(-3.2, 1.8, 3.8), v3(1.8, 1.6, 3.2), orange, m);
+            ball(out, &sq, v3(-3.6, 2.2, 7.0), v3(1.2, 1.1, 1.2), white, m);
         }
     }
 }

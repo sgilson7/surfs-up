@@ -1,0 +1,92 @@
+\documentclass[tikz,border=0pt]{standalone}
+\usetikzlibrary{calc}
+% Palette: the 3D gym's colours (crates/core/src/mesh.rs, data/shaders/scene.frag).
+\definecolor{sky}{HTML}{DCE6EE}
+\definecolor{skyhi}{HTML}{F2F6F9}
+\definecolor{wall}{HTML}{EDE6D3}
+\definecolor{walldark}{HTML}{D6CCB4}
+\definecolor{stripeblue}{HTML}{2F5CBF}
+\definecolor{stripegold}{HTML}{F8C537}
+\definecolor{window}{HTML}{CFE6FF}
+\definecolor{windowlit}{HTML}{F6FBFF}
+\definecolor{wood}{HTML}{DBA86B}
+\definecolor{wooddark}{HTML}{B98549}
+\definecolor{woodline}{HTML}{C9965A}
+\definecolor{mat}{HTML}{2961CC}
+\definecolor{matlit}{HTML}{4A82E8}
+\definecolor{matdark}{HTML}{1C4597}
+\definecolor{matseam}{HTML}{16377A}
+\definecolor{red}{HTML}{DD3D38}
+\definecolor{redlit}{HTML}{F06A5E}
+\definecolor{reddark}{HTML}{A92A27}
+\definecolor{yellow}{HTML}{F9C02E}
+\definecolor{yellowlit}{HTML}{FFDB6B}
+\definecolor{yellowdark}{HTML}{C9961C}
+\definecolor{green}{HTML}{3FA866}
+\definecolor{greenlit}{HTML}{62C98A}
+\definecolor{greendark}{HTML}{2C7D4B}
+\definecolor{pink}{HTML}{F27A93}
+\definecolor{pinklit}{HTML}{F7A1B3}
+\definecolor{orange}{HTML}{F28A2E}
+\definecolor{orangelit}{HTML}{F7AE66}
+\definecolor{orangedark}{HTML}{C2671A}
+\definecolor{sky2}{HTML}{7FB8F0}
+\definecolor{purple}{HTML}{8B5CC8}
+\definecolor{skin}{HTML}{F2C49A}
+\definecolor{skinlit}{HTML}{F8D8B8}
+\definecolor{skindark}{HTML}{D9A47A}
+\definecolor{skinb}{HTML}{B9835A}
+\definecolor{skinbdark}{HTML}{93653F}
+\definecolor{shirt}{HTML}{E2463F}
+\definecolor{shirtdark}{HTML}{B23430}
+\definecolor{shirtb}{HTML}{2F7DD8}
+\definecolor{shirtbdark}{HTML}{225DA6}
+\definecolor{shorts}{HTML}{21305A}
+\definecolor{shortsdark}{HTML}{151F3D}
+\definecolor{shoe}{HTML}{FFFFFF}
+\definecolor{shoedark}{HTML}{D8DDE3}
+\definecolor{hair}{HTML}{4A2F1C}
+\definecolor{band}{HTML}{F8C537}
+\definecolor{chick}{HTML}{FBE48F}
+\definecolor{chicklit}{HTML}{FFF2BE}
+\definecolor{chickdark}{HTML}{DCC064}
+\definecolor{comb}{HTML}{E2302E}
+\definecolor{beak}{HTML}{F28A2E}
+\definecolor{noodle}{HTML}{57D163}
+\definecolor{noodledark}{HTML}{3A9E45}
+\definecolor{ball}{HTML}{D8302B}
+\definecolor{balldark}{HTML}{A5211D}
+\definecolor{balllit}{HTML}{F0645D}
+\definecolor{duck}{HTML}{FFD12E}
+\definecolor{duckdark}{HTML}{E0A814}
+\definecolor{foam}{HTML}{2F6BE0}
+\definecolor{foamdark}{HTML}{214FAD}
+\definecolor{white}{HTML}{FFFFFF}
+\definecolor{ink}{HTML}{1E2B45}
+\definecolor{netline}{HTML}{9AA9BF}
+\definecolor{glow}{HTML}{FFF4C2}
+\begin{document}
+\begin{tikzpicture}[x=1cm,y=1cm]
+\useasboundingbox (0,0) rectangle (3,3);
+% the tail, curled up behind, white at the tip
+\fill[orangedark] (1.9,0.5) -- (2.75,0.9) -- (2.85,1.7) -- (2.45,1.75) -- (2.2,1) -- cycle;
+\fill[white] (2.85,1.7) -- (2.45,1.75) -- (2.6,2.1) -- cycle;
+% the body, the white chest
+\fill[orange] (2.143,1.287) -- (1.737,1.693) -- (1.163,1.693) -- (0.757,1.287) -- (0.757,0.713) -- (1.163,0.307) -- (1.737,0.307) -- (2.143,0.713) -- cycle;
+\fill[orangelit] (1.45,1) -- (1.737,1.693) -- (1.163,1.693) -- (0.757,1.287) -- cycle;
+\fill[orangedark] (1.45,1) -- (1.163,0.307) -- (1.737,0.307) -- (2.143,0.713) -- cycle;
+\fill[white] (1.35,0.95) ellipse (0.32 and 0.45);
+% the head: two ears, a white muzzle, eyes and nose
+\fill[orange] (1,2.35) -- (1.25,2.85) -- (1.45,2.3) -- cycle;
+\fill[ink] (1.13,2.6) -- (1.25,2.85) -- (1.35,2.6) -- cycle;
+\fill[orange] (1.75,2.35) -- (2,2.85) -- (2.2,2.3) -- cycle;
+\fill[ink] (1.88,2.6) -- (2,2.85) -- (2.1,2.6) -- cycle;
+\fill[orange] (1.978,2.26) -- (1.68,2.558) -- (1.26,2.558) -- (0.962,2.26) -- (0.962,1.84) -- (1.26,1.542) -- (1.68,1.542) -- (1.978,1.84) -- cycle;
+\fill[orangelit] (1.47,2.05) -- (1.68,2.558) -- (1.26,2.558) -- (0.962,2.26) -- cycle;
+\fill[orangedark] (1.47,2.05) -- (1.26,1.542) -- (1.68,1.542) -- (1.978,1.84) -- cycle;
+\fill[white] (1.1,1.95) -- (1.85,1.95) -- (1.47,1.55) -- cycle;
+\fill[ink] (1.47,1.62) circle (0.07);
+\fill[ink] (1.27,2.15) circle (0.06);
+\fill[ink] (1.67,2.15) circle (0.06);
+\end{tikzpicture}
+\end{document}

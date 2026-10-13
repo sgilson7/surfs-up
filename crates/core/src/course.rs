@@ -66,6 +66,68 @@ pub struct Course {
     /// The destination (name index) each stage starts at, in order.
     pub stages: Vec<u16>,
     pub medals: Medals,
+    /// The course's things to hold, by tier (see `TIERS`).
+    pub things: Vec<String>,
+}
+
+/// What each place in a course's `things` asks: finish it, the three medal
+/// times, then the best time in the gym.
+pub const TIERS: [&str; 5] = ["finish", "bronze", "silver", "gold", "best"];
+
+impl Medals {
+    /// The time a tier asks for, if it is a time.
+    pub fn limit(&self, tier: &str) -> Option<u32> {
+        match tier {
+            "bronze" => Some(self.bronze),
+            "silver" => Some(self.silver),
+            "gold" => Some(self.gold),
+            _ => None,
+        }
+    }
+}
+
+/// A course's set: its id, its name, its things in tier order, its medals.
+pub struct Set {
+    pub id: String,
+    pub name: String,
+    pub things: Vec<String>,
+    pub medals: Medals,
+}
+
+fn medals_of(m: &Value) -> Medals {
+    let medal = |k: &str| (m["medals"][k].as_f64().unwrap_or(600.0) * 64.0).round() as u32;
+    Medals {
+        record: medal("record"),
+        gold: medal("gold"),
+        silver: medal("silver"),
+        bronze: medal("bronze"),
+    }
+}
+
+fn things_of(m: &Value) -> Vec<String> {
+    m["things"]
+        .as_array()
+        .map(|a| a.iter().filter_map(|t| t.as_str()).map(String::from).collect())
+        .unwrap_or_default()
+}
+
+/// Every course's set, in the order maps.json lists the courses.
+pub fn sets(maps_json: &str) -> Vec<Set> {
+    let Ok(v) = serde_json::from_str::<Value>(maps_json) else {
+        return Vec::new();
+    };
+    v["maps"]
+        .as_array()
+        .map(|l| l.as_slice())
+        .unwrap_or(&[])
+        .iter()
+        .map(|m| Set {
+            id: m["id"].as_str().unwrap_or("").to_string(),
+            name: m["name"].as_str().unwrap_or("").to_string(),
+            things: things_of(m),
+            medals: medals_of(m),
+        })
+        .collect()
 }
 
 fn vec_of(v: &Value) -> Result<V3, String> {
@@ -110,6 +172,7 @@ impl Course {
             },
             rules: Vec::new(),
             stages: Vec::new(),
+            things: Vec::new(),
             medals: Medals {
                 record: never,
                 gold: never,
@@ -166,7 +229,6 @@ impl Course {
                 .ok_or(format!("{id}: no stage start named {name}"))?;
             stages.push(i);
         }
-        let medal = |k: &str| (m["medals"][k].as_f64().unwrap_or(600.0) * 64.0).round() as u32;
         Ok(Course {
             id: id.to_string(),
             name: m["name"].as_str().unwrap_or(id).to_string(),
@@ -174,12 +236,8 @@ impl Course {
             zone: Zone { mins: lo, maxs: hi },
             rules,
             stages,
-            medals: Medals {
-                record: medal("record"),
-                gold: medal("gold"),
-                silver: medal("silver"),
-                bronze: medal("bronze"),
-            },
+            medals: medals_of(m),
+            things: things_of(m),
         })
     }
 
