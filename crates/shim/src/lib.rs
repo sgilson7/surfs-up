@@ -26,10 +26,26 @@ pub struct Game {
 #[wasm_bindgen]
 impl Game {
     #[wasm_bindgen(constructor)]
-    pub fn new(map: &[u8], saved: &str) -> Result<Game, JsValue> {
-        game::Game::new(map, saved)
+    pub fn new(maps: &str, saved: &str) -> Result<Game, JsValue> {
+        game::Game::new(maps, saved)
             .map(|inner| Game { inner })
             .map_err(|e| JsValue::from_str(&e))
+    }
+
+    pub fn map_wanted(&self) -> String {
+        self.inner.map_wanted()
+    }
+
+    pub fn map_loaded(&self) -> String {
+        self.inner.map_loaded()
+    }
+
+    pub fn choose_map(&mut self, id: &str) -> bool {
+        self.inner.choose_map(id)
+    }
+
+    pub fn load_map(&mut self, id: &str, bytes: &[u8]) -> Result<(), JsValue> {
+        self.inner.load_map(id, bytes).map_err(|e| JsValue::from_str(&e))
     }
 
     /// CSS size and device pixel ratio in; drawing-buffer size out.

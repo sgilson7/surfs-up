@@ -5,16 +5,22 @@
 //! step every surfer runs, so another browser can replay it as a ghost.
 
 use std::fs;
+use surf_core::course::Course;
 use surf_core::map::Map;
 use surf_core::movement::{Cmd, Mover, B_FORWARD};
 use surf_core::online::RunRecord;
-use surf_core::run::{start_zone, Surfer};
+use surf_core::run::Surfer;
 
 #[test]
 #[ignore]
 fn write_saved_best() {
-    let m = Map::parse(include_bytes!("../../../data/maps/surf_utopia.bin")).unwrap();
-    let zone = start_zone(&m);
+    let mut m = Map::parse(include_bytes!("../../../data/maps/surf_utopia.bin")).unwrap();
+    let zone = Course::parse(
+        include_str!("../../../data/maps/maps.json"),
+        "surf_utopia",
+        &mut m,
+    )
+    .unwrap();
     let mut mv = Mover::new(&m);
     let mut s = Surfer::at_start(&m);
     let mut rec = None;
@@ -31,6 +37,9 @@ fn write_saved_best() {
     }
     let (start, prev, cmds) = rec.expect("left the ledge");
     let run = RunRecord {
+        map: "surf_utopia".into(),
+        start_name: 0,
+        start_stage: 0,
         name: "Hana".into(),
         seed: 5,
         ticks: cmds.len() as u32,

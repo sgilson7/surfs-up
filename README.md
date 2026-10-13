@@ -1,14 +1,14 @@
 # Surfs Up!
 
-Counter-Strike surfing in the browser, on surf_utopia. The ramps are gym mats, the pits are full of foam cubes, and up to eight friends can surf together.
+Counter-Strike surfing in the browser, on surf_utopia and surf_kitsune. The ramps are gym mats, the pits are full of foam cubes, and up to eight friends can surf together.
 
 **Play:** https://sgilson7.github.io/surfs-up/
 
 ## The game
 
-- **surf_utopia, rebuilt from the original.** The course is Panzerhandschuh's surf_utopia_v3, read brush by brush from the original map file: every ramp, seam and gap is where it was. Only the look has changed: a school gym on a Saturday, where surfing is just something kids do.
+- **Two courses, rebuilt from the originals.** surf_utopia is Panzerhandschuh's surf_utopia_v3, and surf_kitsune is Arblarg's nine-stage course, each read brush by brush from the original map file: every ramp, seam and gap is where it was. On kitsune a fall sends you back to the start of your stage with the clock still running, and its secret shortcuts still remember who found them. Only the look has changed: a school gym on a Saturday, where surfing is just something kids do.
 - **Source movement.** The movement is ported from the Source engine's: air acceleration capped at 30 units a second in the wish direction but not in the rate, ramps too steep to stand on (the 0.7 rule), velocity clipped along a ramp, and gravity applied in half-ticks at 64 ticks a second, with CS:GO surf-server settings (airaccelerate 150). Rampbugs are fixed the way surf servers fix them. `docs/RESEARCH-surf-movement.md` gives the sources for all of it.
-- **A timer that knows surfing.** The clock starts when you drop off the start ledge and stops at the doors on the final wall. It counts sync (how often your mouse turns the way your strafe key points), strafes and gain, as the CS surf timers do.
+- **A timer that knows surfing.** The clock starts when you leave the start and stops at the course's finish. It counts sync (how often your mouse turns the way your strafe key points), strafes and gain, as the CS surf timers do.
 - **Things to hold.** You start with your palms pressed together. A finish earns a pool noodle; bronze, silver and gold times earn a kickball, a squeaky duck and a foam finger; and the best time in the gym earns the rubber chicken. Click to squeeze what you hold.
 - **Online, for up to eight.** Meet by room code or pasted invitation. You see the others surfing live: each browser re-runs everyone from their inputs, and rolls back when inputs arrive late. Each finished run is also sent once, whole, and races beside you as a ghost next time, all in your own browser. Turn off live surfers and only the finished runs travel.
 

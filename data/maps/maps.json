@@ -1,0 +1,38 @@
+{
+ "_about": "The courses, and what each teleport means for a run, which a BSP does not say (a timer plugin's zones do, on a server). The core reads this file and holds every rule in it. `spawn` is the teleport destination you start at. `start_zone` is the box [min, max] the clock waits in; leaving it starts the clock. `roles` are tried in order for each teleport touched: `target` is the destination's name, `box` (optional) limits the rule to triggers whose centre is inside it; a `finish` stops the clock, an `exit` ends the run with no time, a `restart` sends you to the spawn and stops the clock, and `move` (the default for any target not listed) teleports you and keeps the clock running, as a stage's fall or its door to the next stage does. `stages` names the destination each stage starts at, in order. Medal times are seconds, and provisional until people have surfed the course.",
+ "maps": [
+  {
+   "id": "surf_utopia",
+   "name": "surf_utopia",
+   "author": "Panzerhandschuh",
+   "spawn": "start",
+   "start_zone": [[-14336, -1088, 12992], [-13760, 1088, 13312]],
+   "roles": [
+    {"target": "jail1", "role": "restart"},
+    {"target": "start", "role": "restart"},
+    {"target": "jail_control_room1", "role": "finish", "ending": 4},
+    {"target": "jail_bottom1", "role": "finish", "ending": 5},
+    {"target": "jail_center", "role": "finish", "ending": 6},
+    {"target": "jail_mid1", "role": "exit", "ending": 1},
+    {"target": "jail_mid2", "role": "exit", "ending": 1},
+    {"target": "jail_rear", "role": "exit", "ending": 2},
+    {"target": "jail_top", "role": "exit", "ending": 3}
+   ],
+   "stages": [],
+   "medals": {"record": 80, "gold": 100, "silver": 130, "bronze": 180}
+  },
+  {
+   "id": "surf_kitsune",
+   "name": "surf_kitsune",
+   "author": "Arblarg",
+   "spawn": "start",
+   "start_zone": [[-512, -2032, 0], [512, -512, 544]],
+   "roles": [
+    {"target": "start", "box": [[-16100, 9000, -12500], [-15900, 11200, -11000]], "role": "finish", "ending": 1},
+    {"target": "start", "role": "restart"}
+   ],
+   "stages": ["red", "orange", "yellow", "green", "teal", "blue", "purple", "pink", "white"],
+   "medals": {"record": 150, "gold": 190, "silver": 240, "bronze": 330}
+  }
+ ]
+}

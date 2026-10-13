@@ -95,6 +95,11 @@ input {
 .title-art { width: 100%; border-radius: 10px; display: block; margin-bottom: 0.6rem; }
 .title-panel h1 { margin: 0.2rem 0; font-size: 3rem; color: var(--accent); letter-spacing: 0.03em; text-shadow: 0 3px 0 var(--red); }
 .tagline { color: var(--muted); margin: 0 0 1rem; }
+.maps { display: flex; gap: 0.6rem; justify-content: center; margin-bottom: 1rem; flex-wrap: wrap; }
+.map-card { display: flex; flex-direction: column; align-items: center; gap: 0.15rem; width: 12.5rem; padding: 0.6rem; }
+.map-card strong { color: var(--ink); font-size: 1.05rem; }
+.map-card span { color: var(--muted); font-size: 0.8rem; }
+.map-card.chosen { border-color: var(--accent); background: rgba(255, 207, 63, 0.16); }
 .name-row { display: flex; gap: 0.6rem; align-items: center; justify-content: center; margin-bottom: 1rem; }
 .name-row input { width: 12rem; }
 .buttons { display: flex; flex-direction: column; gap: 0.5rem; }

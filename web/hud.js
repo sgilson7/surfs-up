@@ -70,6 +70,8 @@ export function makeHud(copy) {
     update(h, labelList) {
       el("h-time").textContent = h.time;
       el("h-best").textContent = h.best || "-";
+      el("h-stage-pair").hidden = !h.stage;
+      el("h-stage").textContent = h.stage || "";
       el("h-speed").textContent = h.speed;
       el("h-speed").className = "speed " + h.trend;
       el("h-sync").textContent = h.sync;

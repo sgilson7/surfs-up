@@ -68,3 +68,27 @@ def run(page, check, engine):
     page.click("#p-title")
     page.wait_for_selector("body[data-mode='title']", state="attached", timeout=5000)
     check(page.input_value("#name") == "Tester", "your name is kept")
+
+    # the second course: surf_kitsune, nine stages, the clock from the red door
+    check(page.locator("#maps .map-card").count() == 2, "two courses on the title")
+    page.click("#maps .map-card:has-text('surf_kitsune')")
+    for _ in range(100):
+        if "surf_kitsune" in page.inner_text("#map-name"):
+            break
+        page.wait_for_timeout(100)
+    check("surf_kitsune" in page.inner_text("#map-name"), "choosing surf_kitsune loads it")
+    page.click("#t-play")
+    page.wait_for_selector("body[data-mode='play']", state="attached", timeout=5000)
+    page.keyboard.down("KeyW")
+    for _ in range(150):
+        if page.inner_text("#h-time") != "0:00.000":
+            break
+        page.wait_for_timeout(100)
+    page.keyboard.up("KeyW")
+    check(page.inner_text("#h-time") != "0:00.000", "walking through the red door starts the clock")
+    check(page.inner_text("#h-stage") == "1/9", f"stage 1 of 9 ({page.inner_text('#h-stage')})")
+    page.keyboard.press("Escape")
+    page.wait_for_selector("body[data-mode='pause']", state="attached", timeout=5000)
+    page.click("#p-title")
+    page.wait_for_selector("body[data-mode='title']", state="attached", timeout=5000)
+    page.click("#maps .map-card:has-text('surf_utopia')")

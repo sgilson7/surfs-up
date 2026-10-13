@@ -1,7 +1,7 @@
 {
  "_about": "Every word a player reads. Braces in a value are filled from what the core returns (a time, a name).",
  "title": "Surfs Up!",
- "tagline": "Saturday open gym. The mats are out, the foam pit is full, and surf_utopia is up.",
+ "tagline": "Saturday open gym. The mats are out, the foam pit is full, and the courses are up.",
  "map_name": "surf_utopia",
  "play": "Surf",
  "host": "Host a room",
@@ -40,7 +40,7 @@
  "hud_sync": "Sync",
  "hud_strafes": "Strafes",
  "hud_gain": "Gain",
- "hud_start": "Drop off the ledge to start the clock",
+ "hud_start": "Leave the start to start the clock",
  "hud_people": "{n} in the gym",
  "banner_fell": "Into the foam pit! Back to the start.",
  "banner_early_exit": "That was door {door}, an early way out. The clock only counts the doors at the very bottom.",
@@ -57,7 +57,7 @@
  "online_no_path": "your networks would not connect",
  "online_signal_failed": "the handshake failed",
  "cubby_title": "Your cubby",
- "cubby_hint": "Things to hold, earned on surf_utopia. Click one to hold it; Q swaps while surfing, and the mouse button squeezes.",
+ "cubby_hint": "Things to hold. Medal times are for the course you have chosen. Click one to hold it; Q swaps while surfing, and the mouse button squeezes.",
  "need_start": "You start with this.",
  "need_finish": "Finish the course once.",
  "need_bronze": "Finish in {time} or less.",
@@ -100,5 +100,13 @@
  "join_paste_hint": "Paste the invitation your friend sent, then send them back the reply.",
  "join_make_reply": "Make my reply",
  "your_reply": "Your reply",
- "code_bad": "That code did not work. Ask for a fresh one."
+ "code_bad": "That code did not work. Ask for a fresh one.",
+ "course": "Course",
+ "course_by": "by {author}",
+ "course_best": "Your best: {time}",
+ "course_none": "Not finished yet",
+ "banner_stage": "Stage {stage} of {of}",
+ "banner_fell_stage": "Into the foam! Back to the start of this stage. The clock keeps running.",
+ "hud_stage": "Stage",
+ "loading_map": "Rolling out the mats for {name}..."
 }

@@ -51,14 +51,22 @@ pub struct Brush {
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum TriggerKind {
-    Teleport(u8),
+    /// Teleport to the destination of this name (an index into `names`).
+    Teleport(u16),
     /// Push direction (unit) and speed in units per second.
     Push(V3, f32),
+    /// Give the activator this name (a map's AddOutput targetname), which
+    /// filters on other triggers test: how a map's secrets remember you.
+    Rename(u16),
 }
+
+/// The name a trigger's filter requires of the activator, if any.
+pub const NO_FILTER: u16 = u16::MAX;
 
 #[derive(Clone, Debug)]
 pub struct Trigger {
     pub kind: TriggerKind,
+    pub filter: u16,
     pub planes: Vec<Plane>,
     pub mins: V3,
     pub maxs: V3,
@@ -75,7 +83,11 @@ const CELL: f32 = 512.0;
 pub struct Map {
     pub brushes: Vec<Brush>,
     pub triggers: Vec<Trigger>,
-    pub targets: Vec<String>,
+    /// Every entity name the map uses, lower-cased; index 0 is no name.
+    pub names: Vec<String>,
+    /// Teleport destinations: name, position, yaw.
+    pub destinations: Vec<(u16, V3, f32)>,
+    /// Where a surfer starts (the course chooses the destination).
     pub spawn: V3,
     pub spawn_yaw: f32,
     pub mins: V3,
@@ -211,8 +223,8 @@ impl Map {
             return Err("not a Surfs Up! map".into());
         }
         let version = r.u32()?;
-        if version != 1 {
-            return Err(format!("map version {version} is not 1"));
+        if version != 2 {
+            return Err(format!("map version {version} is not 2"));
         }
         let nb = r.u32()? as usize;
         let mut brushes = Vec::with_capacity(nb);
@@ -248,11 +260,18 @@ impl Map {
                 maxs,
             });
         }
+        let nn = r.u32()? as usize;
+        let mut names = Vec::with_capacity(nn);
+        for _ in 0..nn {
+            let len = r.u8()? as usize;
+            names.push(String::from_utf8_lossy(r.take(len)?).into_owned());
+        }
         let nt = r.u32()? as usize;
         let mut triggers = Vec::with_capacity(nt);
         for _ in 0..nt {
             let kind = r.u8()?;
-            let target = r.u8()?;
+            let a = r.u16()?;
+            let filter = r.u16()?;
             let (pitch, yaw, _, speed) = (r.f32()?, r.f32()?, r.f32()?, r.f32()?);
             let ns = r.u16()? as usize;
             let mut planes = Vec::with_capacity(ns);
@@ -260,42 +279,52 @@ impl Map {
                 planes.push(r.plane()?);
             }
             let (mins, maxs) = bounds_of(&planes);
-            let kind = if kind == 0 {
-                TriggerKind::Teleport(target)
-            } else {
-                let (f, _, _) = crate::vec3::angle_vectors(pitch, yaw);
-                TriggerKind::Push(f, speed)
+            let kind = match kind {
+                0 => TriggerKind::Teleport(a),
+                1 => {
+                    let (f, _, _) = crate::vec3::angle_vectors(pitch, yaw);
+                    TriggerKind::Push(f, speed)
+                }
+                _ => TriggerKind::Rename(a),
             };
             triggers.push(Trigger {
                 kind,
+                filter,
                 planes,
                 mins,
                 maxs,
             });
         }
-        let ntg = r.u32()? as usize;
-        let mut targets = Vec::with_capacity(ntg);
-        for _ in 0..ntg {
-            let len = r.u8()? as usize;
-            targets.push(String::from_utf8_lossy(r.take(len)?).into_owned());
+        let nd = r.u32()? as usize;
+        let mut destinations = Vec::with_capacity(nd);
+        for _ in 0..nd {
+            let name = r.u16()?;
+            let p = v3(r.f32()?, r.f32()?, r.f32()?);
+            destinations.push((name, p, r.f32()?));
         }
-        let spawn = v3(r.f32()?, r.f32()?, r.f32()?);
-        let spawn_yaw = r.f32()?;
-        Ok(Map::build(brushes, triggers, targets, spawn, spawn_yaw))
+        let mut map = Map::build(brushes, triggers, names, destinations);
+        if let Some((p, yaw)) = map.destination_named("start") {
+            map.spawn = p;
+            map.spawn_yaw = yaw;
+        }
+        Ok(map)
     }
 
     fn build(
         brushes: Vec<Brush>,
         triggers: Vec<Trigger>,
-        targets: Vec<String>,
-        spawn: V3,
-        spawn_yaw: f32,
+        names: Vec<String>,
+        destinations: Vec<(u16, V3, f32)>,
     ) -> Map {
         let mut mins = v3(f32::MAX, f32::MAX, f32::MAX);
         let mut maxs = v3(f32::MIN, f32::MIN, f32::MIN);
         for b in brushes.iter().filter(|b| b.kind.blocks()) {
             mins = v3(mins.x.min(b.mins.x), mins.y.min(b.mins.y), mins.z.min(b.mins.z));
             maxs = v3(maxs.x.max(b.maxs.x), maxs.y.max(b.maxs.y), maxs.z.max(b.maxs.z));
+        }
+        if mins.x > maxs.x {
+            mins = v3(-1.0, -1.0, -1.0);
+            maxs = v3(1.0, 1.0, 1.0);
         }
         let grid_origin = mins - v3(CELL, CELL, CELL);
         let span = maxs - grid_origin + v3(CELL, CELL, CELL);
@@ -307,9 +336,10 @@ impl Map {
         let mut map = Map {
             brushes,
             triggers,
-            targets,
-            spawn,
-            spawn_yaw,
+            names,
+            destinations,
+            spawn: V3::default(),
+            spawn_yaw: 0.0,
             mins,
             maxs,
             grid_origin,
@@ -409,8 +439,28 @@ impl Map {
         out.dedup();
     }
 
-    pub fn target_name(&self, i: u8) -> &str {
-        self.targets.get(i as usize).map(|s| s.as_str()).unwrap_or("")
+    /// A map with nothing in it, held while the real one loads.
+    pub fn empty() -> Map {
+        Map::build(Vec::new(), Vec::new(), vec![String::new()], Vec::new())
+    }
+
+    pub fn name(&self, i: u16) -> &str {
+        self.names.get(i as usize).map(|s| s.as_str()).unwrap_or("")
+    }
+
+    /// The index of a name, matched without regard to case as Source does.
+    pub fn name_index(&self, name: &str) -> Option<u16> {
+        let n = name.to_ascii_lowercase();
+        self.names.iter().position(|x| *x == n).map(|i| i as u16)
+    }
+
+    /// A teleport destination's place and yaw, by name index.
+    pub fn destination(&self, name: u16) -> Option<(V3, f32)> {
+        self.destinations.iter().find(|d| d.0 == name).map(|d| (d.1, d.2))
+    }
+
+    pub fn destination_named(&self, name: &str) -> Option<(V3, f32)> {
+        self.name_index(name).and_then(|i| self.destination(i))
     }
 }
 
@@ -440,8 +490,11 @@ pub mod tests {
         assert!(m.brushes.len() > 4000, "{} brushes", m.brushes.len());
         assert!(m.triggers.len() > 100);
         assert_eq!((m.spawn.x, m.spawn.y, m.spawn.z), (-14272.0, 0.0, 13072.0));
-        assert!(m.targets.iter().any(|t| t == "start"));
-        assert!(m.targets.iter().any(|t| t == "jail1"));
+        assert!(
+            m.name_index("START").is_some(),
+            "names match without regard to case"
+        );
+        assert!(m.name_index("jail1").is_some());
     }
 
     #[test]

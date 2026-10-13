@@ -43,10 +43,10 @@ function fillCopy(copy) {
 
 async function start() {
   const names = ["copy", "controls", "sounds", "display"];
-  const [copyText, controlsText, soundsText, displayText, vertex, fragment, mapBuffer] = await Promise.all(
+  const [copyText, controlsText, soundsText, displayText, vertex, fragment, mapsText] = await Promise.all(
     names
       .map((n) => text(`data/${n}.json`))
-      .concat([text("data/shaders/scene.vert"), text("data/shaders/scene.frag"), fetched("data/maps/surf_utopia.bin").then((r) => r.arrayBuffer())]),
+      .concat([text("data/shaders/scene.vert"), text("data/shaders/scene.frag"), text("data/maps/maps.json")]),
   );
   const copy = JSON.parse(copyText);
   const display = JSON.parse(displayText);
@@ -58,7 +58,7 @@ async function start() {
 
   let game;
   try {
-    game = new Game(new Uint8Array(mapBuffer), storage.load());
+    game = new Game(mapsText, storage.load());
   } catch (e) {
     el("message").textContent = String(e);
     document.body.dataset.ready = "true";
@@ -72,8 +72,34 @@ async function start() {
     document.body.dataset.ready = "true";
     return;
   }
-  renderer.setWorld(game.world_vertices(), game.world_counts());
-  el("message").textContent = "";
+  // The core says which course it wants; the page fetches that map file
+  // (once each) and hands it over, then uploads the world the core built.
+  const mapFiles = new Map();
+  let loading = null;
+  function ensureMap() {
+    const want = game.map_wanted();
+    if (want === game.map_loaded() || loading === want) return loading ? loadingPromise : Promise.resolve();
+    loading = want;
+    el("message").textContent = copy.loading;
+    const got = mapFiles.has(want)
+      ? Promise.resolve(mapFiles.get(want))
+      : fetched(`data/maps/${want}.bin`)
+          .then((r) => r.arrayBuffer())
+          .then((b) => {
+            const bytes = new Uint8Array(b);
+            mapFiles.set(want, bytes);
+            return bytes;
+          });
+    loadingPromise = got.then((bytes) => {
+      game.load_map(want, bytes);
+      renderer.setWorld(game.world_vertices(), game.world_counts());
+      loading = null;
+      el("message").textContent = "";
+      redraw();
+    });
+    return loadingPromise;
+  }
+  let loadingPromise = Promise.resolve();
 
   const hud = makeHud(copy);
   const screens = makeScreens(copy);
@@ -131,6 +157,7 @@ async function start() {
   // ?at=x,y,z,yaw,pitch: a developer's shortcut onto the course (the core ignores it online)
   const devAt = new URLSearchParams(location.search).get("at");
   function surf() {
+    if (loading || game.map_loaded() !== game.map_wanted()) return;
     game.set_name(el("name").value);
     game.play();
     if (devAt) game.dev_at(devAt);
@@ -288,6 +315,12 @@ async function start() {
     screens.board(el("p-board"), s);
     screens.items(s, (id) => act(() => game.hold(id))());
     screens.settings(s);
+    screens.maps(s, (id) =>
+      act(() => {
+        game.choose_map(id);
+        ensureMap();
+      })(),
+    );
     el("click-to-surf").hidden = !(s.mode === "pause" && dialog === null);
   }
 
@@ -324,6 +357,7 @@ async function start() {
     requestAnimationFrame(frame);
   }
 
+  await ensureMap();
   redraw();
   document.body.dataset.ready = "true";
   requestAnimationFrame(frame);

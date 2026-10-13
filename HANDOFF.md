@@ -38,3 +38,7 @@ Stage 9. Written 13 October 2026.
 ## Waiting on the person
 
 Rows 11 to 15 of `SECOND-ORDER.md`: the finish doors, the medal times, publishing the map geometry, ptonkle's agreement to reuse his transport, and a room-code test between two computers.
+
+## Second request: surf_kitsune (13 October 2026)
+
+surf_kitsune is the second course, picked on the title. `./scripts/check.sh` passed after it: 54 Rust tests (new: the course file resolves against both maps, kitsune's red door starts stage 1, a fall keeps the clock, its secrets remember your name, bests are kept per course, a first-version save keeps its utopia best), the browser check in three engines (now choosing kitsune and walking through its red door to stage 1 of 9), and eight browsers in one room. The secret-filter test was broken on purpose and failed. Not checked: nobody has surfed kitsune's nine stages; its medal times are provisional (SECOND-ORDER rows 20 to 22).

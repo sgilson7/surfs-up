@@ -4,6 +4,7 @@
 //! mouse movement, and draws what comes back.
 
 use crate::camera::Camera;
+use crate::course::{self, Course, Medals};
 use crate::map::Map;
 use crate::mesh::{self, FLOATS_PER_VERTEX};
 use crate::models::{hands, kid, thing, Held, Look, Xf};
@@ -11,7 +12,7 @@ use crate::movement::{Body, Cmd, Mover, B_BACK, B_DUCK, B_FORWARD, B_JUMP, B_LEF
 use crate::online::{
     self, clean_name, Ghost, Peer, RunRecord, LIVE_BATCH, MAX_PEERS, PROTOCOL, SNAPSHOT_EVERY,
 };
-use crate::run::{start_zone, Phase, Stats, Surfer, Tick, Zone};
+use crate::run::{Phase, Stats, Surfer, Tick};
 use crate::trace::Scratch;
 use crate::vec3::{angle_vectors, v3, wrap180, V3};
 use serde_json::{json, Value};
@@ -23,21 +24,15 @@ const MAX_CATCH_UP: u32 = 8;
 /// How long a banner stays up, in ticks.
 const BANNER_TICKS: u32 = 64 * 4;
 
-/// Medal times in ticks (64 a second). Provisional until the course has been
-/// played by people (BRIEF.md: a decision that stays with the person).
-pub const GYM_RECORD: u32 = 64 * 80;
-pub const GOLD: u32 = 64 * 100;
-pub const SILVER: u32 = 64 * 130;
-pub const BRONZE: u32 = 64 * 180;
-
-/// How each held thing is earned.
-pub fn requirement(h: Held) -> (&'static str, Option<u32>) {
+/// How each held thing is earned, against a course's medal times (in
+/// data/maps/maps.json; provisional until people have surfed the courses).
+pub fn requirement(h: Held, m: &Medals) -> (&'static str, Option<u32>) {
     match h {
         Held::Prayer => ("start", None),
         Held::Noodle => ("finish", None),
-        Held::Kickball => ("bronze", Some(BRONZE)),
-        Held::Duck => ("silver", Some(SILVER)),
-        Held::FoamFinger => ("gold", Some(GOLD)),
+        Held::Kickball => ("bronze", Some(m.bronze)),
+        Held::Duck => ("silver", Some(m.silver)),
+        Held::FoamFinger => ("gold", Some(m.gold)),
         Held::Chicken => ("best", None),
     }
 }
@@ -97,9 +92,16 @@ pub struct Room {
     pub peers: Vec<Peer>,
 }
 
+/// A run being recorded: the surfer when the clock started, and every input since.
+type Recording = (Surfer, Vec<Cmd>);
+
 pub struct Game {
     map: Map,
-    zone: Zone,
+    course: Course,
+    maps_json: String,
+    /// The course loaded, and the one wanted (the page fetches its map).
+    loaded: String,
+    wanted: String,
     scratch: Scratch,
     world: (Vec<f32>, usize),
     pub mode: Mode,
@@ -115,14 +117,15 @@ pub struct Game {
     yaw: f32,
     pitch: f32,
     buttons: u8,
-    recording: Option<(Body, Cmd, Vec<Cmd>)>,
+    recording: Option<Recording>,
     pub held: Held,
     pub unlocked: Vec<Held>,
     squeeze: u32,
     sway: (f32, f32),
     bob_phase: f32,
     last_stats: Option<Stats>,
-    pub best: Option<RunRecord>,
+    /// Your best run on each course.
+    pub bests: Vec<RunRecord>,
     pub finishes: u32,
     banner: Option<(String, Value, u32)>,
     events: Vec<Event>,
@@ -133,7 +136,7 @@ pub struct Game {
     live_batch: Vec<Cmd>,
     live_first: u64,
     /// The surfer's state before the batch being gathered.
-    live_before: (Body, Cmd, Phase),
+    live_before: Surfer,
     live_batches: u32,
     /// A newcomer needs our exact state with the next batch.
     live_force: bool,
@@ -148,13 +151,22 @@ pub struct Game {
 }
 
 impl Game {
-    pub fn new(map_bytes: &[u8], saved: &str) -> Result<Game, String> {
-        let map = Map::parse(map_bytes)?;
-        let zone = start_zone(&map);
-        let world = mesh::world(&map);
+    /// A game with no map yet: the page fetches `map_wanted()` and hands it
+    /// to `load_map`.
+    pub fn new(maps_json: &str, saved: &str) -> Result<Game, String> {
+        let listed = course::listed(maps_json)?;
+        let first = listed
+            .first()
+            .map(|m| m.0.clone())
+            .ok_or("maps.json lists no maps")?;
+        let map = Map::empty();
+        let world = (Vec::new(), 0);
         let me = Surfer::at_start(&map);
         let mut g = Game {
-            zone,
+            course: Course::empty(),
+            maps_json: maps_json.to_string(),
+            loaded: String::new(),
+            wanted: first,
             scratch: Scratch::default(),
             world,
             mode: Mode::Title,
@@ -175,7 +187,7 @@ impl Game {
             sway: (0.0, 0.0),
             bob_phase: 0.0,
             last_stats: None,
-            best: None,
+            bests: Vec::new(),
             finishes: 0,
             banner: None,
             events: Vec::new(),
@@ -184,7 +196,7 @@ impl Game {
             outbox: Vec::new(),
             live_batch: Vec::new(),
             live_first: 0,
-            live_before: (Body::at(V3::default()), Cmd::default(), Phase::Start),
+            live_before: Surfer::at_start(&map),
             live_batches: 0,
             live_force: true,
             msg_counter: 0,
@@ -195,8 +207,55 @@ impl Game {
             map,
         };
         g.load(saved);
-        g.rebuild_ghosts();
         Ok(g)
+    }
+
+    /// The course the page should fetch the map of.
+    pub fn map_wanted(&self) -> String {
+        self.wanted.clone()
+    }
+
+    pub fn map_loaded(&self) -> String {
+        self.loaded.clone()
+    }
+
+    /// Choose a course (from the title). False if it is not listed.
+    pub fn choose_map(&mut self, id: &str) -> bool {
+        let ok = course::listed(&self.maps_json)
+            .map(|l| l.iter().any(|m| m.0 == id))
+            .unwrap_or(false);
+        if ok {
+            self.wanted = id.to_string();
+        }
+        ok
+    }
+
+    /// The map file for course `id` has arrived: read it, build the world,
+    /// and stand at its start.
+    pub fn load_map(&mut self, id: &str, bytes: &[u8]) -> Result<(), String> {
+        let mut map = Map::parse(bytes)?;
+        let course = Course::parse(&self.maps_json, id, &mut map)?;
+        self.world = mesh::world(&map, &course);
+        self.map = map;
+        self.course = course;
+        self.loaded = id.to_string();
+        self.wanted = id.to_string();
+        self.respawn();
+        self.me.snap_yaw = None;
+        self.live_force = true;
+        if let Some(room) = &mut self.room {
+            for p in &mut room.peers {
+                p.live = None;
+            }
+        }
+        self.rebuild_ghosts();
+        self.say_hello(None);
+        Ok(())
+    }
+
+    /// Your best run on the course you are on.
+    pub fn best(&self) -> Option<&RunRecord> {
+        self.bests.iter().find(|r| r.map == self.loaded)
     }
 
     // ---- what is kept between visits ------------------------------------
@@ -237,8 +296,22 @@ impl Game {
             }
         }
         self.finishes = v["finishes"].as_u64().unwrap_or(0) as u32;
+        // the first version kept one best, on surf_utopia
         if let Ok(r) = RunRecord::from_json(&v["best"]) {
-            self.best = Some(r);
+            self.bests.push(r);
+        }
+        if let Some(list) = v["bests"].as_array() {
+            for b in list {
+                if let Ok(r) = RunRecord::from_json(b) {
+                    if !self.bests.iter().any(|x| x.map == r.map) {
+                        self.bests.push(r);
+                    }
+                }
+            }
+        }
+        if let Some(m) = v["map"].as_str() {
+            let m = m.to_string();
+            self.choose_map(&m);
         }
     }
 
@@ -250,7 +323,8 @@ impl Game {
             "unlocked": self.unlocked.iter().map(|h| h.id()).collect::<Vec<_>>(),
             "held": self.held.id(),
             "finishes": self.finishes,
-            "best": self.best.as_ref().map(|b| b.to_json()).unwrap_or(Value::Null),
+            "map": self.wanted,
+            "bests": self.bests.iter().map(|b| b.to_json()).collect::<Vec<_>>(),
         })
         .to_string()
     }
@@ -383,12 +457,12 @@ impl Game {
         let cmd = Cmd::new(buttons, self.yaw, self.pitch);
         let was_use = self.me.last_cmd.has(B_USE);
         if self.live_batch.is_empty() {
-            self.live_before = (self.me.body, self.me.last_cmd, self.me.phase);
+            self.live_before = self.me.clone();
             self.live_first = self.tick;
         }
         let mut mv = Mover::new(&self.map);
         mv.scratch = std::mem::take(&mut self.scratch);
-        let t = self.me.step(&mut mv, &self.zone, cmd);
+        let t = self.me.step(&mut mv, &self.course, cmd);
         // ghosts and live surfers move on the same tick
         let started = t.started;
         if started {
@@ -399,7 +473,7 @@ impl Game {
         let mut squeaks: Vec<(V3, Held)> = Vec::new();
         if self.me.phase == Phase::Running || !started {
             for g in &mut self.ghosts {
-                if self.me.phase == Phase::Running && g.step(&mut mv, &self.zone) {
+                if self.me.phase == Phase::Running && g.step(&mut mv, &self.course) {
                     let h =
                         Held::from_id(if g.mine { self.held.id() } else { "chicken" }).unwrap_or(Held::Duck);
                     squeaks.push((g.surfer.body.origin, h));
@@ -410,7 +484,7 @@ impl Game {
         if let Some(room) = &mut self.room {
             for p in &mut room.peers {
                 if let Some(l) = &mut p.live {
-                    l.tick(&mut mv, &self.zone, now);
+                    l.tick(&mut mv, &self.course, now);
                     if l.squeezed {
                         l.squeezed = false;
                         squeaks.push((l.origin(), Held::from_id(&p.held).unwrap_or(Held::Prayer)));
@@ -446,10 +520,24 @@ impl Game {
 
     fn after_tick(&mut self, cmd: Cmd, t: Tick, was_use: bool) {
         if let Some(r) = &mut self.recording {
-            r.2.push(cmd);
+            r.1.push(cmd);
+        }
+        if let Some(st) = t.stage {
+            if !self.course.stages.is_empty() && st > 0 {
+                self.show_banner(
+                    "banner_stage",
+                    json!({"stage": st + 1, "of": self.course.stages.len()}),
+                );
+                self.events.push(Event {
+                    sound: "start",
+                    gain: 0.5,
+                });
+            }
         }
         if t.started {
-            self.recording = Some((self.me.body, cmd, Vec::new()));
+            let mut start = self.me.clone();
+            start.snap_yaw = None;
+            self.recording = Some((start, Vec::new()));
             self.events.push(Event {
                 sound: "start",
                 gain: 0.6,
@@ -502,7 +590,12 @@ impl Game {
                 sound: "pit",
                 gain: 1.0,
             });
-            self.show_banner("banner_fell", json!({}));
+            let key = if self.me.phase == Phase::Running && !self.course.stages.is_empty() {
+                "banner_fell_stage"
+            } else {
+                "banner_fell"
+            };
+            self.show_banner(key, json!({}));
         }
         if let Some(e) = t.exited {
             self.events.push(Event {
@@ -512,7 +605,10 @@ impl Game {
             self.show_banner("banner_early_exit", json!({ "door": e + 1 }));
         }
         if t.teleported {
-            self.recording = None;
+            // a stage's fall or door keeps the run; a restart ends it
+            if self.me.phase != Phase::Running {
+                self.recording = None;
+            }
             self.prev_body = self.me.body;
         }
         if let Some((ending, ticks)) = t.finished {
@@ -523,24 +619,28 @@ impl Game {
     fn finish(&mut self, ending: u8, ticks: u32) {
         self.finishes += 1;
         let stats = self.last_stats.unwrap_or_default();
-        let Some((start, prev, cmds)) = self.recording.take() else {
+        let Some((start, cmds)) = self.recording.take() else {
             return;
         };
         let run = RunRecord {
+            map: self.loaded.clone(),
+            start_name: start.name,
+            start_stage: start.stage,
             name: self.settings.name.clone(),
             seed: self.settings.seed,
             ticks,
             ending,
-            start,
-            prev,
+            start: start.body,
+            prev: start.last_cmd,
             cmds,
             sync: stats.sync_pct(),
             strafes: stats.strafes,
         };
-        let improved = self.best.as_ref().map(|b| ticks < b.ticks).unwrap_or(true);
-        let old_best = self.best.as_ref().map(|b| b.ticks);
+        let improved = self.best().map(|b| ticks < b.ticks).unwrap_or(true);
+        let old_best = self.best().map(|b| b.ticks);
         if improved && run.cmds.len() as u32 == ticks {
-            self.best = Some(run.clone());
+            self.bests.retain(|b| b.map != run.map);
+            self.bests.push(run.clone());
             self.rebuild_ghosts();
             // the run goes to the room once, whole
             let text = json!({"t": "run", "run": run.to_json()}).to_string();
@@ -551,7 +651,7 @@ impl Game {
             if self.unlocked.contains(&h) {
                 continue;
             }
-            let earned = match requirement(h) {
+            let earned = match requirement(h, &self.course.medals) {
                 (_, Some(limit)) => ticks <= limit,
                 ("finish", None) => true,
                 ("best", None) => ticks <= self.best_on_board_excluding_me(),
@@ -587,12 +687,13 @@ impl Game {
         );
     }
 
-    /// The best time on the board that is not yours (the gym record counts).
+    /// The best time on this course's board that is not yours (the gym
+    /// record counts).
     fn best_on_board_excluding_me(&self) -> u32 {
-        let mut best = GYM_RECORD;
+        let mut best = self.course.medals.record;
         if let Some(room) = &self.room {
             for p in &room.peers {
-                if let Some(r) = &p.best {
+                for r in p.bests.iter().filter(|r| r.map == self.loaded) {
                     best = best.min(r.ticks);
                 }
             }
@@ -610,13 +711,13 @@ impl Game {
             return;
         }
         if self.settings.own_ghost {
-            if let Some(b) = &self.best {
+            if let Some(b) = self.best() {
                 self.ghosts.push(Ghost::new(b.clone(), true));
             }
         }
         if let Some(room) = &self.room {
             for p in &room.peers {
-                if let Some(r) = &p.best {
+                for r in p.bests.iter().filter(|r| r.map == self.loaded) {
                     self.ghosts.push(Ghost::new(r.clone(), false));
                 }
             }
@@ -686,9 +787,13 @@ impl Game {
         }
         room.peers.push(Peer::new(id, host));
         self.say_hello(Some(id.to_string()));
-        // a newcomer gets our best run once, so they can race it at once
-        if let Some(b) = &self.best {
-            let text = json!({"t": "run", "run": b.to_json()}).to_string();
+        // a newcomer gets our best runs once, so they can race them at once
+        let runs: Vec<String> = self
+            .bests
+            .iter()
+            .map(|b| json!({"t": "run", "run": b.to_json()}).to_string())
+            .collect();
+        for text in runs {
             self.send(Some(id.to_string()), text);
         }
         // and our exact state with the next batch
@@ -749,16 +854,34 @@ impl Game {
                         p.seed = v["seed"].as_u64().unwrap_or(0) as u32;
                         let h = v["held"].as_str().unwrap_or("prayer");
                         p.held = Held::from_id(h).map(|h| h.id()).unwrap_or("prayer").to_string();
+                        let m: String = v["m"].as_str().unwrap_or("").chars().take(40).collect();
+                        if m != p.map {
+                            p.live = None;
+                        }
+                        p.map = m;
                     }
                     "in" => {
-                        let _ = p.hear_live(&mut mv, &self.zone, &v, now);
+                        // only someone on the same course is drawn surfing
+                        if p.map == self.loaded {
+                            let _ = p.hear_live(&mut mv, &self.course, &v, now);
+                        } else {
+                            p.live = None;
+                        }
                     }
                     "run" => {
                         if let Ok(r) = RunRecord::from_json(&v["run"]) {
-                            let better = p.best.as_ref().map(|b| r.ticks < b.ticks).unwrap_or(true);
+                            let better = p
+                                .bests
+                                .iter()
+                                .find(|b| b.map == r.map)
+                                .map(|b| r.ticks < b.ticks)
+                                .unwrap_or(true);
                             if better {
-                                newcomer_best = Some(r.ticks);
-                                p.best = Some(r);
+                                if r.map == self.loaded {
+                                    newcomer_best = Some(r.ticks);
+                                }
+                                p.bests.retain(|b| b.map != r.map);
+                                p.bests.push(r);
                                 ghosts_changed = true;
                             }
                         }
@@ -793,7 +916,7 @@ impl Game {
         }
         let text = json!({
             "t": "hi", "v": PROTOCOL, "name": self.settings.name,
-            "seed": self.settings.seed, "held": self.held.id(),
+            "seed": self.settings.seed, "held": self.held.id(), "m": self.loaded,
         })
         .to_string();
         self.send(to, text);
@@ -823,8 +946,7 @@ impl Game {
         }
         // the exact state before this batch: twice a second, and at once for a newcomer
         let due = self.live_force || self.live_batches.is_multiple_of(SNAPSHOT_EVERY / LIVE_BATCH);
-        let (b, c, ph) = self.live_before;
-        let state = if due { Some((&b, c, ph)) } else { None };
+        let state = if due { Some(&self.live_before) } else { None };
         let text = online::live_message(self.live_first, &self.live_batch, state);
         self.live_batch.clear();
         self.live_batches += 1;
@@ -1025,6 +1147,7 @@ impl Game {
     pub fn hud(&self) -> String {
         let s = &self.me.stats;
         let running = self.me.phase == Phase::Running;
+        let stages = self.course.stages.len();
         let speed = self.me.body.velocity.length2d();
         let b = self.buttons;
         let before = self.prev_body.velocity.length2d();
@@ -1045,7 +1168,8 @@ impl Game {
             "sync": if running { format!("{:.1}", s.sync_pct()) } else { "-".into() },
             "gain": if running { format!("{:.1}", s.gain_pct()) } else { "-".into() },
             "strafes": s.strafes,
-            "best": self.best.as_ref().map(|r| format_time(r.ticks)),
+            "best": self.best().map(|r| format_time(r.ticks)),
+            "stage": if stages > 0 && running { Some(format!("{}/{}", self.me.stage + 1, stages)) } else { None },
             "keys": {
                 "w": b & B_FORWARD != 0, "a": b & B_LEFT != 0, "s": b & B_BACK != 0,
                 "d": b & B_RIGHT != 0, "jump": b & B_JUMP != 0, "duck": b & B_DUCK != 0,
@@ -1064,8 +1188,10 @@ impl Game {
             Mode::Pause => "pause",
         };
         let mut board: Vec<Value> = Vec::new();
-        board.push(json!({"name": "gym_record", "ticks": GYM_RECORD, "time": format_time(GYM_RECORD), "coach": true}));
-        if let Some(b) = &self.best {
+        let record = self.course.medals.record;
+        board
+            .push(json!({"name": "gym_record", "ticks": record, "time": format_time(record), "coach": true}));
+        if let Some(b) = self.best() {
             board.push(json!({"name": self.settings.name, "ticks": b.ticks, "time": format_time(b.ticks), "me": true, "held": self.held.id(), "sync": format!("{:.1}", b.sync)}));
         }
         let mut people = vec![
@@ -1073,9 +1199,9 @@ impl Game {
         ];
         if let Some(room) = &self.room {
             for p in &room.peers {
-                people
-                    .push(json!({"name": p.name, "held": p.held, "host": p.host, "live": p.live.is_some()}));
-                if let Some(r) = &p.best {
+                people.push(json!({"name": p.name, "held": p.held, "host": p.host,
+                    "live": p.live.is_some(), "map": p.map}));
+                for r in p.bests.iter().filter(|r| r.map == self.loaded) {
                     board.push(json!({"name": p.name, "ticks": r.ticks, "time": format_time(r.ticks), "held": p.held, "sync": format!("{:.1}", r.sync)}));
                 }
             }
@@ -1087,16 +1213,32 @@ impl Game {
         let items: Vec<Value> = Held::ALL
             .iter()
             .map(|h| {
-                let (need, limit) = requirement(*h);
+                let (need, limit) = requirement(*h, &self.course.medals);
                 json!({
                     "id": h.id(), "need": need, "time": limit.map(format_time),
                     "have": self.unlocked.contains(h), "held": *h == self.held,
                 })
             })
             .collect();
+        let maps: Vec<Value> = course::listed(&self.maps_json)
+            .unwrap_or_default()
+            .into_iter()
+            .map(|(id, name, author)| {
+                let best = self
+                    .bests
+                    .iter()
+                    .find(|r| r.map == id)
+                    .map(|r| format_time(r.ticks));
+                json!({"id": id, "name": name, "author": author, "best": best,
+                    "chosen": id == self.wanted, "loaded": id == self.loaded})
+            })
+            .collect();
         let s = &self.settings;
         json!({
             "mode": mode,
+            "maps": maps,
+            "map": self.loaded,
+            "map_name": self.course.name,
             "room": self.room.as_ref().map(|r| r.code.clone()),
             "host": self.room.as_ref().map(|r| r.host).unwrap_or(false),
             "people": people,
@@ -1240,8 +1382,15 @@ pub fn noise(samples: u32, seed: u32) -> Vec<f32> {
 mod tests {
     use super::*;
 
+    const MAPS: &str = include_str!("../../../data/maps/maps.json");
+    const UTOPIA: &[u8] = include_bytes!("../../../data/maps/surf_utopia.bin");
+    const KITSUNE: &[u8] = include_bytes!("../../../data/maps/surf_kitsune.bin");
+
     fn game() -> Game {
-        Game::new(include_bytes!("../../../data/maps/surf_utopia.bin"), "").unwrap()
+        let mut g = Game::new(MAPS, "").unwrap();
+        assert_eq!(g.map_wanted(), "surf_utopia");
+        g.load_map("surf_utopia", UTOPIA).unwrap();
+        g
     }
 
     #[test]
@@ -1286,14 +1435,15 @@ mod tests {
 
     fn finish_in(g: &mut Game, ticks: u32) {
         let cmds = vec![Cmd::new(0, 0.0, 0.0); ticks as usize];
-        g.recording = Some((g.me.body, Cmd::default(), cmds));
+        g.recording = Some((g.me.clone(), cmds));
         g.finish(5, ticks);
     }
 
     #[test]
     fn times_earn_things_to_hold_and_the_best_time_earns_the_chicken() {
+        let m = game().course.medals;
         let mut slow = game();
-        finish_in(&mut slow, BRONZE + 64);
+        finish_in(&mut slow, m.bronze + 64);
         assert_eq!(
             slow.unlocked,
             vec![Held::Prayer, Held::Noodle],
@@ -1305,17 +1455,17 @@ mod tests {
             "a new thing goes straight into your hands"
         );
         let mut silver = game();
-        finish_in(&mut silver, SILVER);
+        finish_in(&mut silver, m.silver);
         assert!(silver.unlocked.contains(&Held::Duck) && !silver.unlocked.contains(&Held::FoamFinger));
         let mut best = game();
-        finish_in(&mut best, GYM_RECORD - 1);
+        finish_in(&mut best, m.record - 1);
         assert_eq!(
             best.unlocked.len(),
             Held::ALL.len(),
             "beating the gym record earns everything"
         );
         assert_eq!(best.held, Held::Chicken);
-        assert_eq!(best.best.as_ref().map(|r| r.ticks), Some(GYM_RECORD - 1));
+        assert_eq!(best.best().map(|r| r.ticks), Some(m.record - 1));
     }
 
     #[test]
@@ -1326,7 +1476,7 @@ mod tests {
         g.unlocked.push(Held::Duck);
         g.hold("duck");
         let text = g.saved();
-        let h = Game::new(include_bytes!("../../../data/maps/surf_utopia.bin"), &text).unwrap();
+        let h = Game::new(MAPS, &text).unwrap();
         assert_eq!(h.settings.name, "Pat");
         assert_eq!(h.settings.sens, 3.5);
         assert_eq!(h.held, Held::Duck);
@@ -1361,10 +1511,48 @@ mod tests {
         }
         let room = b.room.as_ref().unwrap();
         let pa = &room.peers[0];
+        assert_eq!(pa.map, "surf_utopia");
         assert_eq!(pa.name, "Surfer");
         let live = pa.live.as_ref().expect("b sees a surfing");
         let gap = (live.origin() - a.me.body.origin).length();
         assert!(gap < 64.0, "b draws a near where a is: {gap}");
         assert!(b.others_opaque() > 0 && !b.others_vertices().is_empty());
+    }
+
+    #[test]
+    fn courses_switch_and_keep_their_own_bests() {
+        let mut g = game();
+        let mu = g.course.medals;
+        finish_in(&mut g, mu.bronze);
+        assert!(g.choose_map("surf_kitsune"));
+        assert!(!g.choose_map("de_nowhere"));
+        assert_eq!(g.map_wanted(), "surf_kitsune");
+        g.load_map("surf_kitsune", KITSUNE).unwrap();
+        assert_eq!(g.map_loaded(), "surf_kitsune");
+        assert!(g.best().is_none(), "kitsune has no best yet");
+        assert_eq!(g.me.body.origin, g.map.spawn);
+        let screen: Value = serde_json::from_str(&g.screen()).unwrap();
+        assert_eq!(screen["maps"].as_array().unwrap().len(), 2);
+        assert_eq!(screen["map"], "surf_kitsune");
+        // what is kept remembers both the utopia best and the chosen course
+        let h = Game::new(MAPS, &g.saved()).unwrap();
+        assert_eq!(h.map_wanted(), "surf_kitsune");
+        assert_eq!(h.bests.len(), 1);
+        assert_eq!(h.bests[0].map, "surf_utopia");
+    }
+
+    #[test]
+    fn a_save_from_the_first_version_keeps_its_utopia_best() {
+        let mut g = game();
+        finish_in(&mut g, 64 * 200);
+        let mut v: Value = serde_json::from_str(&g.saved()).unwrap();
+        let mut old = v["bests"][0].clone();
+        old.as_object_mut().unwrap().remove("map");
+        v["best"] = old;
+        v.as_object_mut().unwrap().remove("bests");
+        v.as_object_mut().unwrap().remove("map");
+        let h = Game::new(MAPS, &v.to_string()).unwrap();
+        assert_eq!(h.bests.len(), 1);
+        assert_eq!(h.bests[0].map, "surf_utopia");
     }
 }

@@ -17,9 +17,10 @@
 //!
 //! A player who turns live surfers off sends only finished runs.
 
+use crate::course::Course;
 use crate::movement::{Body, Cmd, Mover, B_USE};
 use crate::replay::{body_from_words, body_to_words, pack_cmds, unpack_cmds};
-use crate::run::{Phase, Surfer, Zone};
+use crate::run::{Phase, Surfer};
 use crate::vec3::V3;
 use serde_json::{json, Value};
 
@@ -40,11 +41,16 @@ pub const PART_CHARS: usize = 15000;
 /// A finished run, as kept and as sent.
 #[derive(Clone, Debug, PartialEq)]
 pub struct RunRecord {
+    /// The course it was surfed on.
+    pub map: String,
     pub name: String,
     pub seed: u32,
     pub ticks: u32,
     pub ending: u8,
     pub start: Body,
+    /// The surfer's map-given name and stage when the clock started.
+    pub start_name: u16,
+    pub start_stage: u8,
     pub prev: Cmd,
     pub cmds: Vec<Cmd>,
     pub sync: f32,
@@ -54,6 +60,9 @@ pub struct RunRecord {
 impl RunRecord {
     pub fn to_json(&self) -> Value {
         json!({
+            "map": self.map,
+            "sname": self.start_name,
+            "stage": self.start_stage,
             "name": self.name,
             "seed": self.seed,
             "ticks": self.ticks,
@@ -89,6 +98,14 @@ impl RunRecord {
             return Err("a run's inputs do not match its time".into());
         }
         Ok(RunRecord {
+            map: v["map"]
+                .as_str()
+                .unwrap_or("surf_utopia")
+                .chars()
+                .take(40)
+                .collect(),
+            start_name: v["sname"].as_u64().unwrap_or(0) as u16,
+            start_stage: v["stage"].as_u64().unwrap_or(0) as u8,
             name: clean_name(v["name"].as_str().unwrap_or("")),
             seed: v["seed"].as_u64().unwrap_or(0) as u32,
             ticks,
@@ -113,6 +130,14 @@ pub fn clean_name(s: &str) -> String {
     }
 }
 
+/// The surfer at the moment a run's clock started.
+pub fn start_of(run: &RunRecord) -> Surfer {
+    let mut s = Surfer::from_body(run.start, run.prev);
+    s.name = run.start_name;
+    s.stage = run.start_stage;
+    s
+}
+
 /// A run replaying beside you.
 #[derive(Clone, Debug)]
 pub struct Ghost {
@@ -125,7 +150,7 @@ pub struct Ghost {
 
 impl Ghost {
     pub fn new(run: RunRecord, mine: bool) -> Ghost {
-        let surfer = Surfer::from_body(run.start, run.prev);
+        let surfer = start_of(&run);
         let o = run.start.origin;
         Ghost {
             run,
@@ -137,7 +162,7 @@ impl Ghost {
     }
     /// Back to the start of the run, waiting.
     pub fn rewind(&mut self) {
-        self.surfer = Surfer::from_body(self.run.start, self.run.prev);
+        self.surfer = start_of(&self.run);
         self.prev_origin = self.run.start.origin;
         self.cursor = 0;
     }
@@ -145,7 +170,7 @@ impl Ghost {
         self.cursor >= self.run.cmds.len()
     }
     /// One tick of the replay. Returns whether it squeezed.
-    pub fn step(&mut self, mv: &mut Mover, zone: &Zone) -> bool {
+    pub fn step(&mut self, mv: &mut Mover, zone: &Course) -> bool {
         self.prev_origin = self.surfer.body.origin;
         if self.done() {
             return false;
@@ -169,8 +194,11 @@ pub struct Peer {
     pub seed: u32,
     pub held: String,
     pub host: bool,
+    /// The course they are on.
+    pub map: String,
     pub live: Option<Live>,
-    pub best: Option<RunRecord>,
+    /// Their best run on each course they have sent one for.
+    pub bests: Vec<RunRecord>,
     /// Parts of a long message, by message id.
     pub parts: Vec<(String, u32, Vec<Option<String>>)>,
 }
@@ -210,7 +238,7 @@ impl Live {
 
     /// Inputs heard: roll the confirmed state forward, and start predicting
     /// again from it.
-    pub fn hear(&mut self, mv: &mut Mover, zone: &Zone, first: u64, cmds: &[Cmd], now: u64) {
+    pub fn hear(&mut self, mv: &mut Mover, zone: &Course, first: u64, cmds: &[Cmd], now: u64) {
         let before = self.shown.body.origin + self.smooth;
         for (i, c) in cmds.iter().enumerate() {
             let t = first + i as u64;
@@ -240,7 +268,7 @@ impl Live {
         self.prev_origin = self.prev_origin - jump + self.smooth;
     }
 
-    fn predict_to(&mut self, mv: &mut Mover, zone: &Zone, ahead: u32) {
+    fn predict_to(&mut self, mv: &mut Mover, zone: &Course, ahead: u32) {
         let last = self.confirmed.last_cmd;
         while self.shown_ahead < ahead {
             self.shown.step(mv, zone, last);
@@ -249,7 +277,7 @@ impl Live {
     }
 
     /// One of our ticks has passed: predict one tick further, up to the limit.
-    pub fn tick(&mut self, mv: &mut Mover, zone: &Zone, now: u64) {
+    pub fn tick(&mut self, mv: &mut Mover, zone: &Course, now: u64) {
         self.prev_origin = self.shown.body.origin + self.smooth;
         let since = (now.saturating_sub(self.heard_at) as u32).min(MAX_PREDICT);
         let want = since + LIVE_BATCH / 2;
@@ -273,8 +301,9 @@ impl Peer {
             seed: 0,
             held: "prayer".into(),
             host,
+            map: String::new(),
             live: None,
-            best: None,
+            bests: Vec::new(),
             parts: Vec::new(),
         }
     }
@@ -307,7 +336,7 @@ impl Peer {
     }
 
     /// Inputs (and maybe a state) from this peer's live surfer.
-    pub fn hear_live(&mut self, mv: &mut Mover, zone: &Zone, v: &Value, now: u64) -> Result<(), String> {
+    pub fn hear_live(&mut self, mv: &mut Mover, zone: &Course, v: &Value, now: u64) -> Result<(), String> {
         let first = v["s"].as_u64().ok_or("inputs without a tick")?;
         let cmds = unpack_cmds(Cmd::default(), v["c"].as_str().unwrap_or(""))?;
         if let Some(b) = v.get("b") {
@@ -362,10 +391,13 @@ pub fn cmd_from(v: &Value) -> Cmd {
 }
 
 /// A live batch: inputs from tick `first`, and the state before them when due.
-pub fn live_message(first: u64, cmds: &[Cmd], state: Option<(&Body, Cmd, Phase)>) -> String {
+pub fn live_message(first: u64, cmds: &[Cmd], state: Option<&Surfer>) -> String {
     let mut v = json!({"t": "in", "s": first, "c": pack_cmds(Cmd::default(), cmds)});
-    if let Some((b, c, ph)) = state {
-        v["b"] = json!({"w": body_to_words(b), "c": cmd_to(c), "ph": if ph == Phase::Start { 0 } else { 1 }});
+    if let Some(s) = state {
+        v["b"] = json!({
+            "w": body_to_words(&s.body), "c": cmd_to(s.last_cmd),
+            "ph": if s.phase == Phase::Start { 0 } else { 1 }, "n": s.name, "st": s.stage,
+        });
     }
     v.to_string()
 }
@@ -391,9 +423,8 @@ pub fn split(text: String, id: &str) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::map::tests::utopia;
+    use crate::course::tests::load;
     use crate::movement::{B_FORWARD, B_LEFT, B_RIGHT};
-    use crate::run::start_zone;
 
     fn wiggle(i: u32) -> Cmd {
         let key = if (i / 20).is_multiple_of(2) {
@@ -406,10 +437,9 @@ mod tests {
 
     #[test]
     fn a_run_survives_the_wire_and_replays_to_the_same_place() {
-        let m = utopia();
-        let zone = start_zone(m);
-        let mut mv = Mover::new(m);
-        let mut s = Surfer::at_start(m);
+        let (m, zone) = load("surf_utopia");
+        let mut mv = Mover::new(&m);
+        let mut s = Surfer::at_start(&m);
         // walk off the start into the course, recording from the start of the clock
         let mut rec: Option<(Body, Cmd, Vec<Cmd>)> = None;
         for i in 0..600 {
@@ -424,6 +454,9 @@ mod tests {
         }
         let (start, prev, cmds) = rec.expect("the clock started");
         let run = RunRecord {
+            map: "surf_utopia".into(),
+            start_name: 0,
+            start_stage: 0,
             name: "Ana".into(),
             seed: 2,
             ticks: cmds.len() as u32,
@@ -449,18 +482,17 @@ mod tests {
 
     #[test]
     fn a_live_surfer_rolls_back_to_the_truth() {
-        let m = utopia();
-        let zone = start_zone(m);
-        let mut mv = Mover::new(m);
-        let mut truth = Surfer::at_start(m);
+        let (m, zone) = load("surf_utopia");
+        let mut mv = Mover::new(&m);
+        let mut truth = Surfer::at_start(&m);
         let mut peer = Peer::new("p", false);
         let mut sent: Vec<String> = Vec::new();
         let mut batch = Vec::new();
-        let mut snap = (truth.body, truth.last_cmd, truth.phase);
+        let mut snap = truth.clone();
         let mut first = 0u64;
         for i in 0..400u32 {
             if batch.is_empty() {
-                snap = (truth.body, truth.last_cmd, truth.phase);
+                snap = truth.clone();
                 first = i as u64;
             }
             let c = wiggle(i);
@@ -468,7 +500,7 @@ mod tests {
             batch.push(c);
             if batch.len() as u32 == LIVE_BATCH {
                 let state = if first.is_multiple_of(SNAPSHOT_EVERY as u64) {
-                    Some((&snap.0, snap.1, snap.2))
+                    Some(&snap)
                 } else {
                     None
                 };

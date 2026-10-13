@@ -116,10 +116,16 @@ fn strafing_into_a_ramp_holds_you_on_it_and_builds_speed() {
 /// clean to the bottom of the ridge.
 #[test]
 fn the_first_ridge_has_no_rampbug_on_either_side() {
-    use surf_core::run::{start_zone, Phase, Surfer};
-    let m = utopia();
+    use surf_core::course::Course;
+    use surf_core::run::{Phase, Surfer};
+    let mut m = utopia();
+    let zone = Course::parse(
+        include_str!("../../../data/maps/maps.json"),
+        "surf_utopia",
+        &mut m,
+    )
+    .unwrap();
     let mut mv = Mover::new(&m);
-    let zone = start_zone(&m);
     for (side, key) in [(1.0f32, B_RIGHT), (-1.0, B_LEFT)] {
         let mut s = Surfer::at_start(&m);
         s.body.origin = v3(-13000.0, side * 120.0, 12600.0);

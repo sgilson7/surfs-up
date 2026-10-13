@@ -4,81 +4,14 @@
 //! ghost and every live surfer resimulated from another browser's inputs, so
 //! all three move by exactly the same rule.
 
-use crate::map::{box_touches, Map, TriggerKind};
+use crate::course::{Course, Role};
+use crate::map::{box_touches, Map, TriggerKind, NO_FILTER};
 use crate::movement::{Body, Cmd, MoveEvents, Mover, B_LEFT, B_RESET, B_RIGHT, HULL_MINS};
 use crate::vec3::{angle_vectors, v3, wrap180, V3, ZERO};
-
-/// What a teleport target means on this course.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Role {
-    /// Fell into a foam pit: back to the start, the run is over.
-    Fall,
-    /// A door back to the start.
-    Restart,
-    /// One of the course's six endings.
-    Ending(u8),
-}
-
-/// The six endings of surf_utopia, by the name of the jail room the original
-/// sent you to. Two mirrored doors share a room, so they share an ending.
-pub const ENDINGS: [&str; 6] = [
-    "jail_mid1|jail_mid2",
-    "jail_rear",
-    "jail_top",
-    "jail_control_room1",
-    "jail_bottom1",
-    "jail_center",
-];
-
-/// The endings on the last wall of the course, where the lowest ramp runs
-/// out: reaching one of these finishes a timed run. The other three are
-/// early exits partway down, and a run that takes one is not timed.
-pub const FINISH_ENDINGS: [u8; 3] = [3, 4, 5];
-
-pub fn role_of(target: &str) -> Role {
-    match target {
-        "jail1" => Role::Fall,
-        "start" => Role::Restart,
-        t => {
-            let i = ENDINGS
-                .iter()
-                .position(|e| e.split('|').any(|n| n == t))
-                .unwrap_or(0);
-            Role::Ending(i as u8)
-        }
-    }
-}
 
 /// Horizontal speed allowed inside the start zone (shavit's default prespeed
 /// limit, 260 + 30).
 pub const START_SPEED_CAP: f32 = 290.0;
-
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Zone {
-    pub mins: V3,
-    pub maxs: V3,
-}
-
-impl Zone {
-    pub fn contains_box(&self, lo: V3, hi: V3) -> bool {
-        hi.x >= self.mins.x
-            && lo.x <= self.maxs.x
-            && hi.y >= self.mins.y
-            && lo.y <= self.maxs.y
-            && hi.z >= self.mins.z
-            && lo.z <= self.maxs.z
-    }
-}
-
-/// The start platform of surf_utopia: the ledge you drop off into the first
-/// trough (the TF2 map's no-build volume over it, from the BSP).
-pub fn start_zone(map: &Map) -> Zone {
-    let s = map.spawn;
-    Zone {
-        mins: v3(-14336.0, -1088.0, s.z - 80.0),
-        maxs: v3(-13760.0, 1088.0, s.z + 240.0),
-    }
-}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Phase {
@@ -131,6 +64,8 @@ pub struct Tick {
     pub finished: Option<(u8, u32)>,
     pub exited: Option<u8>,
     pub boosted: bool,
+    /// A new stage reached (0 is the first).
+    pub stage: Option<u8>,
 }
 
 /// A surfer: the body, where it is in a run, and the run's tallies.
@@ -142,6 +77,11 @@ pub struct Surfer {
     pub last_cmd: Cmd,
     /// The yaw a teleport turned the view to; the page's view follows it.
     pub snap_yaw: Option<f32>,
+    /// The name the map has given this surfer (a name index, 0 for none):
+    /// how a map's secrets remember where you have been.
+    pub name: u16,
+    /// The furthest stage reached this run (0 is the first).
+    pub stage: u8,
 }
 
 impl Surfer {
@@ -152,6 +92,8 @@ impl Surfer {
             stats: Stats::default(),
             last_cmd: Cmd::new(0, map.spawn_yaw, 0.0),
             snap_yaw: Some(map.spawn_yaw),
+            name: 0,
+            stage: 0,
         }
     }
 
@@ -162,6 +104,8 @@ impl Surfer {
             stats: Stats::default(),
             last_cmd: cmd,
             snap_yaw: None,
+            name: 0,
+            stage: 0,
         }
     }
 
@@ -170,10 +114,12 @@ impl Surfer {
         self.phase = Phase::Start;
         self.stats = Stats::default();
         self.snap_yaw = Some(map.spawn_yaw);
+        self.name = 0;
+        self.stage = 0;
     }
 
-    /// One tick. `mv` carries the map; `zone` is the start zone.
-    pub fn step(&mut self, mv: &mut Mover, zone: &Zone, cmd: Cmd) -> Tick {
+    /// One tick. `mv` carries the map; `course` says what its teleports mean.
+    pub fn step(&mut self, mv: &mut Mover, course: &Course, cmd: Cmd) -> Tick {
         let map = mv.map;
         let mut out = Tick::default();
         if cmd.has(B_RESET) && !self.last_cmd.has(B_RESET) {
@@ -193,13 +139,17 @@ impl Surfer {
         // Triggers fire along the whole swept box (not only where the move
         // ended), and reach 2 units under the feet, so a fast surfer cannot
         // pass through a thin trigger (RNGFix's telehop and trigger-jump fixes).
+        // A filtered trigger fires only for a surfer with the name its filter
+        // wants; a rename takes effect after this tick's teleports, as an
+        // output fires after the touch that caused it.
         let maxs = self.body.maxs();
         let a = self.body.origin;
         let lo = v3(before.x.min(a.x), before.y.min(a.y), before.z.min(a.z)) + HULL_MINS - v3(0.0, 0.0, 2.0);
         let hi = v3(before.x.max(a.x), before.y.max(a.y), before.z.max(a.z)) + maxs;
         let mut push = ZERO;
         let mut pushed = false;
-        let mut role: Option<Role> = None;
+        let mut jump: Option<(Role, u16)> = None;
+        let mut rename: Option<u16> = None;
         for t in &map.triggers {
             if t.maxs.x < lo.x
                 || t.mins.x > hi.x
@@ -210,6 +160,9 @@ impl Surfer {
             {
                 continue;
             }
+            if t.filter != NO_FILTER && t.filter != self.name {
+                continue;
+            }
             if !box_touches(&t.planes, lo, hi) {
                 continue;
             }
@@ -218,13 +171,14 @@ impl Surfer {
                     push += dir * speed;
                     pushed = true;
                 }
-                TriggerKind::Teleport(i) => {
-                    let r = role_of(map.target_name(i));
-                    // an ending outranks a fall in the same tick
-                    role = match (role, r) {
-                        (Some(Role::Ending(e)), _) => Some(Role::Ending(e)),
-                        (_, r) => Some(r),
-                    };
+                TriggerKind::Rename(n) => rename = Some(n),
+                TriggerKind::Teleport(d) => {
+                    let r = course.role(t, d);
+                    // a finish outranks anything else touched in the same tick
+                    let keep = matches!(jump, Some((Role::Finish(_), _)));
+                    if !keep {
+                        jump = Some((r, d));
+                    }
                 }
             }
         }
@@ -234,9 +188,9 @@ impl Surfer {
         }
         self.body.pushed = pushed;
 
-        match role {
-            Some(Role::Ending(e)) => {
-                if self.phase == Phase::Running && FINISH_ENDINGS.contains(&e) {
+        match jump {
+            Some((Role::Finish(e), _)) => {
+                if self.phase == Phase::Running {
                     out.finished = Some((e, self.stats.ticks));
                 } else {
                     out.exited = Some(e);
@@ -244,16 +198,47 @@ impl Surfer {
                 self.back_to_start(map);
                 out.teleported = true;
             }
-            Some(Role::Fall) | Some(Role::Restart) => {
-                out.fell = role == Some(Role::Fall);
+            Some((Role::Exit(e), _)) => {
+                out.exited = Some(e);
                 self.back_to_start(map);
                 out.teleported = true;
             }
+            Some((Role::Restart, _)) => {
+                out.fell = true;
+                self.back_to_start(map);
+                out.teleported = true;
+            }
+            Some((Role::Move, d)) => {
+                if let Some((p, yaw)) = map.destination(d) {
+                    // Source's trigger_teleport: the new place and facing, no velocity
+                    self.body.origin = p;
+                    self.body.velocity = ZERO;
+                    self.body.base_velocity = ZERO;
+                    self.body.pushed = false;
+                    self.snap_yaw = Some(yaw);
+                    match course.stage_of(d) {
+                        Some(st) if st > self.stage || (st == 0 && self.phase == Phase::Start) => {
+                            self.stage = st;
+                            out.stage = Some(st);
+                        }
+                        Some(st) if st == self.stage => out.fell = true,
+                        _ => {}
+                    }
+                }
+            }
             None => {}
         }
+        if let Some(n) = rename {
+            self.name = n;
+        }
 
-        if !out.teleported {
-            let in_zone = zone.contains_box(self.body.origin + HULL_MINS, self.body.origin + maxs);
+        let restarted = out.teleported;
+        out.teleported |= matches!(jump, Some((Role::Move, _)));
+        if !restarted {
+            let maxs = self.body.maxs();
+            let in_zone = course
+                .zone
+                .contains_box(self.body.origin + HULL_MINS, self.body.origin + maxs);
             if in_zone {
                 if self.phase == Phase::Running {
                     self.stats = Stats::default();
@@ -322,36 +307,17 @@ impl Surfer {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::map::tests::utopia;
+    use crate::course::tests::load;
     use crate::movement::{B_FORWARD, B_JUMP};
 
     #[test]
-    fn roles_cover_the_six_endings() {
-        assert_eq!(role_of("jail1"), Role::Fall);
-        assert_eq!(role_of("start"), Role::Restart);
-        assert_eq!(role_of("jail_mid2"), Role::Ending(0));
-        assert_eq!(role_of("jail_center"), Role::Ending(5));
-        let m = utopia();
-        let mut seen = [false; 6];
-        for t in &m.triggers {
-            if let TriggerKind::Teleport(i) = t.kind {
-                if let Role::Ending(e) = role_of(m.target_name(i)) {
-                    seen[e as usize] = true;
-                }
-            }
-        }
-        assert_eq!(seen, [true; 6], "every ending has a door on the map");
-    }
-
-    #[test]
     fn the_clock_starts_when_you_leave_the_platform() {
-        let m = utopia();
-        let mut mv = Mover::new(m);
-        let zone = start_zone(m);
-        let mut s = Surfer::at_start(m);
+        let (m, c) = load("surf_utopia");
+        let mut mv = Mover::new(&m);
+        let mut s = Surfer::at_start(&m);
         let mut started = None;
         for i in 0..640 {
-            let t = s.step(&mut mv, &zone, Cmd::new(B_FORWARD, 0.0, 0.0));
+            let t = s.step(&mut mv, &c, Cmd::new(B_FORWARD, 0.0, 0.0));
             if t.started {
                 started = Some(i);
                 break;
@@ -367,26 +333,21 @@ mod tests {
     }
 
     #[test]
-    fn falling_into_a_pit_sends_you_back_to_the_start() {
-        let m = utopia();
-        let mut mv = Mover::new(m);
-        let zone = start_zone(m);
-        let mut s = Surfer::at_start(m);
-        // just above a fall trigger's top face
+    fn falling_into_a_utopia_pit_sends_you_back_to_the_start() {
+        let (m, c) = load("surf_utopia");
+        let mut mv = Mover::new(&m);
+        let mut s = Surfer::at_start(&m);
+        let jail = m.name_index("jail1").unwrap();
         let pit = m
             .triggers
             .iter()
-            .find(|t| {
-                matches!(t.kind, TriggerKind::Teleport(i) if m.target_name(i) == "jail1")
-                    && t.mins.z == 8192.0
-                    && t.maxs.x > 5000.0
-            })
+            .find(|t| t.kind == TriggerKind::Teleport(jail) && t.mins.z == 8192.0 && t.maxs.x > 5000.0)
             .expect("the pit under the first section");
         s.phase = Phase::Running;
         s.body.origin = v3(-4000.0, 0.0, pit.maxs.z + 30.0);
         let mut fell = false;
         for _ in 0..64 {
-            let t = s.step(&mut mv, &zone, Cmd::new(0, 0.0, 0.0));
+            let t = s.step(&mut mv, &c, Cmd::new(0, 0.0, 0.0));
             if t.fell {
                 fell = true;
                 break;
@@ -398,10 +359,106 @@ mod tests {
     }
 
     #[test]
+    fn kitsune_the_red_door_starts_stage_one_and_a_fall_keeps_the_clock() {
+        let (m, c) = load("surf_kitsune");
+        let mut mv = Mover::new(&m);
+        let mut s = Surfer::at_start(&m);
+        assert_eq!(m.spawn_yaw, 90.0, "the spawn faces the red door (+y)");
+        let mut started = false;
+        for _ in 0..640 {
+            let t = s.step(&mut mv, &c, Cmd::new(B_FORWARD, 90.0, 0.0));
+            if t.started {
+                started = true;
+                assert_eq!(t.stage, Some(0));
+                break;
+            }
+        }
+        assert!(
+            started,
+            "through the red door into stage 1 at {:?}",
+            s.body.origin
+        );
+        let (red, _) = m.destination_named("red").unwrap();
+        assert_eq!(s.body.origin, red);
+        // drop onto stage 1's pit: back to the red start, clock still running
+        let pit = m
+            .triggers
+            .iter()
+            .find(|t| {
+                t.kind == TriggerKind::Teleport(m.name_index("red").unwrap())
+                    && t.maxs.z - t.mins.z < 100.0
+                    && t.maxs.x - t.mins.x > 500.0
+            })
+            .expect("stage 1's pit");
+        s.body.origin = v3(
+            (pit.mins.x + pit.maxs.x) * 0.5,
+            (pit.mins.y + pit.maxs.y) * 0.5,
+            pit.maxs.z + 20.0,
+        );
+        let ticks = s.stats.ticks;
+        let mut fell = false;
+        for _ in 0..64 {
+            let t = s.step(&mut mv, &c, Cmd::new(0, 90.0, 0.0));
+            if t.fell {
+                fell = true;
+                break;
+            }
+        }
+        assert!(fell, "stage 1's pit is a fall");
+        assert_eq!(s.phase, Phase::Running, "the clock keeps running after a fall");
+        assert!(s.stats.ticks > ticks);
+        assert_eq!(s.body.origin, red);
+    }
+
+    #[test]
+    fn kitsune_secrets_remember_your_name() {
+        let (m, c) = load("surf_kitsune");
+        let mut mv = Mover::new(&m);
+        // the shortcut out of stage 1 (to orange1) fires only for someone the
+        // secret room behind the spawn has named "x"
+        let orange1 = m.name_index("orange1").unwrap();
+        let door = m
+            .triggers
+            .iter()
+            .find(|t| t.kind == TriggerKind::Teleport(orange1))
+            .expect("the shortcut");
+        let mid = (door.mins + door.maxs) * 0.5 - v3(0.0, 0.0, 36.0);
+        let mut s = Surfer::at_start(&m);
+        s.phase = Phase::Running;
+        s.body.origin = mid;
+        s.step(&mut mv, &c, Cmd::new(0, 90.0, 0.0));
+        assert_ne!(
+            s.body.origin,
+            m.destination(orange1).unwrap().0,
+            "no name, no shortcut"
+        );
+        let mut named = Surfer::at_start(&m);
+        named.phase = Phase::Running;
+        named.name = m.name_index("x").unwrap();
+        named.body.origin = mid;
+        named.step(&mut mv, &c, Cmd::new(0, 90.0, 0.0));
+        assert_eq!(
+            named.body.origin,
+            m.destination(orange1).unwrap().0,
+            "named, the shortcut takes you"
+        );
+        // and the room that names you
+        let x = m.name_index("x").unwrap();
+        let namer = m
+            .triggers
+            .iter()
+            .find(|t| t.kind == TriggerKind::Rename(x))
+            .expect("the naming trigger");
+        let mut n = Surfer::at_start(&m);
+        n.body.origin = (namer.mins + namer.maxs) * 0.5 - v3(0.0, 0.0, 36.0);
+        n.step(&mut mv, &c, Cmd::new(0, 90.0, 0.0));
+        assert_eq!(n.name, x);
+    }
+
+    #[test]
     fn sync_counts_turning_into_the_held_key() {
-        let m = utopia();
-        let mut mv = Mover::new(m);
-        let zone = start_zone(m);
+        let (m, c) = load("surf_utopia");
+        let mut mv = Mover::new(&m);
         let mut s = Surfer::from_body(Body::at(v3(0.0, 0.0, 14000.0)), Cmd::new(0, 0.0, 0.0));
         s.body.velocity = v3(500.0, 0.0, 0.0);
         let mut yaw = 0.0;
@@ -409,7 +466,7 @@ mod tests {
             // turn left holding A for 20 ticks, then left holding D (bad)
             yaw += 2.0;
             let key = if i < 20 { B_LEFT } else { B_RIGHT };
-            s.step(&mut mv, &zone, Cmd::new(key | B_JUMP, yaw, 0.0));
+            s.step(&mut mv, &c, Cmd::new(key | B_JUMP, yaw, 0.0));
         }
         assert_eq!(s.stats.sync_total, 40);
         assert_eq!(s.stats.sync_good, 20);

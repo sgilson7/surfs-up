@@ -23,6 +23,7 @@
     <div class="hud-top">
       <div class="pair"><span class="k" data-copy="hud_time"></span><span class="v" id="h-time"></span></div>
       <div class="pair"><span class="k" data-copy="hud_best"></span><span class="v" id="h-best"></span></div>
+      <div class="pair" id="h-stage-pair" hidden><span class="k" data-copy="hud_stage"></span><span class="v" id="h-stage"></span></div>
     </div>
     <div id="h-start" class="hint" data-copy="hud_start"></div>
     <div id="crosshair"></div>
@@ -50,6 +51,7 @@
       <img class="title-art" src="art/title.png" alt="Kids in gym clothes surfing a blue mat ramp over a foam pit">
       <h1 data-copy="title"></h1>
       <p class="tagline" data-copy="tagline"></p>
+      <div id="maps" class="maps"></div>
       <label class="name-row"><span data-copy="your_name"></span><input id="name" maxlength="16" autocomplete="off" spellcheck="false"></label>
       <div class="buttons">
         <button id="t-play" class="big" data-copy="play"></button>
@@ -61,7 +63,7 @@
         <button class="open-help" data-copy="help"></button>
         <button class="open-settings" data-copy="settings"></button>
       </div>
-      <p class="build">surf_utopia · <span id="build"></span></p>
+      <p class="build"><span id="map-name"></span> · <span id="build"></span></p>
     </div>
   </section>
 

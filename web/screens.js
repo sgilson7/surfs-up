@@ -89,5 +89,25 @@ export function makeScreens(copy) {
     el("s-shirt").style.background = st.shirt;
   }
 
-  return { board, items, settings };
+  // the courses on the title: pick one, see your best on it
+  function maps(s, onPick) {
+    const box = el("maps");
+    box.replaceChildren();
+    for (const m of s.maps) {
+      const b = document.createElement("button");
+      b.className = "map-card" + (m.chosen ? " chosen" : "");
+      const name = document.createElement("strong");
+      name.textContent = m.name;
+      const by = document.createElement("span");
+      by.textContent = fill(copy.course_by, { author: m.author });
+      const best = document.createElement("span");
+      best.textContent = m.best ? fill(copy.course_best, { time: m.best }) : copy.course_none;
+      b.append(name, by, best);
+      b.addEventListener("click", () => onPick(m.id));
+      box.append(b);
+    }
+    el("map-name").textContent = s.map_name;
+  }
+
+  return { board, items, settings, maps };
 }

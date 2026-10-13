@@ -2,6 +2,7 @@
 //! values in through the shim and draws what comes back.
 
 pub mod camera;
+pub mod course;
 pub mod game;
 pub mod map;
 pub mod mesh;

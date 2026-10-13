@@ -4,10 +4,10 @@
 //! maple boards, painted block, foam cubes...); the shader holds no rule, only
 //! the patterns.
 
+use crate::course::{Course, Role};
 use crate::map::{
-    face_polygon, BrushKind, Map, Plane, TriggerKind, HINT_BLACK, HINT_GLASS, HINT_LIGHT, HINT_METAL,
+    face_polygon, BrushKind, Map, Plane, TriggerKind, HINT_GLASS, HINT_LIGHT, HINT_METAL, NO_FILTER,
 };
-use crate::run::{role_of, Role, FINISH_ENDINGS};
 use crate::vec3::{v3, V3};
 
 pub const FLOATS_PER_VERTEX: usize = 10;
@@ -45,7 +45,6 @@ const WOOD: [f32; 3] = [0.86, 0.66, 0.42];
 const CEILING: [f32; 3] = [0.95, 0.95, 0.93];
 const NET: [f32; 3] = [0.95, 0.97, 1.0];
 const LIGHT: [f32; 3] = [1.0, 0.97, 0.86];
-const TRIM: [f32; 3] = [0.20, 0.24, 0.40];
 const METAL: [f32; 3] = [0.62, 0.66, 0.72];
 const FOAM: [f32; 3] = [0.95, 0.55, 0.62];
 const FINISH: [f32; 3] = [1.0, 0.85, 0.20];
@@ -96,7 +95,7 @@ fn scramble(x: u32) -> u32 {
 
 /// The static world: opaque triangles first, then see-through ones. Returns
 /// the vertices and how many of them are opaque.
-pub fn world(map: &Map) -> (Vec<f32>, usize) {
+pub fn world(map: &Map, course: &Course) -> (Vec<f32>, usize) {
     let mut opaque = Vec::new();
     let mut clear = Vec::new();
     let mats = ramp_mats(map);
@@ -119,15 +118,17 @@ pub fn world(map: &Map) -> (Vec<f32>, usize) {
             if poly.is_empty() {
                 continue;
             }
-            let see_through = b.kind == BrushKind::Window || s.hint == HINT_GLASS;
+            // See-through walls are safety netting; a see-through floor (a
+            // grid you run on) is a maple floor and a see-through ramp a mat,
+            // like any other.
+            let see_through =
+                (b.kind == BrushKind::Window || s.hint == HINT_GLASS) && n.z < RAMP_TOP && !ramp;
             let (c, m) = if b.kind == BrushKind::Water {
                 (BALLS, M_BALLS)
             } else if see_through {
                 (NET, M_NET)
             } else if s.hint == HINT_LIGHT {
                 (LIGHT, M_LIGHT)
-            } else if s.hint == HINT_BLACK {
-                (TRIM, M_FLAT)
             } else if s.hint == HINT_METAL {
                 (METAL, M_FLAT)
             } else if ramp {
@@ -144,16 +145,23 @@ pub fn world(map: &Map) -> (Vec<f32>, usize) {
         }
     }
     // The triggers you can see: foam pits where you fall, the finish doors,
-    // the early exits, and the doors back to the start.
+    // the early exits, the doors to the next stage and back to the start. A
+    // filtered teleport is a map's secret, and stays unseen.
     for t in &map.triggers {
         let TriggerKind::Teleport(i) = t.kind else {
             continue;
         };
-        let (c, m) = match role_of(map.target_name(i)) {
-            Role::Fall => (FOAM, M_FOAM),
+        if t.filter != NO_FILTER {
+            continue;
+        }
+        let size = t.maxs - t.mins;
+        let pit = size.z <= 96.0 && size.x.max(size.y) >= 256.0;
+        let (c, m) = match course.role(t, i) {
+            Role::Finish(_) => (FINISH, M_FINISH),
+            Role::Exit(_) => (EARLY, M_DOOR_EARLY),
+            _ if pit => (FOAM, M_FOAM),
             Role::Restart => (EXIT, M_EXIT),
-            Role::Ending(e) if FINISH_ENDINGS.contains(&e) => (FINISH, M_FINISH),
-            Role::Ending(_) => (EARLY, M_DOOR_EARLY),
+            Role::Move => (EARLY, M_DOOR_EARLY),
         };
         for k in 0..t.planes.len() {
             let n = t.planes[k].n;
@@ -294,12 +302,18 @@ fn hall(map: &Map, out: &mut Vec<f32>) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::map::tests::utopia;
+    use crate::course::tests::load;
 
     #[test]
     fn the_world_has_ramps_floors_pits_and_doors() {
-        let m = utopia();
-        let (v, opaque) = world(m);
+        let (km, kc) = load("surf_kitsune");
+        let (kv, _) = world(&km, &kc);
+        let kmats: Vec<f32> = kv.chunks(FLOATS_PER_VERTEX).map(|c| c[9]).collect();
+        for m in [M_MAT, M_FOAM, M_FINISH, M_DOOR_EARLY, M_HALL] {
+            assert!(kmats.contains(&m), "kitsune: material {m} missing");
+        }
+        let (um, uc) = load("surf_utopia");
+        let (v, opaque) = world(&um, &uc);
         assert_eq!(v.len() % (3 * FLOATS_PER_VERTEX), 0, "whole triangles");
         assert!(opaque * FLOATS_PER_VERTEX <= v.len());
         let mats: Vec<f32> = v.chunks(FLOATS_PER_VERTEX).map(|c| c[9]).collect();
