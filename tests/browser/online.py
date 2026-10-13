@@ -130,7 +130,13 @@ def run(p, engine, origin):
                     break
                 host.wait_for_timeout(100)
 
-    host.click("#p-resume")
+    # the host may stay paused: a paused browser still runs the room and draws
+    # the others; resume only if the button is there to press
+    if host.is_visible("#p-resume"):
+        try:
+            host.click("#p-resume", timeout=5000)
+        except Exception:
+            pass
     everyone = COPY["hud_people"].replace("{n}", str(PEOPLE))
     for _ in range(200):
         if all(pg.inner_text("#h-people") == everyone for pg in pages):
