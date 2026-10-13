@@ -87,7 +87,8 @@ def run(page, check, engine):
             break
         page.wait_for_timeout(100)
     page.keyboard.up("KeyW")
-    check(page.inner_text("#h-time") != "0:00.000", "walking through the red door starts the clock")
+    state = page.evaluate("() => [document.body.dataset.mode, document.getElementById('h-speed').textContent, document.getElementById('h-time').textContent, document.getElementById('message').textContent]")
+    check(page.inner_text("#h-time") != "0:00.000", f"walking through the red door starts the clock {state}")
     check(page.inner_text("#h-stage") == "1/9", f"stage 1 of 9 ({page.inner_text('#h-stage')})")
     page.keyboard.press("Escape")
     page.wait_for_selector("body[data-mode='pause']", state="attached", timeout=5000)
