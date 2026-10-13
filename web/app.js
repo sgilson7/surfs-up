@@ -8,7 +8,7 @@ import { makeRenderer } from "./gl.js";
 import { makeInput } from "./input.js";
 import { makeHud } from "./hud.js";
 import { makeScreens } from "./screens.js";
-import { setup as setupSound, wake, play, setWind, toggleMute } from "./sound.js";
+import { setup as setupSound, wake, play, toggleMute } from "./sound.js";
 import { makeOnline } from "./online.js";
 
 const BUILD = "__BUILD__";
@@ -340,7 +340,6 @@ async function start() {
     if (s.mode !== shownMode) redraw();
     el("board").hidden = !(boardHeld && s.mode === "play");
     if (boardHeld) screens.board(el("b-board"), s);
-    setWind(s.mode === "play" ? h.wind : 0, s.settings.volume);
     for (const [kind, gain] of JSON.parse(game.events())) {
       play(kind, gain);
       if (kind === "finish" || kind === "record") {

@@ -1162,7 +1162,6 @@ impl Game {
             "speed": speed as u32,
             "trend": trend,
             "fall": (-self.me.body.velocity.z).max(0.0) as u32,
-            "wind": (self.me.body.velocity.length() / 3000.0).min(1.0),
             "running": running,
             "time": if running { format_time(s.ticks) } else { format_time(0) },
             "sync": if running { format!("{:.1}", s.sync_pct()) } else { "-".into() },

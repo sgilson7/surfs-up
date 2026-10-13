@@ -46,3 +46,7 @@ surf_kitsune is the second course, picked on the title. `./scripts/check.sh` pas
 ## Third request: dismounting and kitsune's stage 2 (13 October 2026)
 
 `docs/ANALYSIS-dismount.md`. The cause was the teleport: Source keeps velocity through a stage door and this game zeroed it. Fixed, with three CS2 alignments (no slow-rise air cut, two air steps a tick, the snag offset). Kitsune's map is unchanged. New tests: a stage door keeps speed, two air steps gain more than one, stage 2 is surfable with stage 1's speed (a beam search), and a save from the first rules keeps everything but its best runs. The first two were broken on purpose and failed. Not checked by a person: how it feels with a mouse (SECOND-ORDER row 26).
+
+## Fourth request (13 October 2026): take out the speed wind
+
+"the noise when you start getting fast is awful, take that out". The wind (filtered noise rising with speed) is removed from the core's HUD, `web/sound.js`, `web/app.js` and `data/sounds.json` (`SECOND-ORDER.md` row 27). `./scripts/check.sh`: BUILDER CHECK PASSED.

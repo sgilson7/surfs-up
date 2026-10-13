@@ -1,7 +1,7 @@
 // Sound, synthesized from data/sounds.json. The core says what happened;
 // this file only performs it. White noise comes from the core's generator,
 // since the page may not draw random numbers. Raiders of the Lost Mart's
-// web/sound.js, with the wind that rises with your speed.
+// web/sound.js.
 import { noise } from "./pkg/surf_shim.js";
 
 let ctx = null;
@@ -9,7 +9,6 @@ let master = null;
 let noiseBuffer = null;
 let recipes = null;
 let muted = false;
-let wind = null;
 const lastAt = new Map();
 
 export function setup(sounds) {
@@ -29,36 +28,8 @@ export function wake() {
     const data = noise(ctx.sampleRate * recipes.noise_seconds, recipes.seed);
     noiseBuffer = ctx.createBuffer(1, data.length, ctx.sampleRate);
     noiseBuffer.copyToChannel(data, 0);
-    startWind();
   }
   if (ctx.state === "suspended") ctx.resume().catch(() => {});
-}
-
-function startWind() {
-  const w = recipes.wind;
-  const src = ctx.createBufferSource();
-  src.buffer = noiseBuffer;
-  src.loop = true;
-  const filter = ctx.createBiquadFilter();
-  filter.type = "bandpass";
-  filter.frequency.value = w.low;
-  filter.Q.value = w.q;
-  const gain = ctx.createGain();
-  gain.gain.value = 0;
-  src.connect(filter);
-  filter.connect(gain);
-  gain.connect(master);
-  src.start();
-  wind = { filter, gain };
-}
-
-// The rush of air, from 0 (still) to 1 (as fast as anyone goes).
-export function setWind(level, volume) {
-  if (!wind || !ctx) return;
-  const w = recipes.wind;
-  const t = ctx.currentTime + w.smooth;
-  wind.gain.gain.linearRampToValueAtTime(level * level * w.gain * volume, t);
-  wind.filter.frequency.linearRampToValueAtTime(w.low + (w.high - w.low) * level, t);
 }
 
 export function toggleMute() {
