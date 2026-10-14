@@ -58,3 +58,7 @@ surf_kitsune is the second course, picked on the title. `./scripts/check.sh` pas
 ## Sixth request (13 October 2026): kitsune online, edges and platforms
 
 "fix the weird see-through edges on kitsune, and change the platforms to more the original kitsune style. also i dont think kitsune works online properly". The title lost a course choice made right after typing a name, so friends ended up on different courses (row 32); live snapshots now keep the map-given name and stage (row 33); kitsune's platforms are solid neon grids in each stage's colour, with neon edges (row 34). `./scripts/check.sh`: BUILDER CHECK PASSED.
+
+## Seventh request (13 October 2026): kitsune's first wedge
+
+"the first wedge is like kind of see through and hard to tell what youre looking at". Row 35: the doubled glass shells are drawn once, lit so the faces read apart, with the hollow ends closed. Collision is unchanged. `./scripts/check.sh`: BUILDER CHECK PASSED.

@@ -118,8 +118,9 @@ pub fn world(map: &Map, course: &Course) -> (Vec<f32>, usize) {
     let mut opaque = Vec::new();
     let mut clear = Vec::new();
     let mats = ramp_mats(map);
+    let inner = inner_shells(map);
     for (bi, b) in map.brushes.iter().enumerate() {
-        if b.kind == BrushKind::Clip {
+        if b.kind == BrushKind::Clip || inner[bi] {
             continue;
         }
         let planes: Vec<Plane> = b.sides.iter().map(|s| s.plane).collect();
@@ -136,6 +137,9 @@ pub fn world(map: &Map, course: &Course) -> (Vec<f32>, usize) {
             .iter()
             .find(|s| s.drawn && s.plane.n.z >= RAMP_TOP)
             .and_then(|s| grid_colour(s.hint));
+        // a see-through grid ramp is kitsune's glass ramp: a lit grid in its
+        // stage's colour, its edges neon, as solid as a mat
+        let grid_ramp = ramp && b.kind == BrushKind::Window;
         let platform = !ramp
             && b.kind == BrushKind::Window
             && b.maxs.z - b.mins.z <= PLATFORM_THICK
@@ -155,6 +159,13 @@ pub fn world(map: &Map, course: &Course) -> (Vec<f32>, usize) {
             let see_through = (b.kind == BrushKind::Window || s.hint == HINT_GLASS) && !ramp && !platform;
             let (c, m) = if b.kind == BrushKind::Water {
                 (BALLS, M_BALLS)
+            } else if grid_ramp {
+                let k = b.sides.iter().find_map(|s| grid_colour(s.hint)).unwrap_or(0);
+                if n.z > WALL_Z && n.z < RAMP_TOP {
+                    (STAGE[k], M_GRID)
+                } else {
+                    (STAGE[k], M_LIGHT)
+                }
             } else if platform {
                 let k = grid_colour(s.hint).or(grid_top).unwrap_or(0);
                 if n.z >= RAMP_TOP {
@@ -181,6 +192,9 @@ pub fn world(map: &Map, course: &Course) -> (Vec<f32>, usize) {
             };
             let out = if see_through { &mut clear } else { &mut opaque };
             push_polygon(out, &poly, n, c, m);
+            if grid_ramp && m == M_GRID {
+                end_caps(&mut opaque, &poly, c);
+            }
         }
     }
     // The triggers you can see: foam pits where you fall, the finish doors,
@@ -216,6 +230,60 @@ pub fn world(map: &Map, course: &Course) -> (Vec<f32>, usize) {
     let count = opaque.len() / FLOATS_PER_VERTEX;
     opaque.extend(clear);
     (opaque, count)
+}
+
+/// Kitsune's glass ramps are thin plates over nothing, so from a ramp's end
+/// you would look into a hollow ridge and through to the pit. Each end of a
+/// ramp face (an edge running down its fall line) gets a solid triangle
+/// under it, down to the edge's low end: the ridge reads as solid, as the
+/// translucent original's lit grid did. Drawn only; nothing collides with it.
+fn end_caps(out: &mut Vec<f32>, poly: &[V3], c: [f32; 3]) {
+    let centre = poly.iter().fold(V3::default(), |a, &p| a + p) * (1.0 / poly.len() as f32);
+    let shade = [c[0] * 0.45, c[1] * 0.45, c[2] * 0.45];
+    for i in 0..poly.len() {
+        let (a, b) = (poly[i], poly[(i + 1) % poly.len()]);
+        let run = v3(b.x - a.x, b.y - a.y, 0.0);
+        let flat = run.length();
+        let drop = (b.z - a.z).abs();
+        // along the ridge an edge falls gently; an end falls steeply
+        if flat < 1.0 || drop < flat * 0.6 {
+            continue;
+        }
+        let (high, low) = if a.z > b.z { (a, b) } else { (b, a) };
+        let foot = v3(high.x, high.y, low.z);
+        let mut n = v3(-run.y, run.x, 0.0).normalized();
+        let mid = (a + b) * 0.5;
+        if n.dot(mid - centre) < 0.0 {
+            n = n * -1.0;
+        }
+        push_polygon(out, &[high, low, foot], n, shade, M_FLAT);
+    }
+}
+
+/// See-through ramp brushes that sit inside another: kitsune doubles its
+/// glass ramps (an outer and an inner shell), and drawing both solid makes
+/// their faces fight. Only the outer one is drawn; both still collide.
+fn inner_shells(map: &Map) -> Vec<bool> {
+    let shells: Vec<usize> = (0..map.brushes.len())
+        .filter(|&i| map.brushes[i].kind == BrushKind::Window && is_ramp(&map.brushes[i]))
+        .collect();
+    let mut out = vec![false; map.brushes.len()];
+    let pad = 1.0;
+    for &i in &shells {
+        let a = &map.brushes[i];
+        out[i] = shells.iter().any(|&j| {
+            let b = &map.brushes[j];
+            j != i
+                && (b.maxs - b.mins).length() > (a.maxs - a.mins).length()
+                && a.mins.x >= b.mins.x - pad
+                && a.mins.y >= b.mins.y - pad
+                && a.mins.z >= b.mins.z - pad
+                && a.maxs.x <= b.maxs.x + pad
+                && a.maxs.y <= b.maxs.y + pad
+                && a.maxs.z <= b.maxs.z + pad
+        });
+    }
+    out
 }
 
 fn is_ramp(b: &crate::map::Brush) -> bool {
@@ -408,6 +476,33 @@ mod tests {
             .find(|p| inside(p) && p[9] == M_GRID)
             .unwrap();
         assert_eq!(&red_top[6..9], &STAGE[0], "stage 1's platform is red");
+    }
+
+    #[test]
+    fn kitsunes_first_wedge_is_drawn_solid_with_closed_ends() {
+        let (m, c) = load("surf_kitsune");
+        let (v, opaque) = world(&m, &c);
+        // stage 1's wedge: the glass ridge between the red start and its pit
+        let wedge = |p: &[f32]| {
+            p[0] > -15760.0 && p[0] < -14960.0 && p[1] > -14700.0 && p[1] < -13500.0 && p[2] > 60.0
+        };
+        let verts: Vec<&[f32]> = v.chunks(FLOATS_PER_VERTEX).collect();
+        assert_eq!(
+            verts[opaque..].iter().filter(|p| wedge(p)).count(),
+            0,
+            "nothing on the wedge is see-through"
+        );
+        let mats: Vec<f32> = verts[..opaque]
+            .iter()
+            .filter(|p| wedge(p))
+            .map(|p| p[9])
+            .collect();
+        assert!(mats.contains(&M_GRID), "its faces are a lit red grid");
+        let caps = mats.iter().filter(|m| **m == M_FLAT).count();
+        assert!(
+            caps >= 6,
+            "its ends are closed, not open onto the pit ({caps} cap vertices)"
+        );
     }
 
     #[test]
