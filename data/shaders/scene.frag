@@ -131,6 +131,12 @@ vec3 paint(int m, vec3 base, vec3 p, vec3 n, out float alpha, out float glow) {
     vec3 c = k < 0.25 ? vec3(0.95, 0.3, 0.3) : k < 0.5 ? vec3(0.3, 0.55, 0.95) : k < 0.75 ? vec3(0.98, 0.85, 0.3) : vec3(0.4, 0.85, 0.45);
     return mix(c, c * 0.5, smoothstep(0.38, 0.5, d));
   }
+  if (m == 16) {
+    // a kitsune platform: a lit grid in its stage's colour, on dark
+    float g = max(line(p.x / 32.0, 0.04), line(p.y / 32.0, 0.04));
+    glow = 0.35 + 0.65 * g;
+    return mix(base * 0.28, base, g);
+  }
   if (m == 13) {
     alpha = 0.38;
     return mix(base, vec3(0.75, 0.90, 1.0), 0.35);

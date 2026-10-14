@@ -362,6 +362,10 @@ impl Peer {
             } else {
                 Phase::Running
             };
+            // the name the map gave them (kitsune's filtered teleports read
+            // it) and their stage come with the state
+            s.name = b["n"].as_u64().map(|n| n as u16).unwrap_or(s.name);
+            s.stage = b["st"].as_u64().map(|n| n as u8).unwrap_or(s.stage);
             match &mut self.live {
                 Some(l) => {
                     // the state is the truth: replace, but keep easing from where it was drawn
@@ -442,6 +446,26 @@ mod tests {
             B_RIGHT
         };
         Cmd::new(B_FORWARD | key, ((i % 40) as f32 - 20.0) * 0.7, 10.0)
+    }
+
+    #[test]
+    fn a_snapshot_carries_the_name_the_map_gave_and_the_stage() {
+        let (m, c) = load("surf_kitsune");
+        let mut mv = Mover::new(&m);
+        let mut s = Surfer::at_start(&m);
+        s.name = 7;
+        s.stage = 3;
+        s.phase = Phase::Running;
+        let text = live_message(10, &[Cmd::new(0, 0.0, 0.0); 2], Some(&s));
+        let mut p = Peer::new("a", false);
+        p.hear_live(&mut mv, &c, &serde_json::from_str(&text).unwrap(), 10)
+            .unwrap();
+        let l = p.live.as_ref().unwrap();
+        assert_eq!(
+            (l.confirmed.name, l.confirmed.stage),
+            (7, 3),
+            "kitsune's filtered teleports read the name"
+        );
     }
 
     #[test]

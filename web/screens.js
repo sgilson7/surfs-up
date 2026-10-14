@@ -57,8 +57,12 @@ export function makeScreens(copy) {
     node.append(ul);
   }
 
+  let shownItems = "";
   function items(s, onPick) {
     const box = el("items");
+    const key = JSON.stringify(s.items);
+    if (key === shownItems) return;
+    shownItems = key;
     box.replaceChildren();
     for (const it of s.items) {
       const b = document.createElement("button");
@@ -90,8 +94,16 @@ export function makeScreens(copy) {
   }
 
   // the courses on the title: pick one, see your best on it
+  // The course cards are rebuilt only when they change: a redraw between a
+  // press and its release (leaving the name box saves the name and redraws)
+  // would otherwise take the card away and lose the click.
+  let shownMaps = "";
   function maps(s, onPick) {
+    el("map-name").textContent = s.map_name;
     const box = el("maps");
+    const key = JSON.stringify(s.maps);
+    if (key === shownMaps) return;
+    shownMaps = key;
     box.replaceChildren();
     for (const m of s.maps) {
       const b = document.createElement("button");
@@ -106,7 +118,6 @@ export function makeScreens(copy) {
       b.addEventListener("click", () => onPick(m.id));
       box.append(b);
     }
-    el("map-name").textContent = s.map_name;
   }
 
   return { board, items, settings, maps };

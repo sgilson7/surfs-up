@@ -54,3 +54,7 @@ surf_kitsune is the second course, picked on the title. `./scripts/check.sh` pas
 ## Fifth request (13 October 2026): things to hold, a kitsune set, spectating
 
 "unlocking the pool noodle and stuff doesn't seem to work at all, also add a new set you can unlock for kitsune" and "there should be a spectator mode like ape race to watch other people in your gym online". Unlocking was broken by the order of the finish and its teleport (row 28); each course now has its own set (row 29); V watches someone in your gym (row 30); the kitsune browser walk starts near the door (row 31). `./scripts/check.sh`: BUILDER CHECK PASSED.
+
+## Sixth request (13 October 2026): kitsune online, edges and platforms
+
+"fix the weird see-through edges on kitsune, and change the platforms to more the original kitsune style. also i dont think kitsune works online properly". The title lost a course choice made right after typing a name, so friends ended up on different courses (row 32); live snapshots now keep the map-given name and stage (row 33); kitsune's platforms are solid neon grids in each stage's colour, with neon edges (row 34). `./scripts/check.sh`: BUILDER CHECK PASSED.

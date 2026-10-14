@@ -76,6 +76,27 @@ pub const HINT_GLASS: u8 = 1;
 pub const HINT_LIGHT: u8 = 2;
 pub const HINT_BLACK: u8 = 3;
 pub const HINT_METAL: u8 = 4;
+/// A neon strip (16 + k) or a grid (32 + k), in stage colour k: kitsune
+/// lights its platforms' and ramps' edges in each stage's colour.
+pub const HINT_NEON: u8 = 16;
+pub const HINT_GRID: u8 = 32;
+/// How many stage colours there are (red, orange, yellow, green, teal, blue,
+/// purple, pink, white).
+pub const STAGE_COLOURS: u8 = 9;
+
+/// The stage colour of a neon strip.
+pub fn neon_colour(hint: u8) -> Option<usize> {
+    (HINT_NEON..HINT_NEON + STAGE_COLOURS)
+        .contains(&hint)
+        .then(|| (hint - HINT_NEON) as usize)
+}
+
+/// The stage colour of a grid.
+pub fn grid_colour(hint: u8) -> Option<usize> {
+    (HINT_GRID..HINT_GRID + STAGE_COLOURS)
+        .contains(&hint)
+        .then(|| (hint - HINT_GRID) as usize)
+}
 
 /// Edge of a broadphase cell in units.
 const CELL: f32 = 512.0;

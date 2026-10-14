@@ -6,7 +6,8 @@
 
 use crate::course::{Course, Role};
 use crate::map::{
-    face_polygon, BrushKind, Map, Plane, TriggerKind, HINT_GLASS, HINT_LIGHT, HINT_METAL, NO_FILTER,
+    face_polygon, grid_colour, neon_colour, BrushKind, Map, Plane, TriggerKind, HINT_GLASS, HINT_LIGHT,
+    HINT_METAL, NO_FILTER,
 };
 use crate::vec3::{v3, V3};
 
@@ -28,6 +29,7 @@ pub const M_KID: f32 = 12.0;
 pub const M_GHOST: f32 = 13.0;
 pub const M_HAND: f32 = 14.0;
 pub const M_DOOR_EARLY: f32 = 15.0;
+pub const M_GRID: f32 = 16.0;
 
 /// Gym mat vinyl: the colours of the mats in a school gym. One ramp (all
 /// the brushes that touch along it) is one mat colour.
@@ -52,6 +54,23 @@ const EXIT: [f32; 3] = [0.30, 0.80, 0.45];
 const EARLY: [f32; 3] = [0.55, 0.75, 1.0];
 const BALLS: [f32; 3] = [0.40, 0.75, 0.95];
 const HALL: [f32; 3] = [0.80, 0.82, 0.86];
+/// Kitsune's stage colours, for its neon strips and grids, in the order the
+/// map file numbers them (red, orange, yellow, green, teal, blue, purple,
+/// pink, white).
+const STAGE: [[f32; 3]; 9] = [
+    [1.0, 0.22, 0.25],
+    [1.0, 0.55, 0.12],
+    [1.0, 0.86, 0.15],
+    [0.25, 0.92, 0.38],
+    [0.15, 0.90, 0.85],
+    [0.22, 0.52, 1.0],
+    [0.68, 0.36, 1.0],
+    [1.0, 0.40, 0.75],
+    [0.96, 0.96, 1.0],
+];
+/// A grid platform no thicker than this is a platform (drawn solid), not a
+/// see-through barrier.
+const PLATFORM_THICK: f32 = 64.0;
 
 /// Below this normal z a face is a wall or the underside of something; above
 /// the ground limit it is a floor; between, a surf ramp.
@@ -109,6 +128,18 @@ pub fn world(map: &Map, course: &Course) -> (Vec<f32>, usize) {
             .iter()
             .any(|s| s.drawn && s.plane.n.z > WALL_Z && s.plane.n.z < RAMP_TOP);
         let pick = scramble(b.group);
+        // a thin see-through grid with a top is a platform, as kitsune
+        // builds them: drawn solid, its top a lit grid in its stage's
+        // colour and its edges a neon strip, so nothing shows through
+        let grid_top = b
+            .sides
+            .iter()
+            .find(|s| s.drawn && s.plane.n.z >= RAMP_TOP)
+            .and_then(|s| grid_colour(s.hint));
+        let platform = !ramp
+            && b.kind == BrushKind::Window
+            && b.maxs.z - b.mins.z <= PLATFORM_THICK
+            && grid_top.is_some();
         for (i, s) in b.sides.iter().enumerate() {
             if !s.drawn {
                 continue;
@@ -121,9 +152,18 @@ pub fn world(map: &Map, course: &Course) -> (Vec<f32>, usize) {
             // See-through walls and floors are safety netting, so you can see
             // the pit and the next ramp through them as in the original; a
             // see-through ramp is a mat like any other.
-            let see_through = (b.kind == BrushKind::Window || s.hint == HINT_GLASS) && !ramp;
+            let see_through = (b.kind == BrushKind::Window || s.hint == HINT_GLASS) && !ramp && !platform;
             let (c, m) = if b.kind == BrushKind::Water {
                 (BALLS, M_BALLS)
+            } else if platform {
+                let k = grid_colour(s.hint).or(grid_top).unwrap_or(0);
+                if n.z >= RAMP_TOP {
+                    (STAGE[k], M_GRID)
+                } else {
+                    (STAGE[k], M_LIGHT)
+                }
+            } else if let Some(k) = neon_colour(s.hint) {
+                (STAGE[k], M_LIGHT)
             } else if see_through {
                 (NET, M_NET)
             } else if s.hint == HINT_LIGHT {
@@ -324,6 +364,50 @@ mod tests {
             let n = v3(c[3], c[4], c[5]);
             assert!((n.length() - 1.0).abs() < 1e-3);
         }
+    }
+
+    #[test]
+    fn kitsune_platforms_are_solid_neon_grids_with_nothing_seen_through_their_edges() {
+        let (m, c) = load("surf_kitsune");
+        let (v, opaque) = world(&m, &c);
+        let (red, _) = m.destination_named("red").unwrap();
+        // the stage 1 start platform: a thin grid under the red start
+        let under = m
+            .brushes
+            .iter()
+            .find(|b| {
+                b.kind == BrushKind::Window
+                    && b.mins.x <= red.x
+                    && red.x <= b.maxs.x
+                    && b.mins.y <= red.y
+                    && red.y <= b.maxs.y
+                    && b.maxs.z <= red.z
+                    && red.z - b.maxs.z < 128.0
+            })
+            .expect("a grid platform under the red start");
+        let inside = |p: &[f32]| {
+            p[0] >= under.mins.x - 0.5
+                && p[0] <= under.maxs.x + 0.5
+                && p[1] >= under.mins.y - 0.5
+                && p[1] <= under.maxs.y + 0.5
+                && p[2] >= under.mins.z - 0.5
+                && p[2] <= under.maxs.z + 0.5
+        };
+        let verts: Vec<&[f32]> = v.chunks(FLOATS_PER_VERTEX).collect();
+        let see_through = verts[opaque..].iter().filter(|p| inside(p)).count();
+        assert_eq!(see_through, 0, "no see-through face on the platform");
+        let mats: Vec<f32> = verts[..opaque]
+            .iter()
+            .filter(|p| inside(p))
+            .map(|p| p[9])
+            .collect();
+        assert!(mats.contains(&M_GRID), "its top is a lit grid");
+        assert!(mats.contains(&M_LIGHT), "its edges are neon");
+        let red_top = verts[..opaque]
+            .iter()
+            .find(|p| inside(p) && p[9] == M_GRID)
+            .unwrap();
+        assert_eq!(&red_top[6..9], &STAGE[0], "stage 1's platform is red");
     }
 
     #[test]

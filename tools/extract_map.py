@@ -31,7 +31,8 @@ Format v2 (little endian), all counts u32:
   b"SURF" u32 2
   u32 brushes; per brush: u8 kind, u32 group, u16 sides; per side f32 nx ny nz d, u8 flags, u8 hint
      kind: 0 solid, 1 clip (solid, never drawn), 2 window (solid, see-through), 3 visual (not solid), 4 water
-     flags: bit0 bevel, bit1 drawn;  hint: 0 wall, 1 glass, 2 light, 3 black, 4 metal, 5 water
+     flags: bit0 bevel, bit1 drawn;  hint: 0 wall, 1 glass, 2 light, 3 black, 4 metal, 5 water,
+       16 + k a neon strip and 32 + k a grid, in colour k of COLOURS (kitsune's stage colours)
   u32 names; per name: u8 len, bytes
   u32 triggers; per trigger: u8 kind, u16 a, u16 filter, f32 pitch yaw roll speed, u16 sides; per side f32 nx ny nz d
      kind 0 teleport (a: destination name), 1 push (a unused), 2 rename (a: the new name)
@@ -50,8 +51,21 @@ CONTENTS_SOLID, CONTENTS_WINDOW, CONTENTS_GRATE = 0x1, 0x2, 0x8
 CONTENTS_WATER, CONTENTS_PLAYERCLIP, CONTENTS_MONSTERCLIP = 0x20, 0x10000, 0x20000
 
 
+# kitsune's stage colours, as its NEONS/NEON_<colour> and GRIDS/GRID_<colour> name them
+COLOURS = ["RED", "ORANGE", "YELLOW", "GREEN", "TEAL", "BLUE", "PURPLE", "PINK", "WHITE"]
+
+
+def colour_of(t, prefix):
+    rest = t[len(prefix):].split("_")[0]
+    return COLOURS.index(rest) if rest in COLOURS else None
+
+
 def hint_of(tex):
     t = tex.upper()
+    if t.startswith("NEONS/NEON_") and colour_of(t, "NEONS/NEON_") is not None:
+        return 16 + colour_of(t, "NEONS/NEON_")
+    if t.startswith("GRIDS/GRID_") and colour_of(t, "GRIDS/GRID_") is not None:
+        return 32 + colour_of(t, "GRIDS/GRID_")
     if "GLASS" in t:
         return 1
     if t.startswith("LIGHTS/"):

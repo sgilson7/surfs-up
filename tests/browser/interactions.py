@@ -76,6 +76,9 @@ def run(page, check, engine):
     page.goto(page.url.split("?")[0].split("#")[0] + "?at=0,-700,200,90")
     page.wait_for_selector("body[data-mode='title']", state="attached", timeout=10000)
     check(page.locator("#maps .map-card").count() == 2, "two courses on the title")
+    # a name typed just before choosing: leaving the box redraws the menus,
+    # which must not swallow the click on the course
+    page.fill("#name", "Tester K")
     page.click("#maps .map-card:has-text('surf_kitsune')")
     for _ in range(100):
         if "surf_kitsune" in page.inner_text("#map-name"):

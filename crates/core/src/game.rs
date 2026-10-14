@@ -1794,6 +1794,52 @@ mod tests {
     }
 
     #[test]
+    fn on_kitsune_the_others_see_you_where_you_are() {
+        let mut a = game();
+        let mut b = game();
+        a.load_map("surf_kitsune", KITSUNE).unwrap();
+        b.load_map("surf_kitsune", KITSUNE).unwrap();
+        a.host_online(42.0);
+        b.join_online(&a.room_code());
+        a.play();
+        b.play();
+        // b is already there when a arrives, and a joins later in a's run
+        b.net_peer("a", true);
+        let mut t = 0.0;
+        // ticks where b draws a far from where a is: only the two ticks of
+        // prediction either side of a teleport (a door or a fall)
+        let mut off = Vec::new();
+        for i in 0..1200 {
+            t += 1000.0 / 64.0;
+            if i == 30 {
+                a.net_peer("b", false);
+            }
+            a.advance(t, B_FORWARD as u32, 0.0, 0.0);
+            b.advance(t, 0, 0.0, 0.0);
+            let out_a: Value = serde_json::from_str(&a.net_outbox()).unwrap();
+            for m in out_a.as_array().unwrap() {
+                b.net_message("a", m[1].as_str().unwrap());
+            }
+            let out_b: Value = serde_json::from_str(&b.net_outbox()).unwrap();
+            for m in out_b.as_array().unwrap() {
+                a.net_message("b", m[1].as_str().unwrap());
+            }
+            if i > 100 {
+                let pa = &b.room.as_ref().unwrap().peers[0];
+                if let Some(l) = &pa.live {
+                    if (l.origin() - a.me.body.origin).length() > 64.0 {
+                        off.push(i);
+                    }
+                }
+            }
+        }
+        assert!(a.me.phase == Phase::Running, "a went through the red door");
+        let pa = &b.room.as_ref().unwrap().peers[0];
+        assert!(pa.live.is_some(), "b sees a");
+        assert!(off.len() <= 8, "b draws a where a is, but for teleports: {off:?}");
+    }
+
+    #[test]
     fn courses_switch_and_keep_their_own_bests() {
         let mut g = game();
         let mu = g.course.medals;
