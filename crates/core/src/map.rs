@@ -486,6 +486,23 @@ impl Map {
 }
 
 /// Does the box [lo, hi] overlap the convex set of planes?
+impl Map {
+    /// Whether a point is inside water (Source's waterlevel above zero at
+    /// the feet).
+    pub fn in_water(&self, p: V3) -> bool {
+        self.brushes.iter().any(|b| {
+            b.kind == BrushKind::Water
+                && p.x >= b.mins.x
+                && p.x <= b.maxs.x
+                && p.y >= b.mins.y
+                && p.y <= b.maxs.y
+                && p.z >= b.mins.z
+                && p.z <= b.maxs.z
+                && b.sides.iter().all(|s| s.plane.n.dot(p) - s.plane.d <= 0.0)
+        })
+    }
+}
+
 pub fn box_touches(planes: &[Plane], lo: V3, hi: V3) -> bool {
     let c = (lo + hi) * 0.5;
     let h = (hi - lo) * 0.5;

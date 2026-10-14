@@ -1444,6 +1444,11 @@ fn squeak_sound(h: Held) -> &'static str {
         Held::Lantern => "rustle",
         Held::Bell => "ding",
         Held::Fox => "yip",
+        Held::Bucket => "shake",
+        Held::Camel => "honk",
+        Held::Pyramid => "clack",
+        Held::Scarab => "jingle",
+        Held::Mummy => "groan",
     }
 }
 
@@ -1852,7 +1857,7 @@ mod tests {
         assert!(g.best().is_none(), "kitsune has no best yet");
         assert_eq!(g.me.body.origin, g.map.spawn);
         let screen: Value = serde_json::from_str(&g.screen()).unwrap();
-        assert_eq!(screen["maps"].as_array().unwrap().len(), 2);
+        assert_eq!(screen["maps"].as_array().unwrap().len(), 3);
         assert_eq!(screen["map"], "surf_kitsune");
         // what is kept remembers both the utopia best and the chosen course
         let h = Game::new(MAPS, &g.saved()).unwrap();

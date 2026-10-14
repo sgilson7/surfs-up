@@ -62,6 +62,8 @@ COLOURS = {
     "chick": "FBE48F", "chicklit": "FFF2BE", "chickdark": "DCC064", "comb": "E2302E", "beak": "F28A2E",
     "noodle": "57D163", "noodledark": "3A9E45", "ball": "D8302B", "balldark": "A5211D", "balllit": "F0645D",
     "duck": "FFD12E", "duckdark": "E0A814", "foam": "2F6BE0", "foamdark": "214FAD", "white": "FFFFFF",
+    "sand": "EDCB85", "sandlit": "F7E2AE", "sanddark": "C9A35E", "camel": "D6A35F", "cameldark": "A97A3F",
+    "gold": "F5C231", "goldlit": "FFE07A", "golddark": "B98A12", "wrap": "F0EBD6", "wrapdark": "C9C2A8",
     "ink": "1E2B45", "netline": "9AA9BF", "glow": "FFF4C2",
 }
 
@@ -391,6 +393,73 @@ def fox():
     return b, (S, S)
 
 
+def bucket():
+    b = "% the handle, then the pail flaring to its rim, sand heaped on top, a red spade\n"
+    b += "\\draw[netline,line width=2pt] (0.85,1.9) .. controls (0.9,2.9) and (2.1,2.9) .. (2.15,1.9);\n"
+    b += poly([(0.95, 0.35), (2.05, 0.35), (2.25, 1.9), (0.75, 1.9)], "sky2")
+    b += poly([(1.5, 0.35), (2.05, 0.35), (2.25, 1.9), (1.5, 1.9)], "stripeblue")
+    b += rect(0.7, 1.85, 2.3, 2.0, "stripeblue")
+    b += ellipse(1.5, 2.02, 0.72, 0.22, "sand") + ellipse(1.35, 2.1, 0.35, 0.1, "sandlit")
+    b += poly([(1.9, 2.0), (1.98, 2.0), (2.35, 2.75), (2.27, 2.78)], "red")
+    b += poly([(2.2, 2.7), (2.55, 2.6), (2.65, 2.95), (2.35, 3.0)], "red")
+    return b, (S, S)
+
+
+def camel():
+    b = "% legs, body, two humps, the neck and head\n"
+    for x in (0.85, 1.15, 1.85, 2.1):
+        b += rect(x, 0.3, x + 0.13, 1.25, "cameldark" if x in (1.15, 2.1) else "camel")
+    b += poly([(0.7, 1.15), (2.3, 1.15), (2.35, 1.6), (0.65, 1.6)], "camel")
+    b += poly([(0.7, 1.15), (2.3, 1.15), (2.3, 1.3), (0.7, 1.3)], "cameldark")
+    b += ellipse(1.1, 1.65, 0.32, 0.3, "camel") + ellipse(1.75, 1.65, 0.32, 0.3, "camel")
+    b += poly([(2.2, 1.4), (2.4, 1.45), (2.55, 2.35), (2.38, 2.4)], "camel")
+    b += poly([(2.3, 2.3), (2.85, 2.3), (2.85, 2.55), (2.35, 2.62)], "camel")
+    b += circle(2.62, 2.48, 0.04, "ink")
+    b += poly([(0.65, 1.5), (0.45, 1.05), (0.52, 1.02), (0.7, 1.4)], "cameldark")
+    return b, (S, S)
+
+
+PYRAMID_STEPS = 4
+
+
+def pyramid():
+    b = "% four stepped blocks of sandstone, a gold cap\n"
+    for k in range(PYRAMID_STEPS):
+        h = 1.15 - k * 0.27
+        y0 = 0.35 + k * 0.5
+        b += rect(1.5 - h, y0, 1.5 + h, y0 + 0.5, "sand")
+        b += rect(1.5, y0, 1.5 + h, y0 + 0.5, "sanddark")
+        b += rect(1.5 - h, y0 + 0.42, 1.5 + h, y0 + 0.5, "sandlit")
+    b += poly([(1.3, 2.35), (1.7, 2.35), (1.5, 2.75)], "gold")
+    b += poly([(1.5, 2.35), (1.7, 2.35), (1.5, 2.75)], "golddark")
+    assert PYRAMID_STEPS == 4
+    return b, (S, S)
+
+
+def scarab():
+    b = "% six legs, the shell split down the middle, the head\n"
+    for side in (-1, 1):
+        for k, y in enumerate((1.1, 1.5, 1.9)):
+            x0 = 1.5 + side * 0.55
+            b += poly([(x0, y), (x0 + side * 0.55, y - 0.25 + k * 0.1), (x0 + side * 0.58, y - 0.17 + k * 0.1), (x0, y + 0.08)], "golddark")
+    b += ellipse(1.5, 1.45, 0.62, 0.78, "gold")
+    b += "\\fill[goldlit] (1.5,2.2) arc (90:270:0.62 and 0.75) -- cycle;\n"
+    b += poly([(1.48, 0.7), (1.52, 0.7), (1.52, 2.2), (1.48, 2.2)], "golddark")
+    b += ellipse(1.5, 2.35, 0.3, 0.22, "golddark")
+    return b, (S, S)
+
+
+def mummy():
+    b = "% a plush mummy: wrapped body, arms out, wrapped head, two eyes peeking\n"
+    b += "\\foreach \\k in {0,...,4} {\\fill[wrap] (1.05,0.3+\\k*0.32) rectangle (1.95,0.58+\\k*0.32);\\fill[wrapdark] (1.05,0.56+\\k*0.32) rectangle (1.95,0.62+\\k*0.32);}\n"
+    b += poly([(1.0, 1.4), (0.35, 1.55), (0.35, 1.75), (1.0, 1.7)], "wrap")
+    b += poly([(2.0, 1.4), (2.65, 1.55), (2.65, 1.75), (2.0, 1.7)], "wrapdark")
+    b += circle(1.5, 2.25, 0.5, "wrap")
+    b += poly([(1.0, 2.35), (2.0, 2.15), (2.0, 2.25), (1.0, 2.45)], "wrapdark")
+    b += circle(1.32, 2.25, 0.08, "ink") + circle(1.68, 2.2, 0.08, "ink")
+    return b, (S, S)
+
+
 def how_to_surf():
     """A ramp seen end-on: the surfer on its right face, the ramp's top to the
     surfer's left, so the key to hold is A."""
@@ -442,6 +511,11 @@ PICTURES = {
     "items/lantern": lantern,
     "items/bell": bell,
     "items/fox": fox,
+    "items/bucket": bucket,
+    "items/camel": camel,
+    "items/pyramid": pyramid,
+    "items/scarab": scarab,
+    "items/mummy": mummy,
 }
 DPI = {"title": 150, "icon": 81, "how-to-surf": 110}
 CLEAR = {"items"}

@@ -5,6 +5,7 @@
 
 surf_utopia:  python3 -I tools/extract_map.py surf_utopia_v3.bsp surf_utopia --floor -8250
 surf_kitsune: python3 -I tools/extract_map.py surf_kitsune.bsp surf_kitsune
+surf_egypt:   python3 -I tools/extract_map.py surf_egypt.bsp surf_egypt --player-start
 
 It copies the brushes (the convex solids the Source engine itself collides
 the player against, bevel planes included), the trigger brushes, the
@@ -84,7 +85,7 @@ def drawn(tex):
     return not t.startswith("TOOLS/") or t == "TOOLS/TOOLSBLACK"
 
 
-def main(path, map_id, floor):
+def main(path, map_id, floor, player_start=False):
     B = bsp.Bsp(path)
     P, BR, BS, TI, M = B.planes(), B.brushes(), B.brushsides(), B.texnames(), B.models()
     ents = B.entities()
@@ -166,6 +167,10 @@ def main(path, map_id, floor):
             continue
         entry = None
         if cls == "trigger_teleport":
+            # a teleport with no target does nothing in Source (surf_egypt's
+            # destination markers are targetless teleports)
+            if not e.get("target", "").strip():
+                continue
             entry = (0, name(e.get("target", "")), required(e), (0.0, 0.0, 0.0, 0.0))
         elif cls == "trigger_push":
             pitch, yaw, _ = [float(x) for x in e.get("pushdir", "0 0 0").split()]
@@ -190,6 +195,31 @@ def main(path, map_id, floor):
             x, y, z = [float(v) for v in e["origin"].split()]
             yaw = float(e.get("angles", "0 0 0").split()[1])
             dests.append((name(e["targetname"]), x, y, z, yaw))
+    # Source sends a teleport to any entity of its target's name, not only an
+    # info_teleport_destination (surf_egypt aims at other teleports' origins)
+    known = {d[0] for d in dests}
+    for e in ents:
+        if e["classname"] != "trigger_teleport" or not e.get("target", "").strip():
+            continue
+        t = name(e["target"])
+        if t in known:
+            continue
+        for o in ents:
+            if o.get("targetname", "").strip().lower() == names[t] and "origin" in o:
+                x, y, z = [float(v) for v in o["origin"].split()]
+                yaw = float(o.get("angles", "0 0 0").split()[1])
+                dests.append((t, x, y, z, yaw))
+                known.add(t)
+                break
+    # --player-start: the first terrorist spawn as a destination named
+    # player_start, for a course that starts where the map spawns players
+    if player_start:
+        for e in ents:
+            if e["classname"] == "info_player_terrorist":
+                x, y, z = [float(v) for v in e["origin"].split()]
+                yaw = float(e.get("angles", "0 0 0").split()[1])
+                dests.append((name("player_start"), x, y, z, yaw))
+                break
 
     out = bytearray(b"SURF") + struct.pack("<I", 2)
     out += struct.pack("<I", len(brushes))
@@ -234,4 +264,7 @@ if __name__ == "__main__":
         i = args.index("--floor")
         floor = float(args[i + 1])
         del args[i:i + 2]
-    main(args[0], args[1], floor)
+    player_start = "--player-start" in args
+    if player_start:
+        args.remove("--player-start")
+    main(args[0], args[1], floor, player_start)

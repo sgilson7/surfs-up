@@ -204,6 +204,9 @@ pub struct MoveEvents {
     pub landed: bool,
     /// Speed lost against walls this tick (for the thud).
     pub impact: f32,
+    /// On a landing, how fast the player was falling when the tick began
+    /// (Source's m_flFallVelocity, which CheckFalling turns into damage).
+    pub fall_speed: f32,
 }
 
 pub struct Mover<'a> {
@@ -248,6 +251,9 @@ impl<'a> Mover<'a> {
         }
         let was_ground = b.on_ground;
         let speed_before = b.velocity.length();
+        // PlayerMove: "if ( player->GetGroundEntity() == NULL )
+        // player->m_Local.m_flFallVelocity = -mv->m_vecVelocity[ 2 ];"
+        let fall_velocity = if was_ground { 0.0 } else { -b.velocity.z };
 
         // A push trigger left last tick: its push becomes the player's own
         // momentum, plus half a frame (CBasePlayer, "apply momentum").
@@ -301,6 +307,7 @@ impl<'a> Mover<'a> {
         }
         if b.on_ground && !was_ground {
             ev.landed = true;
+            ev.fall_speed = fall_velocity.max(0.0);
         }
         let lost = speed_before - b.velocity.length();
         if lost > 0.0 && !ev.jumped {

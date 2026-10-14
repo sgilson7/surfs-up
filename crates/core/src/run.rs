@@ -12,6 +12,9 @@ use crate::vec3::{angle_vectors, v3, wrap180, V3, ZERO};
 /// Horizontal speed allowed inside the start zone (shavit's default prespeed
 /// limit, 260 + 30).
 pub const START_SPEED_CAP: f32 = 290.0;
+/// Source's PLAYER_FATAL_FALL_SPEED (shareddefs.h, "approx 60 feet"): a
+/// landing this fast takes all of a full 100 health.
+pub const FATAL_FALL_SPEED: f32 = 1024.0;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Phase {
@@ -181,6 +184,17 @@ impl Surfer {
                     }
                 }
             }
+        }
+        // Source's CheckFalling with a full 100 health: a landing at
+        // PLAYER_FATAL_FALL_SPEED (1024, shareddefs.h) or faster kills,
+        // unless the feet are in water; here it is a fall back to the start
+        if jump.is_none()
+            && course.fall_damage
+            && out.moved.landed
+            && out.moved.fall_speed >= FATAL_FALL_SPEED
+            && !map.in_water(self.body.origin + v3(0.0, 0.0, 1.0))
+        {
+            jump = Some((Role::Restart, 0));
         }
         if pushed {
             self.body.base_velocity = push;
@@ -359,6 +373,57 @@ mod tests {
         assert!(fell);
         assert_eq!(s.phase, Phase::Start);
         assert_eq!(s.body.origin, m.spawn);
+    }
+
+    #[test]
+    fn on_egypt_a_fatal_fall_to_the_ground_restarts_and_water_is_safe() {
+        let (m, c) = load("surf_egypt");
+        assert!(c.fall_damage);
+        let mut mv = Mover::new(&m);
+        // dropped from 1000 units onto the plain ground beside the pyramid's pool
+        let mut s = Surfer::at_start(&m);
+        s.phase = Phase::Running;
+        s.body.origin = v3(2000.0, 4000.0, 1018.0);
+        let mut fell = false;
+        for _ in 0..200 {
+            let t = s.step(&mut mv, &c, Cmd::new(0, 0.0, 0.0));
+            if t.fell {
+                fell = true;
+                break;
+            }
+            if s.body.on_ground {
+                break;
+            }
+        }
+        assert!(fell, "a 1000-unit drop lands at over 1024 u/s and restarts");
+        assert_eq!(s.phase, Phase::Start);
+        // a short hop down does not hurt
+        let mut s = Surfer::at_start(&m);
+        s.phase = Phase::Running;
+        s.body.origin = v3(2000.0, 4000.0, 218.0);
+        for _ in 0..200 {
+            let t = s.step(&mut mv, &c, Cmd::new(0, 0.0, 0.0));
+            assert!(!t.fell, "a 200-unit drop is safe");
+            if s.body.on_ground {
+                break;
+            }
+        }
+        // the same big drop into the pyramid's pool, beside the pyramid, is
+        // safe (the pool's floor is under water)
+        let mut s = Surfer::at_start(&m);
+        s.phase = Phase::Running;
+        s.body.origin = v3(3280.0, 5600.0, 1100.0);
+        for _ in 0..200 {
+            let t = s.step(&mut mv, &c, Cmd::new(0, 0.0, 0.0));
+            assert!(!t.fell, "landing in water is safe");
+            if s.body.on_ground {
+                break;
+            }
+        }
+        assert!(s.body.on_ground && s.phase == Phase::Running);
+        // and utopia has no fall damage at all
+        let (_, uc) = load("surf_utopia");
+        assert!(!uc.fall_damage);
     }
 
     #[test]

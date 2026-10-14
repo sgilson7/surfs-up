@@ -62,3 +62,7 @@ surf_kitsune is the second course, picked on the title. `./scripts/check.sh` pas
 ## Seventh request (13 October 2026): kitsune's first wedge
 
 "the first wedge is like kind of see through and hard to tell what youre looking at". Row 35: the doubled glass shells are drawn once, lit so the faces read apart, with the hollow ends closed. Collision is unchanged. `./scripts/check.sh`: BUILDER CHECK PASSED.
+
+## Eighth request (13 October 2026): surf_egypt
+
+"theres this egyptian themed pretty technical map we liked from back in the day, could you find that and add it as a new map?" Sam chose surf_egypt (Seabass45). Rows 36 to 40: the extractor follows Source's entity-named teleport targets; the run starts at the spawn and finishes at the three bottom doors; Source's fatal fall is on for egypt only; egypt's own set of five things. Medal times are provisional and nobody has played it through yet. `./scripts/check.sh`: BUILDER CHECK PASSED.

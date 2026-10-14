@@ -68,6 +68,10 @@ pub struct Course {
     pub medals: Medals,
     /// The course's things to hold, by tier (see `TIERS`).
     pub things: Vec<String>,
+    /// Source's fall damage: a landing out of water at the fatal fall speed
+    /// sends you back to the start (a map with plain ground under its ramps,
+    /// where the original's fall killed you).
+    pub fall_damage: bool,
 }
 
 /// What each place in a course's `things` asks: finish it, the three medal
@@ -173,6 +177,7 @@ impl Course {
             rules: Vec::new(),
             stages: Vec::new(),
             things: Vec::new(),
+            fall_damage: false,
             medals: Medals {
                 record: never,
                 gold: never,
@@ -238,6 +243,7 @@ impl Course {
             stages,
             medals: medals_of(m),
             things: things_of(m),
+            fall_damage: m["fall_damage"].as_bool().unwrap_or(false),
         })
     }
 
@@ -282,6 +288,7 @@ pub mod tests {
     pub fn load(id: &str) -> (Map, Course) {
         let bytes: &[u8] = match id {
             "surf_kitsune" => include_bytes!("../../../data/maps/surf_kitsune.bin"),
+            "surf_egypt" => include_bytes!("../../../data/maps/surf_egypt.bin"),
             _ => include_bytes!("../../../data/maps/surf_utopia.bin"),
         };
         let mut map = Map::parse(bytes).expect("parse");

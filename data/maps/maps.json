@@ -1,5 +1,5 @@
 {
- "_about": "The courses, and what each teleport means for a run, which a BSP does not say (a timer plugin's zones do, on a server). The core reads this file and holds every rule in it. `spawn` is the teleport destination you start at. `start_zone` is the box [min, max] the clock waits in; leaving it starts the clock. `roles` are tried in order for each teleport touched: `target` is the destination's name, `box` (optional) limits the rule to triggers whose centre is inside it; a `finish` stops the clock, an `exit` ends the run with no time, a `restart` sends you to the spawn and stops the clock, and `move` (the default for any target not listed) teleports you and keeps the clock running, as a stage's fall or its door to the next stage does. `stages` names the destination each stage starts at, in order. Medal times are seconds, and provisional until people have surfed the course. `things` is the course's set of things to hold, earned on that course only: the first for finishing it, then bronze, silver and gold times, and the last for the best time in the gym.",
+ "_about": "The courses, and what each teleport means for a run, which a BSP does not say (a timer plugin's zones do, on a server). The core reads this file and holds every rule in it. `spawn` is the teleport destination you start at. `start_zone` is the box [min, max] the clock waits in; leaving it starts the clock. `roles` are tried in order for each teleport touched: `target` is the destination's name, `box` (optional) limits the rule to triggers whose centre is inside it; a `finish` stops the clock, an `exit` ends the run with no time, a `restart` sends you to the spawn and stops the clock, and `move` (the default for any target not listed) teleports you and keeps the clock running, as a stage's fall or its door to the next stage does. `stages` names the destination each stage starts at, in order. `fall_damage` (default false) is Source's fatal fall: a landing out of water at 1024 u/s or faster sends you to the start, for a map with plain ground under its ramps. Medal times are seconds, and provisional until people have surfed the course. `things` is the course's set of things to hold, earned on that course only: the first for finishing it, then bronze, silver and gold times, and the last for the best time in the gym.",
  "maps": [
   {
    "id": "surf_utopia",
@@ -35,6 +35,22 @@
    "stages": ["red", "orange", "yellow", "green", "teal", "blue", "purple", "pink", "white"],
    "medals": {"record": 150, "gold": 190, "silver": 240, "bronze": 330},
    "things": ["pinwheel", "ribbon", "lantern", "bell", "fox"]
+  },
+  {
+   "id": "surf_egypt",
+   "name": "surf_egypt",
+   "author": "Seabass45",
+   "spawn": "player_start",
+   "start_zone": [[-3, 1213, 4680], [951, 2197, 5310]],
+   "roles": [
+    {"target": "top", "role": "finish", "ending": 1},
+    {"target": "t_spawn", "role": "finish", "ending": 2},
+    {"target": "ct_spawn", "role": "finish", "ending": 3}
+   ],
+   "stages": [],
+   "fall_damage": true,
+   "medals": {"record": 20, "gold": 26, "silver": 34, "bronze": 48},
+   "things": ["bucket", "camel", "pyramid", "scarab", "mummy"]
   }
  ]
 }

@@ -85,6 +85,27 @@
    {"type": "osc", "wave": "sawtooth", "from": 900, "to": 1700, "at": 0, "attack": 0.01, "dur": 0.1, "gain": 0.16},
    {"type": "osc", "wave": "sawtooth", "from": 1700, "to": 800, "at": 0.09, "attack": 0.01, "dur": 0.16, "gain": 0.14}
   ],
+  "shake": [
+   {"type": "noise", "filter": "highpass", "freq": 2500, "q": 0.6, "at": 0, "attack": 0.01, "dur": 0.1, "gain": 0.22},
+   {"type": "noise", "filter": "highpass", "freq": 2500, "q": 0.6, "at": 0.12, "attack": 0.01, "dur": 0.1, "gain": 0.2}
+  ],
+  "honk": [
+   {"type": "osc", "wave": "square", "from": 330, "to": 300, "at": 0, "attack": 0.01, "dur": 0.25, "gain": 0.12},
+   {"type": "osc", "wave": "square", "from": 333, "to": 303, "at": 0, "attack": 0.01, "dur": 0.25, "gain": 0.1}
+  ],
+  "clack": [
+   {"type": "noise", "filter": "bandpass", "freq": 900, "q": 3.0, "at": 0, "attack": 0.002, "dur": 0.06, "gain": 0.4},
+   {"type": "noise", "filter": "bandpass", "freq": 1200, "q": 3.0, "at": 0.07, "attack": 0.002, "dur": 0.06, "gain": 0.3}
+  ],
+  "jingle": [
+   {"type": "osc", "wave": "sine", "from": 2093, "to": 2093, "at": 0, "attack": 0.003, "dur": 0.3, "gain": 0.15},
+   {"type": "osc", "wave": "sine", "from": 2637, "to": 2637, "at": 0.06, "attack": 0.003, "dur": 0.3, "gain": 0.13},
+   {"type": "osc", "wave": "sine", "from": 3136, "to": 3136, "at": 0.12, "attack": 0.003, "dur": 0.35, "gain": 0.11}
+  ],
+  "groan": [
+   {"type": "osc", "wave": "sawtooth", "from": 160, "to": 110, "at": 0, "attack": 0.08, "dur": 0.7, "gain": 0.14},
+   {"type": "noise", "filter": "lowpass", "freq": 500, "q": 1.0, "at": 0, "attack": 0.1, "dur": 0.6, "gain": 0.1}
+  ],
   "join": [
    {"type": "osc", "wave": "sine", "from": 880, "to": 1320, "at": 0, "attack": 0.01, "dur": 0.18, "gain": 0.2}
   ],

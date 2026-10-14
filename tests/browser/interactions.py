@@ -22,7 +22,7 @@ def run(page, check, engine):
     page.wait_for_selector("#locker:not([hidden])", timeout=5000)
     items = page.locator("#items .item").count()
     locked = page.locator("#items .item.locked").count()
-    check(items == 11 and locked == 10, f"the cubby has eleven things, ten still to earn ({items}, {locked} locked)")
+    check(items == 16 and locked == 15, f"the cubby has sixteen things, fifteen still to earn ({items}, {locked} locked)")
     check("Rubber chicken" in page.inner_text("#items"), "the rubber chicken is in the cubby")
     page.click("#locker .close")
 
@@ -75,7 +75,7 @@ def run(page, check, engine):
     # developer's ?at= shortcut sets the walker down 150 units short of the door.
     page.goto(page.url.split("?")[0].split("#")[0] + "?at=0,-700,200,90")
     page.wait_for_selector("body[data-mode='title']", state="attached", timeout=10000)
-    check(page.locator("#maps .map-card").count() == 2, "two courses on the title")
+    check(page.locator("#maps .map-card").count() == 3, "three courses on the title")
     # a name typed just before choosing: leaving the box redraws the menus,
     # which must not swallow the click on the course
     page.fill("#name", "Tester K")
