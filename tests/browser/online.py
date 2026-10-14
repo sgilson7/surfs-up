@@ -258,10 +258,16 @@ def course_pair(p, engine, origin, course):
     j.bring_to_front()
     if j.is_visible("#pause"):
         j.evaluate("document.getElementById('p-resume').click()")
+    # (a CPU renderer runs slower than real time: walk until J1 is far
+    # enough ahead to be drawn on screen, then watch for a moment)
     j.keyboard.down("KeyW")
-    j.wait_for_timeout(700)
-    first = dict((n, (x, y)) for n, x, y in label_positions(host))
-    j.wait_for_timeout(700)
+    first = {}
+    for _ in range(200):
+        first = dict((n, (x, y)) for n, x, y in label_positions(host))
+        if "J1" in first and 0 <= float(first["J1"][1].rstrip("px")) <= 720:
+            break
+        j.wait_for_timeout(100)
+    j.wait_for_timeout(1000)
     second = dict((n, (x, y)) for n, x, y in label_positions(host))
     j.keyboard.up("KeyW")
     check("J1" in first and "J1" in second, f"{course}: the host draws J1 surfing")
