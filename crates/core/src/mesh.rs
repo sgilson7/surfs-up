@@ -139,7 +139,8 @@ pub fn world(map: &Map, course: &Course) -> (Vec<f32>, usize) {
             .and_then(|s| grid_colour(s.hint));
         // a see-through grid ramp is kitsune's glass ramp: a lit grid in its
         // stage's colour, its edges neon, as solid as a mat
-        let grid_ramp = ramp && b.kind == BrushKind::Window;
+        // (only one textured as a grid: utopia's glass panes stay as they were)
+        let grid_ramp = ramp && b.kind == BrushKind::Window && is_grid(b);
         let platform = !ramp
             && b.kind == BrushKind::Window
             && b.maxs.z - b.mins.z <= PLATFORM_THICK
@@ -265,7 +266,10 @@ fn end_caps(out: &mut Vec<f32>, poly: &[V3], c: [f32; 3]) {
 /// their faces fight. Only the outer one is drawn; both still collide.
 fn inner_shells(map: &Map) -> Vec<bool> {
     let shells: Vec<usize> = (0..map.brushes.len())
-        .filter(|&i| map.brushes[i].kind == BrushKind::Window && is_ramp(&map.brushes[i]))
+        .filter(|&i| {
+            let b = &map.brushes[i];
+            b.kind == BrushKind::Window && is_ramp(b) && is_grid(b)
+        })
         .collect();
     let mut out = vec![false; map.brushes.len()];
     let pad = 1.0;
@@ -284,6 +288,11 @@ fn inner_shells(map: &Map) -> Vec<bool> {
         });
     }
     out
+}
+
+/// A brush with a side textured as one of kitsune's grids.
+fn is_grid(b: &crate::map::Brush) -> bool {
+    b.sides.iter().any(|s| grid_colour(s.hint).is_some())
 }
 
 fn is_ramp(b: &crate::map::Brush) -> bool {
@@ -503,6 +512,14 @@ mod tests {
             caps >= 6,
             "its ends are closed, not open onto the pit ({caps} cap vertices)"
         );
+    }
+
+    #[test]
+    fn utopia_keeps_its_own_look_with_no_kitsune_grid_on_it() {
+        let (m, c) = load("surf_utopia");
+        let (v, _) = world(&m, &c);
+        let grids = v.chunks(FLOATS_PER_VERTEX).filter(|p| p[9] == M_GRID).count();
+        assert_eq!(grids, 0, "utopia's glass panes are not kitsune's glass ramps");
     }
 
     #[test]
