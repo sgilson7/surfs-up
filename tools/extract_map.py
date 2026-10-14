@@ -24,7 +24,10 @@ What it keeps and drops (the rules for play are in the core; this only copies):
     renames its activator (AddOutput targetname), each with its filter's
     required name; triggers that start disabled are dropped;
   - nothing below --floor (surf_utopia's TF2 jail sits under the course);
-  - water brushes (drawn as a ball pit, not solid: Source does not block on water).
+  - water brushes (drawn as a ball pit, not solid: Source does not block on water);
+  - displacements (curved terrain, solid in Source): each triangle of the
+    surface becomes a thin solid wedge under it (its top drawn, 4 units
+    deep, with axial bevels), so the core's brush collision holds them.
 
 Names are lower-cased: Source matches entity names without regard to case.
 
@@ -32,7 +35,7 @@ Format v2 (little endian), all counts u32:
   b"SURF" u32 2
   u32 brushes; per brush: u8 kind, u32 group, u16 sides; per side f32 nx ny nz d, u8 flags, u8 hint
      kind: 0 solid, 1 clip (solid, never drawn), 2 window (solid, see-through), 3 visual (not solid), 4 water
-     flags: bit0 bevel, bit1 drawn;  hint: 0 wall, 1 glass, 2 light, 3 black, 4 metal, 5 water,
+     flags: bit0 bevel, bit1 drawn;  hint: 0 wall, 1 glass, 2 light, 3 black, 4 metal, 5 water, 6 terrain (a displacement's top),
        16 + k a neon strip and 32 + k a grid, in colour k of COLOURS (kitsune's stage colours)
   u32 names; per name: u8 len, bytes
   u32 triggers; per trigger: u8 kind, u16 a, u16 filter, f32 pitch yaw roll speed, u16 sides; per side f32 nx ny nz d
@@ -77,6 +80,8 @@ def hint_of(tex):
         return 4
     if "WATER" in t:
         return 5
+    if t.startswith("TERRAIN:"):
+        return 6
     return 0
 
 
@@ -90,6 +95,13 @@ def main(path, map_id, floor, player_start=False):
     P, BR, BS, TI, M = B.planes(), B.brushes(), B.brushsides(), B.texnames(), B.models()
     ents = B.entities()
 
+    # a brush face a displacement was built on is replaced by the
+    # displacement: it is not drawn (it would lie on the sand and flicker)
+    def plane_key(pl):
+        return (round(pl[0], 3), round(pl[1], 3), round(pl[2], 3), round(pl[3]))
+
+    disp_planes = {(plane_key(P[d[4]]), d[0].upper()) for d in B.displacements()}
+
     def sides_of(bi, origin=(0.0, 0.0, 0.0)):
         # A brush entity's brushes are stored about its origin; move them to world space.
         f, n, c = BR[bi]
@@ -97,6 +109,8 @@ def main(path, map_id, floor, player_start=False):
         for s in BS[f:f + n]:
             pl = P[s[0]]
             tex = TI[s[1]][1][0] if s[1] >= 0 else "TOOLS/TOOLSNODRAW"
+            if (plane_key(pl), tex.upper()) in disp_planes:
+                tex = "TOOLS/TOOLSNODRAW"
             d = pl[3] + sum(pl[k] * origin[k] for k in range(3))
             out.append((pl[0:3], d, bool(s[3] & 0xFF), tex))
         return out, c
@@ -123,6 +137,55 @@ def main(path, map_id, floor, player_start=False):
             add(bi, 0, bi)
         elif c & CONTENTS_PLAYERCLIP:
             add(bi, 1, bi)
+
+    # displacements: one thin wedge per triangle, its top the surface
+    def sub(a, b):
+        return (a[0] - b[0], a[1] - b[1], a[2] - b[2])
+
+    def cross(a, b):
+        return (a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0])
+
+    def dot(a, b):
+        return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+
+    def unit(a):
+        m = dot(a, a) ** 0.5
+        return (a[0] / m, a[1] / m, a[2] / m) if m > 1e-9 else None
+
+    DEPTH = 4.0
+    for tex, contents, face_n, tris, _ in B.displacements():
+        if not contents & CONTENTS_SOLID and contents != 0:
+            continue
+        for a, b, c in tris:
+            nrm = unit(cross(sub(b, a), sub(c, a)))
+            if nrm is None:
+                continue
+            if dot(nrm, face_n) < 0:
+                nrm = (-nrm[0], -nrm[1], -nrm[2])
+            sides = [(nrm, dot(nrm, a), False, "TERRAIN:" + tex)]
+            low = [tuple(p[i] - nrm[i] * DEPTH for i in range(3)) for p in (a, b, c)]
+            sides.append(((-nrm[0], -nrm[1], -nrm[2]), -dot(nrm, a) + DEPTH, False, "TOOLS/TOOLSNODRAW"))
+            centre = tuple((a[i] + b[i] + c[i]) / 3 for i in range(3))
+            for p, q in ((a, b), (b, c), (c, a)):
+                en = unit(cross(sub(q, p), nrm))
+                if en is None:
+                    continue
+                if dot(en, sub(centre, p)) > 0:
+                    en = (-en[0], -en[1], -en[2])
+                sides.append((en, dot(en, p), False, "TOOLS/TOOLSNODRAW"))
+            pts = [a, b, c] + low
+            for i in range(3):
+                lo = min(p[i] for p in pts)
+                hi = max(p[i] for p in pts)
+                ax = [0.0, 0.0, 0.0]
+                ax[i] = 1.0
+                sides.append((tuple(ax), hi, True, "TOOLS/TOOLSNODRAW"))
+                ax = [0.0, 0.0, 0.0]
+                ax[i] = -1.0
+                sides.append((tuple(ax), -lo, True, "TOOLS/TOOLSNODRAW"))
+            if max(p[2] for p in pts) < floor:
+                continue
+            brushes.append((0, len(brushes), sides))
 
     names = [""]
 

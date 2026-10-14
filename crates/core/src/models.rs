@@ -328,10 +328,15 @@ pub enum Held {
     Glowstick,
     Sceptre,
     Jackal,
+    Sunglasses,
+    Lizard,
+    Sandcastle,
+    Hourglass,
+    Cactus,
 }
 
 impl Held {
-    pub const ALL: [Held; 21] = [
+    pub const ALL: [Held; 26] = [
         Held::Prayer,
         Held::Noodle,
         Held::Kickball,
@@ -353,6 +358,11 @@ impl Held {
         Held::Glowstick,
         Held::Sceptre,
         Held::Jackal,
+        Held::Sunglasses,
+        Held::Lizard,
+        Held::Sandcastle,
+        Held::Hourglass,
+        Held::Cactus,
     ];
     pub fn id(self) -> &'static str {
         match self {
@@ -377,6 +387,11 @@ impl Held {
             Held::Glowstick => "glowstick",
             Held::Sceptre => "sceptre",
             Held::Jackal => "jackal",
+            Held::Sunglasses => "sunglasses",
+            Held::Lizard => "lizard",
+            Held::Sandcastle => "sandcastle",
+            Held::Hourglass => "hourglass",
+            Held::Cactus => "cactus",
         }
     }
     pub fn from_id(id: &str) -> Option<Held> {
@@ -960,6 +975,148 @@ pub fn thing(out: &mut Vec<f32>, f: &Xf, held: Held, k: f32, m: f32) {
                 cuboid(out, &sq, v3(2.2, side * 0.9, 8.6), v3(0.2, 0.3, 0.25), gold, m);
                 cuboid(out, &sq, v3(1.4, side * 1.5, 0.4), v3(1.0, 0.7, 0.5), black, m);
             }
+        }
+        Held::Sunglasses => {
+            // big star-shaped party sunglasses, held up by one arm
+            let pink = [0.98, 0.38, 0.62];
+            let lens = [0.10, 0.12, 0.20];
+            for side in [-1.0f32, 1.0] {
+                cuboid(out, &sq, v3(0.0, side * 2.0, 6.0), v3(0.4, 1.8, 1.4), pink, m);
+                cuboid(out, &sq, v3(0.0, side * 2.0, 6.0), v3(0.25, 1.9, 0.5), pink, m);
+                cuboid(out, &sq, v3(0.0, side * 2.0, 6.0), v3(0.25, 0.5, 1.9), pink, m);
+                cuboid(out, &sq, v3(0.3, side * 2.0, 6.0), v3(0.2, 1.3, 1.0), lens, m);
+                bar(
+                    out,
+                    &sq,
+                    v3(-0.2, side * 3.7, 6.4),
+                    v3(-4.0, side * 3.7, 5.6),
+                    0.25,
+                    pink,
+                    m,
+                );
+            }
+            cuboid(out, &sq, v3(0.0, 0.0, 6.3), v3(0.3, 0.5, 0.25), pink, m);
+            bar(out, &sq, v3(0.0, 2.0, 4.6), v3(0.0, 2.0, 0.0), 0.3, pink, m);
+        }
+        Held::Lizard => {
+            // a toy lizard: long green body, four splayed legs, a curling tail
+            let green = [0.40, 0.78, 0.32];
+            let dark = [0.22, 0.52, 0.20];
+            cuboid(out, &sq, v3(0.0, 0.0, 1.0), v3(2.4, 1.0, 0.6), green, m);
+            cuboid(out, &sq, v3(3.2, 0.0, 1.2), v3(1.1, 0.8, 0.6), green, m);
+            for side in [-1.0f32, 1.0] {
+                cuboid(
+                    out,
+                    &sq,
+                    v3(3.8, side * 0.6, 1.6),
+                    v3(0.2, 0.15, 0.2),
+                    [0.05, 0.05, 0.06],
+                    m,
+                );
+                for x in [-1.6f32, 1.6] {
+                    bar(
+                        out,
+                        &sq,
+                        v3(x, side * 0.9, 1.0),
+                        v3(x + 0.6, side * 2.4, 0.2),
+                        0.3,
+                        dark,
+                        m,
+                    );
+                }
+            }
+            let mut prev = v3(-2.4, 0.0, 1.0);
+            for i in 1..7 {
+                let t = i as f32;
+                let p = v3(-2.4 - t * 0.8, (t * 0.35) * (t * 0.35) * 0.4, 1.0 + t * 0.15);
+                bar(out, &sq, prev, p, 0.45 - t * 0.04, green, m);
+                prev = p;
+            }
+        }
+        Held::Sandcastle => {
+            // a sandcastle: a keep, four corner towers, a little red flag
+            let sand = [0.93, 0.80, 0.52];
+            let shade = [0.82, 0.68, 0.42];
+            cuboid(out, &sq, v3(0.0, 0.0, 1.6), v3(3.0, 3.0, 1.6), sand, m);
+            cuboid(out, &sq, v3(0.0, 0.0, 4.2), v3(1.5, 1.5, 1.2), shade, m);
+            for (x, y) in [(-2.6f32, -2.6f32), (2.6, -2.6), (-2.6, 2.6), (2.6, 2.6)] {
+                cuboid(out, &sq, v3(x, y, 2.4), v3(0.8, 0.8, 2.4), sand, m);
+                cuboid(out, &sq, v3(x, y, 5.1), v3(0.9, 0.9, 0.3), shade, m);
+            }
+            bar(
+                out,
+                &sq,
+                v3(0.0, 0.0, 5.4),
+                v3(0.0, 0.0, 9.0),
+                0.12,
+                [0.9, 0.9, 0.9],
+                m,
+            );
+            cuboid(
+                out,
+                &sq,
+                v3(0.0, 0.9, 8.4),
+                v3(0.05, 0.8, 0.5),
+                [0.92, 0.22, 0.22],
+                m,
+            );
+        }
+        Held::Hourglass => {
+            // an hourglass: gold ends, glass bulbs, sand running down
+            let gold = [1.0, 0.78, 0.20];
+            let glass = [0.80, 0.90, 0.95];
+            let sand = [0.95, 0.78, 0.40];
+            let run = 1.0 - k;
+            cuboid(out, &sq, v3(0.0, 0.0, 0.3), v3(2.4, 2.4, 0.3), gold, m);
+            cuboid(out, &sq, v3(0.0, 0.0, 9.7), v3(2.4, 2.4, 0.3), gold, m);
+            ball(out, &sq, v3(0.0, 0.0, 2.8), v3(1.9, 1.9, 2.3), glass, m);
+            ball(out, &sq, v3(0.0, 0.0, 7.2), v3(1.9, 1.9, 2.3), glass, m);
+            ball(
+                out,
+                &sq,
+                v3(0.0, 0.0, 1.8 + run),
+                v3(1.6, 1.6, 1.2 + run),
+                sand,
+                m,
+            );
+            ball(
+                out,
+                &sq,
+                v3(0.0, 0.0, 7.6),
+                v3(1.3, 1.3, 1.0 - run * 0.5),
+                sand,
+                m,
+            );
+            for (x, y) in [(-2.1f32, -2.1f32), (2.1, -2.1), (-2.1, 2.1), (2.1, 2.1)] {
+                bar(out, &sq, v3(x, y, 0.6), v3(x, y, 9.4), 0.2, gold, m);
+            }
+        }
+        Held::Cactus => {
+            // a cactus plush in a little pot: two arms, a pink flower
+            let green = [0.30, 0.66, 0.36];
+            let pot = [0.82, 0.42, 0.24];
+            cuboid(out, &sq, v3(0.0, 0.0, 1.2), v3(2.0, 2.0, 1.2), pot, m);
+            cuboid(out, &sq, v3(0.0, 0.0, 6.4), v3(1.3, 1.3, 4.0), green, m);
+            for side in [-1.0f32, 1.0] {
+                cuboid(out, &sq, v3(0.0, side * 2.0, 6.0), v3(0.7, 0.8, 0.6), green, m);
+                cuboid(out, &sq, v3(0.0, side * 2.6, 7.6), v3(0.7, 0.6, 1.6), green, m);
+                cuboid(
+                    out,
+                    &sq,
+                    v3(1.35, side * 0.5, 7.4),
+                    v3(0.1, 0.15, 0.2),
+                    [0.05, 0.05, 0.06],
+                    m,
+                );
+            }
+            ball(
+                out,
+                &sq,
+                v3(0.0, 0.0, 10.8),
+                v3(0.9, 0.9, 0.6),
+                [0.98, 0.45, 0.68],
+                m,
+            );
         }
         Held::Mummy => {
             // a mummy plush, wrapped in strips, arms out, two eyes peeking

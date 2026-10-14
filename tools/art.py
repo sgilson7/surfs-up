@@ -63,6 +63,7 @@ COLOURS = {
     "noodle": "57D163", "noodledark": "3A9E45", "ball": "D8302B", "balldark": "A5211D", "balllit": "F0645D",
     "duck": "FFD12E", "duckdark": "E0A814", "foam": "2F6BE0", "foamdark": "214FAD", "white": "FFFFFF",
     "sand": "EDCB85", "sandlit": "F7E2AE", "sanddark": "C9A35E", "camel": "D6A35F", "cameldark": "A97A3F",
+    "lizard": "66C752", "lizarddark": "3A8A34", "potclay": "D06A3D", "glass": "D6EAF2",
     "stick": "7CF25C", "sticklit": "C8FFB0", "night": "24222B", "nightlit": "3A3744",
     "gold": "F5C231", "goldlit": "FFE07A", "golddark": "B98A12", "wrap": "F0EBD6", "wrapdark": "C9C2A8",
     "ink": "1E2B45", "netline": "9AA9BF", "glow": "FFF4C2",
@@ -517,6 +518,73 @@ def jackal():
     return b, (S, S)
 
 
+def sunglasses():
+    b = "% star-shaped pink party sunglasses: two stars, dark lenses, a bridge\n"
+    for cx in (0.95, 2.05):
+        pts = []
+        for k in range(10):
+            r = 0.55 if k % 2 == 0 else 0.25
+            a = math.radians(90 + 36 * k)
+            pts.append((cx + r * math.cos(a), 1.6 + r * math.sin(a)))
+        b += poly(pts, "pink")
+        b += circle(cx, 1.58, 0.2, "ink")
+    b += rect(1.3, 1.6, 1.7, 1.7, "pink")
+    b += poly([(0.4, 1.75), (0.45, 1.7), (0.1, 1.3), (0.05, 1.35)], "pinklit")
+    b += poly([(2.6, 1.75), (2.55, 1.7), (2.9, 1.3), (2.95, 1.35)], "pinklit")
+    return b, (S, S)
+
+
+def lizard():
+    b = "% a green toy lizard seen from above: body, head, four legs, curling tail\n"
+    b += "\\draw[lizard,line width=6pt,line cap=round] (1.3,1.2) .. controls (0.9,0.6) and (0.4,0.9) .. (0.55,1.3);\n"
+    for (x0, y0, x1, y1) in ((1.4, 1.5, 1.0, 1.75), (1.7, 1.5, 2.1, 1.75), (1.4, 1.95, 1.05, 2.2), (1.7, 1.95, 2.05, 2.25)):
+        b += f"\\draw[lizarddark,line width=3pt,line cap=round] {P(x0, y0)} -- {P(x1, y1)};\n"
+    b += ellipse(1.55, 1.75, 0.22, 0.6, "lizard")
+    b += ellipse(1.55, 2.45, 0.2, 0.25, "lizard")
+    b += circle(1.47, 2.52, 0.04, "ink") + circle(1.63, 2.52, 0.04, "ink")
+    return b, (S, S)
+
+
+CASTLE_TOWERS = 3
+
+
+def sandcastle():
+    b = "% a sandcastle: the wall, three towers with crenels, a red flag\n"
+    b += rect(0.5, 0.35, 2.5, 1.35, "sand") + rect(1.5, 0.35, 2.5, 1.35, "sanddark")
+    for k in range(CASTLE_TOWERS):
+        x = 0.55 + k * 0.75
+        b += rect(x, 0.35, x + 0.45, 1.9, "sand" if k < 1 else "sanddark")
+        b += "\\foreach \\c in {0,1,2} {\\fill[sandlit] (" + f(x) + "+\\c*0.17,1.9) rectangle (" + f(x) + "+\\c*0.17+0.1,2.05);}\n"
+    b += rect(1.0, 0.35, 1.25, 0.75, "sanddark")
+    b += rect(1.49, 2.0, 1.53, 2.7, "netline")
+    b += poly([(1.53, 2.7), (1.95, 2.55), (1.53, 2.4)], "red")
+    assert CASTLE_TOWERS == 3
+    return b, (S, S)
+
+
+def hourglass():
+    b = "% an hourglass: gold ends and posts, glass bulbs, sand mostly fallen\n"
+    b += rect(0.8, 0.3, 2.2, 0.45, "gold") + rect(0.8, 2.55, 2.2, 2.7, "gold")
+    b += rect(0.85, 0.45, 0.95, 2.55, "golddark") + rect(2.05, 0.45, 2.15, 2.55, "golddark")
+    b += poly([(1.05, 2.55), (1.95, 2.55), (1.55, 1.55), (1.45, 1.55)], "glass")
+    b += poly([(1.05, 0.45), (1.95, 0.45), (1.55, 1.45), (1.45, 1.45)], "glass")
+    b += poly([(1.1, 0.45), (1.9, 0.45), (1.5, 1.0)], "sand")
+    b += poly([(1.35, 2.1), (1.65, 2.1), (1.52, 1.6), (1.48, 1.6)], "sand")
+    b += rect(1.48, 1.0, 1.52, 1.6, "sand")
+    return b, (S, S)
+
+
+def cactus():
+    b = "% a cactus plush in a clay pot: two arms, two eyes, a pink flower\n"
+    b += poly([(0.95, 0.3), (2.05, 0.3), (2.2, 0.95), (0.8, 0.95)], "potclay")
+    b += rect(1.2, 0.95, 1.8, 2.5, "lizard") + rect(1.5, 0.95, 1.8, 2.5, "lizarddark")
+    b += rect(0.75, 1.55, 1.2, 1.8, "lizard") + rect(0.75, 1.55, 1.0, 2.25, "lizard")
+    b += rect(1.8, 1.35, 2.25, 1.6, "lizarddark") + rect(2.0, 1.35, 2.25, 2.0, "lizarddark")
+    b += circle(1.38, 2.05, 0.05, "ink") + circle(1.62, 2.05, 0.05, "ink")
+    b += circle(1.5, 2.62, 0.17, "pink") + circle(1.5, 2.62, 0.06, "yellow")
+    return b, (S, S)
+
+
 def how_to_surf():
     """A ramp seen end-on: the surfer on its right face, the ramp's top to the
     surfer's left, so the key to hold is A."""
@@ -578,6 +646,11 @@ PICTURES = {
     "items/glowstick": glowstick,
     "items/sceptre": sceptre,
     "items/jackal": jackal,
+    "items/sunglasses": sunglasses,
+    "items/lizard": lizard,
+    "items/sandcastle": sandcastle,
+    "items/hourglass": hourglass,
+    "items/cactus": cactus,
 }
 DPI = {"title": 150, "icon": 81, "how-to-surf": 110}
 CLEAR = {"items"}

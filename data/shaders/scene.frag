@@ -131,6 +131,12 @@ vec3 paint(int m, vec3 base, vec3 p, vec3 n, out float alpha, out float glow) {
     vec3 c = k < 0.25 ? vec3(0.95, 0.3, 0.3) : k < 0.5 ? vec3(0.3, 0.55, 0.95) : k < 0.75 ? vec3(0.98, 0.85, 0.3) : vec3(0.4, 0.85, 0.45);
     return mix(c, c * 0.5, smoothstep(0.38, 0.5, d));
   }
+  if (m == 17) {
+    // sand: fine grain and soft ripples
+    float grain = hash(floor(p.xy / 6.0));
+    float ripple = 0.5 + 0.5 * sin(dot(p.xy, vec2(0.021, 0.013)));
+    return base * (0.90 + 0.06 * grain + 0.05 * ripple);
+  }
   if (m == 16) {
     // a kitsune platform or glass ramp: a lit grid in its stage's colour, on dark
     float g = max(line(u / 32.0, 0.04), line(v / 32.0, 0.04));

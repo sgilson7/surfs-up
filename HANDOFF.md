@@ -70,3 +70,8 @@ surf_kitsune is the second course, picked on the title. `./scripts/check.sh` pas
 ## Ninth request (13 October 2026): surf_anubis, and utopia's flashing start
 
 Utopia's start flickered because the kitsune glass-ramp look reached its glass side panes; it now needs a kitsune grid texture (row 41, deployed first on its own). surf_anubis is the fourth course: stages 1 to 3, finishing in its end zone (rows 42 to 46). Bonuses are not timed; medal times are provisional; nobody has played it through yet. `./scripts/check.sh`: BUILDER CHECK PASSED.
+
+## Tenth request (13 October 2026): online on every course, an Egyptian multi-parter
+
+"make sure all the online still works with the new map": every course is checked online in the core and in browsers (row 47). anubis is tier 7+; after a survey Sam chose surf_sandtrap, added as the fifth course with displacement collision (rows 48 to 52).
+`./scripts/check.sh`: BUILDER CHECK PASSED (the online check now includes a pair of browsers on every course).

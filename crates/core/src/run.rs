@@ -334,6 +334,7 @@ impl Surfer {
 mod tests {
     use super::*;
     use crate::course::tests::load;
+    use crate::map::HINT_TERRAIN;
     use crate::movement::{B_FORWARD, B_JUMP};
 
     #[test]
@@ -382,6 +383,72 @@ mod tests {
         assert!(fell);
         assert_eq!(s.phase, Phase::Start);
         assert_eq!(s.body.origin, m.spawn);
+    }
+
+    #[test]
+    fn sandtrap_stands_on_its_sand_and_finishes_at_its_end_door() {
+        let (m, c) = load("surf_sandtrap");
+        let mut mv = Mover::new(&m);
+        // you stand in the start room
+        let mut s = Surfer::at_start(&m);
+        s.body.origin = v3(1072.0, -900.0, 14400.0);
+        for _ in 0..200 {
+            s.step(&mut mv, &c, Cmd::new(0, 0.0, 0.0));
+            if s.body.on_ground {
+                break;
+            }
+        }
+        assert!(s.body.on_ground, "you stand in the start room");
+        // a flat sand triangle with no brush within 300 units above or
+        // under it:
+        // the player's box, dropped on it (movement alone, no triggers),
+        // comes to rest on the sand
+        let tri = m
+            .brushes
+            .iter()
+            .filter(|b| {
+                b.sides.iter().any(|s| s.drawn && s.hint == HINT_TERRAIN) && b.sides[0].plane.n.z > 0.9
+            })
+            .find(|t| {
+                !m.brushes.iter().any(|o| {
+                    !o.sides.iter().any(|s| s.hint == HINT_TERRAIN)
+                        && o.maxs.z > t.mins.z - 300.0
+                        && o.mins.z < t.maxs.z + 300.0
+                        && o.mins.x < t.maxs.x
+                        && o.maxs.x > t.mins.x
+                        && o.mins.y < t.maxs.y
+                        && o.maxs.y > t.mins.y
+                })
+            })
+            .expect("a sand triangle with nothing under it");
+        let centre = (tri.mins + tri.maxs) * 0.5;
+        let mut b = crate::movement::Body::at(v3(centre.x, centre.y, tri.maxs.z + 200.0));
+        for _ in 0..300 {
+            mv.player_move_same(&mut b, Cmd::new(0, 0.0, 0.0));
+            if b.on_ground {
+                break;
+            }
+        }
+        assert!(b.on_ground, "the sand holds you ({:?})", b.origin);
+        assert!(
+            b.origin.z > tri.mins.z - 1.0 && b.origin.z < tri.maxs.z + 20.0,
+            "on the sand at {:.0}..{:.0}, not through it ({:.1})",
+            tri.mins.z,
+            tri.maxs.z,
+            b.origin.z
+        );
+        // the end door finishes a run; the other doors back to the spawn restart
+        let start = m.name_index("start").unwrap();
+        let end = m
+            .triggers
+            .iter()
+            .find(|t| t.kind == TriggerKind::Teleport(start) && t.maxs.z < 0.0 && t.mins.y < -14000.0)
+            .expect("the end door");
+        let mut s = Surfer::at_start(&m);
+        s.phase = Phase::Running;
+        s.body.origin = (end.mins + end.maxs) * 0.5;
+        let t = s.step(&mut mv, &c, Cmd::new(0, 0.0, 0.0));
+        assert!(t.finished.is_some(), "the end door finishes the run");
     }
 
     #[test]

@@ -76,6 +76,8 @@ pub const HINT_GLASS: u8 = 1;
 pub const HINT_LIGHT: u8 = 2;
 pub const HINT_BLACK: u8 = 3;
 pub const HINT_METAL: u8 = 4;
+/// The top of a displacement (curved terrain, sand on surf_sandtrap).
+pub const HINT_TERRAIN: u8 = 6;
 /// A neon strip (16 + k) or a grid (32 + k), in stage colour k: kitsune
 /// lights its platforms' and ramps' edges in each stage's colour.
 pub const HINT_NEON: u8 = 16;

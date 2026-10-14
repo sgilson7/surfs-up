@@ -1,10 +1,12 @@
 """Read a Source engine BSP (v20) far enough to recover brushes, planes,
-texture names, models and entities. Pure reading; no geometry decisions."""
+texture names, models, entities and displacement surfaces. Pure reading; no
+geometry decisions."""
 import struct, re
 
 LUMP_ENTITIES, LUMP_PLANES, LUMP_TEXDATA, LUMP_VERTEXES = 0, 1, 2, 3
 LUMP_TEXINFO, LUMP_FACES, LUMP_EDGES, LUMP_SURFEDGES, LUMP_MODELS = 6, 7, 12, 13, 14
 LUMP_BRUSHES, LUMP_BRUSHSIDES = 18, 19
+LUMP_DISPINFO, LUMP_DISP_VERTS = 26, 33
 LUMP_TEXDATA_STRING_DATA, LUMP_TEXDATA_STRING_TABLE = 43, 44
 
 
@@ -64,6 +66,66 @@ class Bsp:
         for i in range(0, len(d), 48):
             v = struct.unpack_from("<fffffffffiii", d, i)
             out.append({"mins": v[0:3], "maxs": v[3:6], "origin": v[6:9], "headnode": v[9], "firstface": v[10], "numfaces": v[11]})
+        return out
+
+
+    def displacements(self):
+        """Every displacement as (texture, contents, face normal, triangles,
+        the base face's plane number),
+        triangles in world space, built as Source's CCoreDispInfo builds them:
+        the base face's corners from the one nearest startPosition, the grid
+        interpolated across them, each vertex moved by its offset vector times
+        its distance, and each grid square split the way the engine splits it
+        (alternating with the vertex index)."""
+        di = self.lump(LUMP_DISPINFO)
+        dv = self.lump(LUMP_DISP_VERTS)
+        faces = self.lump(LUMP_FACES)
+        verts = self.lump(LUMP_VERTEXES)
+        edges = self.lump(LUMP_EDGES)
+        surf = self.lump(LUMP_SURFEDGES)
+        planes = self.planes()
+        texinfo = self.texnames()
+        out = []
+        for k in range(0, len(di), 176):
+            start = struct.unpack_from("<fff", di, k)
+            vstart, = struct.unpack_from("<i", di, k + 12)
+            power, = struct.unpack_from("<i", di, k + 20)
+            contents, = struct.unpack_from("<i", di, k + 32)
+            mapface, = struct.unpack_from("<H", di, k + 36)
+            f = mapface * 56
+            planenum, side, _, firstedge, numedges, tinfo = struct.unpack_from("<HBBihh", faces, f)
+            corners = []
+            for j in range(numedges):
+                se, = struct.unpack_from("<i", surf, (firstedge + j) * 4)
+                a, b = struct.unpack_from("<HH", edges, abs(se) * 4)
+                corners.append(struct.unpack_from("<fff", verts, (a if se >= 0 else b) * 12))
+            if len(corners) != 4:
+                continue
+            near = min(range(4), key=lambda i: sum((corners[i][c] - start[c]) ** 2 for c in range(3)))
+            c0, c1, c2, c3 = [corners[(near + i) % 4] for i in range(4)]
+            n = (1 << power) + 1
+            grid = []
+            for y in range(n):
+                t = y / (n - 1)
+                left = [c0[c] + (c1[c] - c0[c]) * t for c in range(3)]
+                right = [c3[c] + (c2[c] - c3[c]) * t for c in range(3)]
+                for x in range(n):
+                    u = x / (n - 1)
+                    vx, vy, vz, dist, _ = struct.unpack_from("<fffff", dv, (vstart + y * n + x) * 20)
+                    p = [left[c] + (right[c] - left[c]) * u for c in range(3)]
+                    grid.append((p[0] + vx * dist, p[1] + vy * dist, p[2] + vz * dist))
+            tris = []
+            for y in range(n - 1):
+                for x in range(n - 1):
+                    i = y * n + x
+                    if i % 2:
+                        tris += [(grid[i], grid[i + n], grid[i + 1]), (grid[i + 1], grid[i + n], grid[i + n + 1])]
+                    else:
+                        tris += [(grid[i], grid[i + n], grid[i + n + 1]), (grid[i], grid[i + n + 1], grid[i + 1])]
+            pn = planes[planenum][0:3]
+            normal = tuple(-c for c in pn) if side else tuple(pn)
+            tex = texinfo[tinfo][1][0] if tinfo >= 0 else ""
+            out.append((tex, contents, normal, tris, planenum))
         return out
 
 

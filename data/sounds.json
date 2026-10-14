@@ -118,6 +118,13 @@
    {"type": "osc", "wave": "triangle", "from": 500, "to": 900, "at": 0, "attack": 0.1, "dur": 0.35, "gain": 0.16},
    {"type": "osc", "wave": "triangle", "from": 900, "to": 650, "at": 0.33, "attack": 0.02, "dur": 0.5, "gain": 0.14}
   ],
+  "chirp": [
+   {"type": "osc", "wave": "sine", "from": 2400, "to": 3200, "at": 0, "attack": 0.005, "dur": 0.06, "gain": 0.15},
+   {"type": "osc", "wave": "sine", "from": 2400, "to": 3200, "at": 0.09, "attack": 0.005, "dur": 0.06, "gain": 0.13}
+  ],
+  "trickle": [
+   {"type": "noise", "filter": "highpass", "freq": 5000, "q": 0.5, "at": 0, "attack": 0.1, "dur": 0.7, "gain": 0.14}
+  ],
   "join": [
    {"type": "osc", "wave": "sine", "from": 880, "to": 1320, "at": 0, "attack": 0.01, "dur": 0.18, "gain": 0.2}
   ],

@@ -300,6 +300,7 @@ pub mod tests {
             "surf_kitsune" => include_bytes!("../../../data/maps/surf_kitsune.bin"),
             "surf_egypt" => include_bytes!("../../../data/maps/surf_egypt.bin"),
             "surf_anubis" => include_bytes!("../../../data/maps/surf_anubis.bin"),
+            "surf_sandtrap" => include_bytes!("../../../data/maps/surf_sandtrap.bin"),
             _ => include_bytes!("../../../data/maps/surf_utopia.bin"),
         };
         let mut map = Map::parse(bytes).expect("parse");

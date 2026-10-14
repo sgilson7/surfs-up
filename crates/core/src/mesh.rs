@@ -7,7 +7,7 @@
 use crate::course::{Course, Role};
 use crate::map::{
     face_polygon, grid_colour, neon_colour, BrushKind, Map, Plane, TriggerKind, HINT_GLASS, HINT_LIGHT,
-    HINT_METAL, NO_FILTER,
+    HINT_METAL, HINT_TERRAIN, NO_FILTER,
 };
 use crate::vec3::{v3, V3};
 
@@ -30,6 +30,7 @@ pub const M_GHOST: f32 = 13.0;
 pub const M_HAND: f32 = 14.0;
 pub const M_DOOR_EARLY: f32 = 15.0;
 pub const M_GRID: f32 = 16.0;
+pub const M_SAND: f32 = 17.0;
 
 /// Gym mat vinyl: the colours of the mats in a school gym. One ramp (all
 /// the brushes that touch along it) is one mat colour.
@@ -54,6 +55,8 @@ const EXIT: [f32; 3] = [0.30, 0.80, 0.45];
 const EARLY: [f32; 3] = [0.55, 0.75, 1.0];
 const BALLS: [f32; 3] = [0.40, 0.75, 0.95];
 const HALL: [f32; 3] = [0.80, 0.82, 0.86];
+/// Terrain (a displacement's surface): the sandpit's sand.
+const SAND: [f32; 3] = [0.93, 0.80, 0.55];
 /// Kitsune's stage colours, for its neon strips and grids, in the order the
 /// map file numbers them (red, orange, yellow, green, teal, blue, purple,
 /// pink, white).
@@ -174,6 +177,8 @@ pub fn world(map: &Map, course: &Course) -> (Vec<f32>, usize) {
                 } else {
                     (STAGE[k], M_LIGHT)
                 }
+            } else if s.hint == HINT_TERRAIN {
+                (SAND, M_SAND)
             } else if let Some(k) = neon_colour(s.hint) {
                 (STAGE[k], M_LIGHT)
             } else if see_through {

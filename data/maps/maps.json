@@ -66,6 +66,21 @@
    "stages": ["stage1", "stage2", "stage3"],
    "medals": {"record": 70, "gold": 90, "silver": 120, "bronze": 170},
    "things": ["jumprope", "cat", "glowstick", "sceptre", "jackal"]
+  },
+  {
+   "id": "surf_sandtrap",
+   "name": "surf_sandtrap",
+   "author": "ArcticPanda",
+   "spawn": "s1",
+   "start_zone": [[48, -1040, 14232], [2096, -16, 14700]],
+   "roles": [
+    {"target": "start", "box": [[400, -15500, -5800], [1700, -14400, -4800]], "role": "finish", "ending": 1},
+    {"target": "start", "role": "restart"},
+    {"target": "s1", "role": "restart"}
+   ],
+   "stages": [],
+   "medals": {"record": 60, "gold": 75, "silver": 95, "bronze": 130},
+   "things": ["sunglasses", "lizard", "sandcastle", "hourglass", "cactus"]
   }
  ]
 }
