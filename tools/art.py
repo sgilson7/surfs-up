@@ -63,6 +63,7 @@ COLOURS = {
     "noodle": "57D163", "noodledark": "3A9E45", "ball": "D8302B", "balldark": "A5211D", "balllit": "F0645D",
     "duck": "FFD12E", "duckdark": "E0A814", "foam": "2F6BE0", "foamdark": "214FAD", "white": "FFFFFF",
     "sand": "EDCB85", "sandlit": "F7E2AE", "sanddark": "C9A35E", "camel": "D6A35F", "cameldark": "A97A3F",
+    "stick": "7CF25C", "sticklit": "C8FFB0", "night": "24222B", "nightlit": "3A3744",
     "gold": "F5C231", "goldlit": "FFE07A", "golddark": "B98A12", "wrap": "F0EBD6", "wrapdark": "C9C2A8",
     "ink": "1E2B45", "netline": "9AA9BF", "glow": "FFF4C2",
 }
@@ -460,6 +461,62 @@ def mummy():
     return b, (S, S)
 
 
+def jumprope():
+    b = "% the rope looping between two red handles\n"
+    b += "\\draw[yellow,line width=2.4pt] (0.75,1.55) .. controls (0.6,3.2) and (2.4,3.2) .. (2.25,1.55);\n"
+    for x in (0.62, 2.12):
+        b += poly([(x, 0.35), (x + 0.26, 0.35), (x + 0.24, 1.6), (x + 0.02, 1.6)], "red")
+        b += poly([(x + 0.13, 0.35), (x + 0.26, 0.35), (x + 0.24, 1.6), (x + 0.13, 1.6)], "reddark")
+    return b, (S, S)
+
+
+def cat():
+    b = "% a sitting black cat: body, chest, head, two ears, gold collar, green eyes\n"
+    b += poly([(0.95, 0.3), (2.05, 0.3), (1.9, 1.6), (1.1, 1.6)], "night")
+    b += poly([(1.5, 0.3), (2.05, 0.3), (1.9, 1.6), (1.5, 1.6)], "nightlit")
+    b += poly([(2.05, 0.45), (2.6, 0.55), (2.6, 0.7), (2.0, 0.65)], "night")
+    b += rect(1.08, 1.55, 1.92, 1.72, "gold")
+    b += poly([(1.1, 1.72), (1.9, 1.72), (1.85, 2.45), (1.15, 2.45)], "night")
+    b += poly([(1.15, 2.4), (1.3, 2.9), (1.45, 2.4)], "night") + poly([(1.55, 2.4), (1.7, 2.9), (1.85, 2.4)], "night")
+    b += circle(1.33, 2.12, 0.07, "green") + circle(1.67, 2.12, 0.07, "green")
+    return b, (S, S)
+
+
+def glowstick():
+    b = "% a glow stick, glowing green, with a cap\n"
+    b += poly([(0.95, 0.4), (1.25, 0.3), (2.15, 2.5), (1.85, 2.6)], "stick")
+    b += poly([(1.05, 0.42), (1.12, 0.39), (2.02, 2.56), (1.95, 2.58)], "sticklit")
+    b += poly([(1.85, 2.6), (2.15, 2.5), (2.25, 2.75), (1.95, 2.85)], "netline")
+    return b, (S, S)
+
+
+SCEPTRE_BANDS = 5
+
+
+def sceptre():
+    b = "% a striped staff, gold and blue, with a hooked top\n"
+    for k in range(SCEPTRE_BANDS):
+        y0 = 0.3 + k * 0.4
+        b += rect(1.38, y0, 1.62, y0 + 0.4, "gold" if k % 2 == 0 else "stripeblue")
+    b += "\\draw[gold,line width=5pt,line cap=round] (1.5,2.3) .. controls (1.5,2.85) and (2.2,2.9) .. (2.2,2.45);\n"
+    assert SCEPTRE_BANDS % 2 == 1
+    return b, (S, S)
+
+
+def jackal():
+    b = "% a black jackal plush: body, gold collar, head, long snout, tall ears\n"
+    b += facet_ball(1.4, 0.95, 0.7, "nightlit", "night", "night")
+    b += rect(1.0, 1.55, 1.8, 1.7, "gold")
+    b += facet_ball(1.4, 2.05, 0.48, "nightlit", "night", "night")
+    b += poly([(1.75, 2.15), (2.55, 1.95), (2.55, 1.75), (1.75, 1.85)], "night")
+    b += circle(2.55, 1.85, 0.07, "ink")
+    for x in (1.05, 1.45):
+        b += poly([(x, 2.35), (x + 0.12, 3.0), (x + 0.28, 2.38)], "night")
+        b += poly([(x + 0.08, 2.45), (x + 0.12, 2.8), (x + 0.2, 2.47)], "gold")
+    b += circle(1.62, 2.12, 0.06, "gold")
+    return b, (S, S)
+
+
 def how_to_surf():
     """A ramp seen end-on: the surfer on its right face, the ramp's top to the
     surfer's left, so the key to hold is A."""
@@ -516,6 +573,11 @@ PICTURES = {
     "items/pyramid": pyramid,
     "items/scarab": scarab,
     "items/mummy": mummy,
+    "items/jumprope": jumprope,
+    "items/cat": cat,
+    "items/glowstick": glowstick,
+    "items/sceptre": sceptre,
+    "items/jackal": jackal,
 }
 DPI = {"title": 150, "icon": 81, "how-to-surf": 110}
 CLEAR = {"items"}

@@ -323,10 +323,15 @@ pub enum Held {
     Pyramid,
     Scarab,
     Mummy,
+    Jumprope,
+    Cat,
+    Glowstick,
+    Sceptre,
+    Jackal,
 }
 
 impl Held {
-    pub const ALL: [Held; 16] = [
+    pub const ALL: [Held; 21] = [
         Held::Prayer,
         Held::Noodle,
         Held::Kickball,
@@ -343,6 +348,11 @@ impl Held {
         Held::Pyramid,
         Held::Scarab,
         Held::Mummy,
+        Held::Jumprope,
+        Held::Cat,
+        Held::Glowstick,
+        Held::Sceptre,
+        Held::Jackal,
     ];
     pub fn id(self) -> &'static str {
         match self {
@@ -362,6 +372,11 @@ impl Held {
             Held::Pyramid => "pyramid",
             Held::Scarab => "scarab",
             Held::Mummy => "mummy",
+            Held::Jumprope => "jumprope",
+            Held::Cat => "cat",
+            Held::Glowstick => "glowstick",
+            Held::Sceptre => "sceptre",
+            Held::Jackal => "jackal",
         }
     }
     pub fn from_id(id: &str) -> Option<Held> {
@@ -846,6 +861,104 @@ pub fn thing(out: &mut Vec<f32>, f: &Xf, held: Held, k: f32, m: f32) {
                     deep,
                     m,
                 );
+            }
+        }
+        Held::Jumprope => {
+            // a skipping rope: two red handles, the rope looping down between
+            let red = [0.90, 0.22, 0.22];
+            let rope = [0.98, 0.86, 0.30];
+            bar(out, &sq, v3(0.0, -1.2, 0.0), v3(0.0, -1.2, 5.0), 0.6, red, m);
+            bar(out, &sq, v3(1.5, 1.6, 0.5), v3(2.2, 2.4, 5.0), 0.6, red, m);
+            let lift = (1.0 - k) * 6.0;
+            let mut prev = v3(0.0, -1.2, 5.0);
+            for i in 1..=10 {
+                let t = i as f32 / 10.0;
+                let sag = 4.0 * t * (1.0 - t);
+                let p = v3(2.2 * t + sag * 2.5, -1.2 + 3.6 * t, 5.0 + sag * (3.0 + lift));
+                bar(out, &sq, prev, p, 0.18, rope, m);
+                prev = p;
+            }
+        }
+        Held::Cat => {
+            // a toy Egyptian cat: black, sitting tall, gold collar and ear
+            let black = [0.14, 0.13, 0.16];
+            let gold = [1.0, 0.78, 0.18];
+            cuboid(out, &sq, v3(0.0, 0.0, 2.0), v3(1.8, 1.4, 2.0), black, m);
+            cuboid(out, &sq, v3(0.6, 0.0, 5.0), v3(1.2, 1.1, 1.4), black, m);
+            cuboid(out, &sq, v3(1.1, 0.0, 7.2), v3(1.3, 1.2, 1.1), black, m);
+            cuboid(out, &sq, v3(0.8, 0.0, 6.2), v3(1.3, 1.25, 0.25), gold, m);
+            for side in [-1.0f32, 1.0] {
+                cuboid(out, &sq, v3(1.0, side * 0.8, 8.8), v3(0.35, 0.3, 0.7), black, m);
+                cuboid(
+                    out,
+                    &sq,
+                    v3(2.4, side * 0.5, 7.5),
+                    v3(0.1, 0.25, 0.15),
+                    [0.30, 0.85, 0.40],
+                    m,
+                );
+            }
+            cuboid(out, &sq, v3(1.0, 0.8, 8.4), v3(0.2, 0.15, 0.15), gold, m);
+            bar(out, &sq, v3(-1.8, 0.0, 0.6), v3(-2.6, 1.6, 0.4), 0.35, black, m);
+        }
+        Held::Glowstick => {
+            // a glow stick, bright green; a squeeze cracks it brighter
+            let glow = 0.75 + (1.0 - k) * 1.0;
+            bar(
+                out,
+                f,
+                v3(0.0, 0.0, -1.0),
+                v3(1.5, 0.0, 12.0),
+                0.55,
+                [0.35 * glow, 1.0, 0.30 * glow],
+                crate::mesh::M_LIGHT,
+            );
+            bar(
+                out,
+                f,
+                v3(1.5, 0.0, 12.0),
+                v3(1.65, 0.0, 13.2),
+                0.35,
+                [0.85, 0.85, 0.9],
+                m,
+            );
+        }
+        Held::Sceptre => {
+            // a toy sceptre: a gold and blue striped staff with a hooked top
+            let gold = [1.0, 0.80, 0.22];
+            let blue = [0.15, 0.32, 0.80];
+            for i in 0..6 {
+                let z0 = -1.0 + i as f32 * 2.0;
+                let col = if i % 2 == 0 { gold } else { blue };
+                bar(out, f, v3(0.0, 0.0, z0), v3(0.0, 0.0, z0 + 2.0), 0.45, col, m);
+            }
+            bar(out, f, v3(0.0, 0.0, 11.0), v3(1.6, 0.0, 12.6), 0.45, gold, m);
+            bar(out, f, v3(1.6, 0.0, 12.6), v3(2.8, 0.0, 12.0), 0.45, gold, m);
+            bar(out, f, v3(2.8, 0.0, 12.0), v3(2.9, 0.0, 10.8), 0.45, blue, m);
+        }
+        Held::Jackal => {
+            // a jackal plush: black, tall pointed ears, a long snout, gold
+            // collar and gold-trimmed ears
+            let black = [0.12, 0.12, 0.15];
+            let gold = [1.0, 0.78, 0.18];
+            ball(out, &sq, v3(0.0, 0.0, 3.0), v3(2.8, 2.4, 3.0), black, m);
+            cuboid(out, &sq, v3(0.4, 0.0, 6.2), v3(1.9, 2.0, 0.35), gold, m);
+            ball(out, &sq, v3(0.6, 0.0, 8.0), v3(2.2, 2.0, 1.9), black, m);
+            cuboid(out, &sq, v3(3.2, 0.0, 7.4), v3(1.4, 0.7, 0.6), black, m);
+            cuboid(
+                out,
+                &sq,
+                v3(4.7, 0.0, 7.6),
+                v3(0.2, 0.35, 0.3),
+                [0.05, 0.05, 0.06],
+                m,
+            );
+            for side in [-1.0f32, 1.0] {
+                let ear = sq.at(v3(0.2, side * 1.2, 10.8)).roll(side * 10.0);
+                cuboid(out, &ear, v3(0.0, 0.0, 0.0), v3(0.45, 0.7, 1.8), black, m);
+                cuboid(out, &ear, v3(0.46, 0.0, 0.0), v3(0.05, 0.4, 1.4), gold, m);
+                cuboid(out, &sq, v3(2.2, side * 0.9, 8.6), v3(0.2, 0.3, 0.25), gold, m);
+                cuboid(out, &sq, v3(1.4, side * 1.5, 0.4), v3(1.0, 0.7, 0.5), black, m);
             }
         }
         Held::Mummy => {

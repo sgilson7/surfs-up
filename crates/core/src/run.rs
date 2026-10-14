@@ -185,6 +185,15 @@ impl Surfer {
                 }
             }
         }
+        // a finish zone stops the clock like a finish door, swept as the
+        // triggers are
+        if !matches!(jump, Some((Role::Finish(_), _))) && self.phase == Phase::Running {
+            if let Some(z) = &course.finish_zone {
+                if z.contains_box(lo, hi) {
+                    jump = Some((Role::Finish(1), 0));
+                }
+            }
+        }
         // Source's CheckFalling with a full 100 health: a landing at
         // PLAYER_FATAL_FALL_SPEED (1024, shareddefs.h) or faster kills,
         // unless the feet are in water; here it is a fall back to the start
@@ -373,6 +382,54 @@ mod tests {
         assert!(fell);
         assert_eq!(s.phase, Phase::Start);
         assert_eq!(s.body.origin, m.spawn);
+    }
+
+    #[test]
+    fn anubis_runs_stage_one_to_three_and_finishes_in_its_end_zone() {
+        let (m, c) = load("surf_anubis");
+        let mut mv = Mover::new(&m);
+        let mut s = Surfer::at_start(&m);
+        assert_eq!(c.stages.len(), 3);
+        let (s1, _) = m.destination_named("stage1").unwrap();
+        assert_eq!(s.body.origin, s1, "you start on stage 1's pad");
+        assert!(c.zone.contains(s1));
+        // walk off stage 1's pad: the clock starts
+        let mut started = false;
+        for _ in 0..200 {
+            if s.step(&mut mv, &c, Cmd::new(B_FORWARD, 0.0, 0.0)).started {
+                started = true;
+                break;
+            }
+        }
+        assert!(started, "leaving stage 1's pad starts the clock");
+        // stage 1's end door (a teleport to stage 2) moves you on, clock running
+        let door = |target: &str| {
+            let d = m.name_index(target).unwrap();
+            m.triggers
+                .iter()
+                .find(|t| {
+                    t.kind == TriggerKind::Teleport(d)
+                        && (t.maxs.y - t.mins.y < 64.0 || t.maxs.x - t.mins.x < 64.0)
+                        && t.maxs.z - t.mins.z > 100.0
+                })
+                .unwrap_or_else(|| panic!("a door to {target}"))
+                .clone()
+        };
+        for (target, stage) in [("stage2", 1u8), ("stage3", 2u8)] {
+            let d = door(target);
+            s.body.origin = (d.mins + d.maxs) * 0.5 - v3(0.0, 0.0, 30.0);
+            s.body.velocity = ZERO;
+            let t = s.step(&mut mv, &c, Cmd::new(0, 0.0, 0.0));
+            assert_eq!(t.stage, Some(stage), "through the door to {target}");
+            assert_eq!(s.phase, Phase::Running);
+        }
+        // into the end zone: the clock stops
+        let z = c.finish_zone.unwrap();
+        s.body.origin = (z.mins + z.maxs) * 0.5;
+        s.body.velocity = ZERO;
+        let t = s.step(&mut mv, &c, Cmd::new(0, 0.0, 0.0));
+        assert!(t.finished.is_some(), "the end zone finishes the run");
+        assert_eq!(s.phase, Phase::Start);
     }
 
     #[test]

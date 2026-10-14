@@ -66,3 +66,7 @@ surf_kitsune is the second course, picked on the title. `./scripts/check.sh` pas
 ## Eighth request (13 October 2026): surf_egypt
 
 "theres this egyptian themed pretty technical map we liked from back in the day, could you find that and add it as a new map?" Sam chose surf_egypt (Seabass45). Rows 36 to 40: the extractor follows Source's entity-named teleport targets; the run starts at the spawn and finishes at the three bottom doors; Source's fatal fall is on for egypt only; egypt's own set of five things. Medal times are provisional and nobody has played it through yet. `./scripts/check.sh`: BUILDER CHECK PASSED.
+
+## Ninth request (13 October 2026): surf_anubis, and utopia's flashing start
+
+Utopia's start flickered because the kitsune glass-ramp look reached its glass side panes; it now needs a kitsune grid texture (row 41, deployed first on its own). surf_anubis is the fourth course: stages 1 to 3, finishing in its end zone (rows 42 to 46). Bonuses are not timed; medal times are provisional; nobody has played it through yet. `./scripts/check.sh`: BUILDER CHECK PASSED.

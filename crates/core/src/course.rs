@@ -72,6 +72,9 @@ pub struct Course {
     /// sends you back to the start (a map with plain ground under its ramps,
     /// where the original's fall killed you).
     pub fall_damage: bool,
+    /// A finish that is a timer zone rather than a teleport (a box the clock
+    /// stops in), as staged maps built for a timer plugin mark their end.
+    pub finish_zone: Option<Zone>,
 }
 
 /// What each place in a course's `things` asks: finish it, the three medal
@@ -178,6 +181,7 @@ impl Course {
             stages: Vec::new(),
             things: Vec::new(),
             fall_damage: false,
+            finish_zone: None,
             medals: Medals {
                 record: never,
                 gold: never,
@@ -244,6 +248,12 @@ impl Course {
             medals: medals_of(m),
             things: things_of(m),
             fall_damage: m["fall_damage"].as_bool().unwrap_or(false),
+            finish_zone: if m["finish_zone"].is_null() {
+                None
+            } else {
+                let (lo, hi) = box_of(&m["finish_zone"])?;
+                Some(Zone { mins: lo, maxs: hi })
+            },
         })
     }
 
@@ -274,7 +284,7 @@ impl Course {
 
     /// Whether any teleport on the map can finish a run here.
     pub fn has_finish(&self) -> bool {
-        self.rules.iter().any(|r| matches!(r.role, Role::Finish(_)))
+        self.finish_zone.is_some() || self.rules.iter().any(|r| matches!(r.role, Role::Finish(_)))
     }
 }
 
@@ -289,6 +299,7 @@ pub mod tests {
         let bytes: &[u8] = match id {
             "surf_kitsune" => include_bytes!("../../../data/maps/surf_kitsune.bin"),
             "surf_egypt" => include_bytes!("../../../data/maps/surf_egypt.bin"),
+            "surf_anubis" => include_bytes!("../../../data/maps/surf_anubis.bin"),
             _ => include_bytes!("../../../data/maps/surf_utopia.bin"),
         };
         let mut map = Map::parse(bytes).expect("parse");

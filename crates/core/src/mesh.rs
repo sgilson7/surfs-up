@@ -227,6 +227,17 @@ pub fn world(map: &Map, course: &Course) -> (Vec<f32>, usize) {
             push_polygon(&mut opaque, &poly, n, c, m);
         }
     }
+    // a finish zone shows as a checkered floor at its foot
+    if let Some(z) = &course.finish_zone {
+        let (lo, hi) = (z.mins, z.maxs);
+        let quad = [
+            v3(lo.x, lo.y, lo.z + 1.0),
+            v3(hi.x, lo.y, lo.z + 1.0),
+            v3(hi.x, hi.y, lo.z + 1.0),
+            v3(lo.x, hi.y, lo.z + 1.0),
+        ];
+        push_polygon(&mut opaque, &quad, v3(0.0, 0.0, 1.0), FINISH, M_FINISH);
+    }
     hall(map, &mut opaque);
     let count = opaque.len() / FLOATS_PER_VERTEX;
     opaque.extend(clear);

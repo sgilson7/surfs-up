@@ -1,5 +1,5 @@
 {
- "_about": "The courses, and what each teleport means for a run, which a BSP does not say (a timer plugin's zones do, on a server). The core reads this file and holds every rule in it. `spawn` is the teleport destination you start at. `start_zone` is the box [min, max] the clock waits in; leaving it starts the clock. `roles` are tried in order for each teleport touched: `target` is the destination's name, `box` (optional) limits the rule to triggers whose centre is inside it; a `finish` stops the clock, an `exit` ends the run with no time, a `restart` sends you to the spawn and stops the clock, and `move` (the default for any target not listed) teleports you and keeps the clock running, as a stage's fall or its door to the next stage does. `stages` names the destination each stage starts at, in order. `fall_damage` (default false) is Source's fatal fall: a landing out of water at 1024 u/s or faster sends you to the start, for a map with plain ground under its ramps. Medal times are seconds, and provisional until people have surfed the course. `things` is the course's set of things to hold, earned on that course only: the first for finishing it, then bronze, silver and gold times, and the last for the best time in the gym.",
+ "_about": "The courses, and what each teleport means for a run, which a BSP does not say (a timer plugin's zones do, on a server). The core reads this file and holds every rule in it. `spawn` is the teleport destination you start at. `start_zone` is the box [min, max] the clock waits in; leaving it starts the clock. `roles` are tried in order for each teleport touched: `target` is the destination's name, `box` (optional) limits the rule to triggers whose centre is inside it; a `finish` stops the clock, an `exit` ends the run with no time, a `restart` sends you to the spawn and stops the clock, and `move` (the default for any target not listed) teleports you and keeps the clock running, as a stage's fall or its door to the next stage does. `finish_zone` (optional) is a box the clock stops in, for a map whose end is a timer zone rather than a teleport. `stages` names the destination each stage starts at, in order. `fall_damage` (default false) is Source's fatal fall: a landing out of water at 1024 u/s or faster sends you to the start, for a map with plain ground under its ramps. Medal times are seconds, and provisional until people have surfed the course. `things` is the course's set of things to hold, earned on that course only: the first for finishing it, then bronze, silver and gold times, and the last for the best time in the gym.",
  "maps": [
   {
    "id": "surf_utopia",
@@ -51,6 +51,21 @@
    "fall_damage": true,
    "medals": {"record": 20, "gold": 26, "silver": 34, "bronze": 48},
    "things": ["bucket", "camel", "pyramid", "scarab", "mummy"]
+  },
+  {
+   "id": "surf_anubis",
+   "name": "surf_anubis",
+   "author": "Sneakyyy",
+   "spawn": "stage1",
+   "start_zone": [[-128, -128, -80], [256, 128, 128]],
+   "finish_zone": [[1680, -2240, -2880], [2320, -1842, -2576]],
+   "roles": [
+    {"target": "spawn", "role": "restart"},
+    {"target": "credits", "role": "restart"}
+   ],
+   "stages": ["stage1", "stage2", "stage3"],
+   "medals": {"record": 70, "gold": 90, "silver": 120, "bronze": 170},
+   "things": ["jumprope", "cat", "glowstick", "sceptre", "jackal"]
   }
  ]
 }
