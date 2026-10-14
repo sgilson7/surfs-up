@@ -12,6 +12,9 @@ saved_best.json, a real recording), which it sends once to each newcomer:
 every joiner must show it on the scoreboard. Then one joiner walks off the
 ledge, and every other browser must draw them (a name tag) and see them move.
 
+Then, for every other course, two browsers choose it, meet, and one walks
+off the start: the other must draw them moving, and V must watch them.
+
 It fails on: a joiner never connecting, a browser not seeing all eight, the
 run not reaching every joiner, a live surfer not moving on the others'
 screens, a page error or console error, or a request off the origin.
@@ -34,6 +37,9 @@ DIST = ROOT / "dist"
 COPY = json.loads((ROOT / "data" / "copy.json").read_text())
 SAVED = (ROOT / "tests" / "browser" / "fixtures" / "saved_best.json").read_text()
 PEOPLE = int(os.environ.get("SURF_PEOPLE", "8"))
+MAPS = json.loads((ROOT / "data" / "maps" / "maps.json").read_text())
+# the eight-browser room surfs the first course; every other one gets a pair
+OTHER_COURSES = [m["id"] for m in MAPS["maps"][1:]]
 failures = []
 
 
@@ -173,10 +179,10 @@ def run(p, engine, origin):
         check(a.get("J1") != b.get("J1"), f"watcher {k} sees J1 move ({a.get('J1')} -> {b.get('J1')})")
 
     # spectating, as in Ape Race: V watches someone in the gym, Space stops
-    spectator = watchers[1]
+    spectator = watchers[-1]
     spectator.bring_to_front()
     if spectator.is_visible("#pause"):
-        spectator.click("#p-resume")
+        spectator.evaluate("document.getElementById('p-resume').click()")
     spectator.keyboard.press("KeyV")
     spectator.wait_for_timeout(300)
     shown = spectator.is_visible("#h-watch")
@@ -193,6 +199,87 @@ def run(p, engine, origin):
     browser.close()
 
 
+def course_pair(p, engine, origin, course):
+    """Two browsers on one course: they meet, one walks, the other sees it."""
+    print(f"\n[{engine}] online on {course}")
+    options = {
+        "chromium": {"args": ["--disable-features=WebRtcHideLocalIpsWithMdns"]},
+        "firefox": {"firefox_user_prefs": {"media.peerconnection.ice.obfuscate_host_addresses": False}},
+    }.get(engine, {})
+    browser = getattr(p, engine).launch(**options)
+    errors = []
+
+    def open_page(name):
+        page = browser.new_context().new_page()
+        page.on("console", lambda m: errors.append(f"{name}: {m.text}") if m.type == "error" else None)
+        page.on("pageerror", lambda e: errors.append(f"{name}: {e}"))
+        page.goto(origin + "/index.html?ice=none")
+        page.wait_for_selector("body[data-ready='true']", state="attached", timeout=30000)
+        page.fill("#name", name)
+        page.click(f"#maps .map-card:has-text('{course}')")
+        for _ in range(300):
+            if course in page.inner_text("#map-name"):
+                break
+            page.wait_for_timeout(100)
+        check(course in page.inner_text("#map-name"), f"{name} chose {course}")
+        return page
+
+    host = open_page("Hana")
+    host.click("#t-play")
+    host.keyboard.press("Escape")
+    host.wait_for_selector("body[data-mode='pause']", state="attached")
+    host.click("#p-host-code")
+    for _ in range(200):
+        if host.input_value("#inv-offer"):
+            break
+        host.wait_for_timeout(100)
+    j = open_page("J1")
+    j.click("#t-join")
+    j.click("#join-paste summary")
+    j.fill("#j-offer", host.input_value("#inv-offer"))
+    j.click("#j-make")
+    for _ in range(100):
+        if j.input_value("#j-reply"):
+            break
+        j.wait_for_timeout(100)
+    host.fill("#inv-reply", j.input_value("#j-reply"))
+    host.click("#inv-accept")
+    j.click("#join .close")
+    j.click("#t-play")
+    host.evaluate("document.getElementById('p-resume').click()")
+    both = COPY["hud_people"].replace("{n}", "2")
+    for _ in range(200):
+        if host.inner_text("#h-people") == both and j.inner_text("#h-people") == both:
+            break
+        host.wait_for_timeout(100)
+    check(host.inner_text("#h-people") == both and j.inner_text("#h-people") == both, f"{course}: both browsers see two in the gym")
+
+    # J1 walks off the start; the host, standing where J1 started, sees them go
+    j.bring_to_front()
+    if j.is_visible("#pause"):
+        j.evaluate("document.getElementById('p-resume').click()")
+    j.keyboard.down("KeyW")
+    j.wait_for_timeout(700)
+    first = dict((n, (x, y)) for n, x, y in label_positions(host))
+    j.wait_for_timeout(700)
+    second = dict((n, (x, y)) for n, x, y in label_positions(host))
+    j.keyboard.up("KeyW")
+    check("J1" in first and "J1" in second, f"{course}: the host draws J1 surfing")
+    check(first.get("J1") != second.get("J1"), f"{course}: the host sees J1 move ({first.get('J1')} -> {second.get('J1')})")
+
+    # and the host can watch J1 through their eyes
+    host.bring_to_front()
+    if host.is_visible("#pause"):
+        host.evaluate("document.getElementById('p-resume').click()")
+    host.keyboard.press("KeyV")
+    host.wait_for_timeout(300)
+    text = host.inner_text("#h-watch") if host.is_visible("#h-watch") else ""
+    check("J1" in text, f"{course}: the host watches J1 ({text!r})")
+    host.keyboard.press("Space")
+    check(not errors, f"{course}: no page or console error {errors[:3]}")
+    browser.close()
+
+
 def main():
     engines = sys.argv[1:] or ["chromium"]
     srv = serve()
@@ -200,6 +287,8 @@ def main():
     with sync_playwright() as p:
         for e in engines:
             run(p, e, origin)
+            for course in OTHER_COURSES:
+                course_pair(p, e, origin, course)
     srv.shutdown()
     if failures:
         print(f"\nONLINE CHECK FAILED: {len(failures)} problem(s)")

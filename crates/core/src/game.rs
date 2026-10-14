@@ -1803,50 +1803,108 @@ mod tests {
         assert_eq!((b.me.body.origin.x, b.me.body.origin.y), (start.x, start.y));
     }
 
+    fn map_bytes(id: &str) -> &'static [u8] {
+        match id {
+            "surf_kitsune" => KITSUNE,
+            "surf_egypt" => include_bytes!("../../../data/maps/surf_egypt.bin"),
+            "surf_anubis" => include_bytes!("../../../data/maps/surf_anubis.bin"),
+            _ => UTOPIA,
+        }
+    }
+
+    /// On every course: b, in the same room, draws a where a really is (but
+    /// for the two predicted ticks either side of a teleport), and a's run
+    /// replays as a ghost exactly as it happened. a walks off the start,
+    /// then strafes and turns, jumps now and then, and so meets ramps, falls,
+    /// stage doors and (on egypt) the fatal fall.
     #[test]
-    fn on_kitsune_the_others_see_you_where_you_are() {
-        let mut a = game();
-        let mut b = game();
-        a.load_map("surf_kitsune", KITSUNE).unwrap();
-        b.load_map("surf_kitsune", KITSUNE).unwrap();
-        a.host_online(42.0);
-        b.join_online(&a.room_code());
-        a.play();
-        b.play();
-        // b is already there when a arrives, and a joins later in a's run
-        b.net_peer("a", true);
-        let mut t = 0.0;
-        // ticks where b draws a far from where a is: only the two ticks of
-        // prediction either side of a teleport (a door or a fall)
-        let mut off = Vec::new();
-        for i in 0..1200 {
-            t += 1000.0 / 64.0;
-            if i == 30 {
-                a.net_peer("b", false);
-            }
-            a.advance(t, B_FORWARD as u32, 0.0, 0.0);
-            b.advance(t, 0, 0.0, 0.0);
-            let out_a: Value = serde_json::from_str(&a.net_outbox()).unwrap();
-            for m in out_a.as_array().unwrap() {
-                b.net_message("a", m[1].as_str().unwrap());
-            }
-            let out_b: Value = serde_json::from_str(&b.net_outbox()).unwrap();
-            for m in out_b.as_array().unwrap() {
-                a.net_message("b", m[1].as_str().unwrap());
-            }
-            if i > 100 {
-                let pa = &b.room.as_ref().unwrap().peers[0];
-                if let Some(l) = &pa.live {
+    fn every_course_works_online_live_and_as_a_ghost() {
+        for (id, _, _) in course::listed(MAPS).unwrap() {
+            let bytes = map_bytes(&id);
+            let mut a = game();
+            let mut b = game();
+            a.load_map(&id, bytes).unwrap();
+            b.load_map(&id, bytes).unwrap();
+            a.host_online(42.0);
+            b.join_online(&a.room_code());
+            a.play();
+            b.play();
+            b.net_peer("a", true);
+            let mut t = 0.0;
+            let mut off = 0;
+            let mut teleports = 0;
+            let mut last_run: Option<(Surfer, Vec<Cmd>, V3)> = None;
+            for i in 0..1600u32 {
+                t += 1000.0 / 64.0;
+                if i == 30 {
+                    a.net_peer("b", false);
+                }
+                let phase = (i / 48) % 4;
+                let keys = match phase {
+                    0 => B_FORWARD,
+                    1 => B_LEFT,
+                    2 => B_FORWARD | if i % 90 == 0 { B_JUMP } else { 0 },
+                    _ => B_RIGHT,
+                } as u32;
+                let dx = match phase {
+                    1 => -6.0,
+                    3 => 6.0,
+                    _ => 0.0,
+                };
+                let before = a.me.body.origin;
+                a.advance(t, keys, dx, 0.0);
+                b.advance(t, 0, 0.0, 0.0);
+                if (a.me.body.origin - before).length() > 300.0 {
+                    teleports += 1;
+                }
+                if let Some((start, cmds)) = &a.recording {
+                    last_run = Some((start.clone(), cmds.clone(), a.me.body.origin));
+                }
+                let out_a: Value = serde_json::from_str(&a.net_outbox()).unwrap();
+                for m in out_a.as_array().unwrap() {
+                    b.net_message("a", m[1].as_str().unwrap());
+                }
+                let out_b: Value = serde_json::from_str(&b.net_outbox()).unwrap();
+                for m in out_b.as_array().unwrap() {
+                    a.net_message("b", m[1].as_str().unwrap());
+                }
+                if i > 100 {
+                    let pa = &b.room.as_ref().unwrap().peers[0];
+                    assert_eq!(pa.map, id, "{id}: b knows a's course");
+                    let l = pa.live.as_ref().unwrap_or_else(|| panic!("{id}: b sees a"));
                     if (l.origin() - a.me.body.origin).length() > 64.0 {
-                        off.push(i);
+                        off += 1;
                     }
                 }
             }
+            assert!(
+                off <= 4 + teleports * 4,
+                "{id}: b draws a where a is but for teleports ({off} ticks off, {teleports} teleports)"
+            );
+            // the last stretch a recorded replays exactly, as a ghost would
+            let (start, cmds, end) = last_run.unwrap_or_else(|| panic!("{id}: a started a run"));
+            let run = RunRecord {
+                map: id.clone(),
+                start_name: start.name,
+                start_stage: start.stage,
+                name: "a".into(),
+                seed: 0,
+                ticks: cmds.len() as u32,
+                ending: 1,
+                start: start.body,
+                prev: start.last_cmd,
+                cmds,
+                sync: 0.0,
+                strafes: 0,
+            };
+            let run = RunRecord::from_json(&run.to_json()).unwrap();
+            let mut g = Ghost::new(run, false);
+            let mut mv = Mover::new(&b.map);
+            while !g.done() {
+                g.step(&mut mv, &b.course);
+            }
+            assert_eq!(g.surfer.body.origin, end, "{id}: the run replays to the bit");
         }
-        assert!(a.me.phase == Phase::Running, "a went through the red door");
-        let pa = &b.room.as_ref().unwrap().peers[0];
-        assert!(pa.live.is_some(), "b sees a");
-        assert!(off.len() <= 8, "b draws a where a is, but for teleports: {off:?}");
     }
 
     #[test]
