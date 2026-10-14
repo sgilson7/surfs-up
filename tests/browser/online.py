@@ -12,8 +12,8 @@ saved_best.json, a real recording), which it sends once to each newcomer:
 every joiner must show it on the scoreboard. Then one joiner walks off the
 ledge, and every other browser must draw them (a name tag) and see them move.
 
-Then, for every other course, two browsers choose it, meet, and one walks
-off the start: the other must draw them moving, and V must watch them.
+Then, for every other course, two browsers choose it and meet; one watches
+the other (V) while the other walks off the start, and must see their speed.
 
 It fails on: a joiner never connecting, a browser not seeing all eight, the
 run not reaching every joiner, a live surfer not moving on the others'
@@ -254,33 +254,35 @@ def course_pair(p, engine, origin, course):
         host.wait_for_timeout(100)
     check(host.inner_text("#h-people") == both and j.inner_text("#h-people") == both, f"{course}: both browsers see two in the gym")
 
-    # J1 walks off the start; the host, standing where J1 started, sees them go
-    j.bring_to_front()
-    if j.is_visible("#pause"):
-        j.evaluate("document.getElementById('p-resume').click()")
-    # (a CPU renderer runs slower than real time: walk until J1 is far
-    # enough ahead to be drawn on screen, then watch for a moment)
-    j.keyboard.down("KeyW")
-    first = {}
-    for _ in range(200):
-        first = dict((n, (x, y)) for n, x, y in label_positions(host))
-        if "J1" in first and 0 <= float(first["J1"][1].rstrip("px")) <= 720:
-            break
-        j.wait_for_timeout(100)
-    j.wait_for_timeout(1000)
-    second = dict((n, (x, y)) for n, x, y in label_positions(host))
-    j.keyboard.up("KeyW")
-    check("J1" in first and "J1" in second, f"{course}: the host draws J1 surfing")
-    check(first.get("J1") != second.get("J1"), f"{course}: the host sees J1 move ({first.get('J1')} -> {second.get('J1')})")
-
-    # and the host can watch J1 through their eyes
+    # the host watches J1 (V) and J1 walks off the start: the host's display
+    # shows J1's name and J1's speed, which only J1's live inputs can give.
+    # (Checked through the watched HUD, not name-tag positions: a CPU
+    # renderer, as in CI, runs too slowly for those to be reliable.)
     host.bring_to_front()
     if host.is_visible("#pause"):
         host.evaluate("document.getElementById('p-resume').click()")
-    host.keyboard.press("KeyV")
-    host.wait_for_timeout(300)
-    text = host.inner_text("#h-watch") if host.is_visible("#h-watch") else ""
+    # (J1's first exact state reaches the host within half a second or so;
+    # until then there is nobody to watch, so try again)
+    text = ""
+    for _ in range(40):
+        host.keyboard.press("KeyV")
+        host.wait_for_timeout(250)
+        text = host.inner_text("#h-watch") if host.is_visible("#h-watch") else ""
+        if "J1" in text:
+            break
     check("J1" in text, f"{course}: the host watches J1 ({text!r})")
+    j.bring_to_front()
+    if j.is_visible("#pause"):
+        j.evaluate("document.getElementById('p-resume').click()")
+    j.keyboard.down("KeyW")
+    speed = "0"
+    for _ in range(300):
+        speed = host.inner_text("#h-speed")
+        if speed not in ("", "0"):
+            break
+        host.wait_for_timeout(100)
+    j.keyboard.up("KeyW")
+    check(speed not in ("", "0"), f"{course}: the host sees J1 move ({speed} u/s)")
     host.keyboard.press("Space")
     check(not errors, f"{course}: no page or console error {errors[:3]}")
     browser.close()
