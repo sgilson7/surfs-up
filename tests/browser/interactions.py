@@ -24,6 +24,12 @@ def run(page, check, engine):
     locked = page.locator("#items .item.locked").count()
     check(items == 41 and locked == 40, f"the cubby has forty-one things, forty still to earn ({items}, {locked} locked)")
     check("Rubber chicken" in page.inner_text("#items"), "the rubber chicken is in the cubby")
+    # taller than the window, the cubby scrolls from its title to its close button
+    page.locator("#locker").evaluate("s => s.scrollTop = 0")
+    top = page.locator("#locker h2").evaluate("h => h.getBoundingClientRect().top")
+    page.locator("#locker").evaluate("s => s.scrollTop = s.scrollHeight")
+    bottom = page.locator("#locker .close").evaluate("b => b.getBoundingClientRect().bottom - innerHeight")
+    check(top >= 0 and bottom <= 0, f"the whole cubby scrolls into view (title at {top:.0f}, close {bottom:.0f} past the bottom)")
     page.click("#locker .close")
 
     page.fill("#name", "Tester")

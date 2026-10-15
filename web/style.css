@@ -71,6 +71,8 @@ input {
   gap: 1.25rem;
   align-items: center;
   align-content: center;
+  /* a screen taller than the window starts at its top, so it all scrolls */
+  align-content: safe center;
   justify-content: center;
   padding: 1.5rem;
   overflow-y: auto;

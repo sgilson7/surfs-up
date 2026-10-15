@@ -80,3 +80,8 @@ Utopia's start flickered because the kitsune glass-ramp look reached its glass s
 
 From Sam's friend, a long-time surfer: add bhop_ambience and surf_aircontrol, show tiers on the course choice "so people who don't know how to surf dont imemdiately ruin themselves", and add surf_mesa. Every card now shows its tier from the server lists (row 55) in a coloured badge with a plain word ("Good for beginners" to "Experts only"), easiest first, bhop last. anubis is tier 8 by KSF and SharpTimer, not 5. The three maps are courses six to eight, each with a set of five things: map format v3 carries displacement grids (mesa went from 38 MB to 2.2 MB, row 56); Source's trigger_hurt is honoured (aircontrol's kill floors, and egypt's ground Killzone, rows 57 and 58); the zones are in rows 59 to 61. Medal times are provisional; nobody has played the three through.
 `./scripts/check.sh`: BUILDER CHECK PASSED (eight courses, tiers shown in chromium, firefox and webkit; online pairs on every course).
+
+## Twelfth request (15 October 2026): the cubby scrolls again
+
+"fix the cubby cause you cant scroll it fully anymore": with 41 things its top was out of reach (row 65); every screen now starts at its top when it is taller than the window, and the browser check scrolls the cubby from title to close button.
+`./scripts/check.sh`: BUILDER CHECK PASSED.
