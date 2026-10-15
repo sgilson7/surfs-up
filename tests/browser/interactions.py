@@ -22,7 +22,7 @@ def run(page, check, engine):
     page.wait_for_selector("#locker:not([hidden])", timeout=5000)
     items = page.locator("#items .item").count()
     locked = page.locator("#items .item.locked").count()
-    check(items == 41 and locked == 40, f"the cubby has forty-one things, forty still to earn ({items}, {locked} locked)")
+    check(items == 61 and locked == 60, f"the cubby has sixty-one things, sixty still to earn ({items}, {locked} locked)")
     check("Rubber chicken" in page.inner_text("#items"), "the rubber chicken is in the cubby")
     # taller than the window, the cubby scrolls from its title to its close button
     page.locator("#locker").evaluate("s => s.scrollTop = 0")
