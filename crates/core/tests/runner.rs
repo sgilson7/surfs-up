@@ -21,6 +21,8 @@
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::time::Instant;
 
 use serde_json::{json, Value};
@@ -321,13 +323,16 @@ fn grid(m: &Map) -> Grid {
 
 /// The goals of each stage, and the triggers that end a try on it.
 fn fields(m: &Map, c: &Course, gr: &Grid) -> Vec<Field> {
-    // one field, to the finish: a stage's door is a teleport, and so a
-    // portal to the next stage's start (the per-stage doors are not always
-    // doors: surf_deadline's stages run into each other)
-    let stages = 1;
+    // one field per stage, whose goal is any way on to a later stage (a
+    // door, or surf_deadline's drop-room pads, whose stages run into each
+    // other) or the finish; every other teleport that keeps the run is a
+    // portal, as near the goal as where it sends you
+    // surf_deadline's stage pads stand side by side in small drop rooms,
+    // closer together than a cell: there, the finish alone leads
+    let finish_only = c.id == "surf_deadline";
+    let stages = if finish_only { 1 } else { c.stages.len().max(1) };
     (0..stages)
         .map(|k| {
-            let last = k + 1 >= stages;
             let mut goals: Vec<(V3, V3)> = Vec::new();
             let mut bad: Vec<(V3, V3, &[Plane])> = Vec::new();
             // a teleport that keeps the run: its trigger is as near the goal
@@ -336,24 +341,23 @@ fn fields(m: &Map, c: &Course, gr: &Grid) -> Vec<Field> {
             for t in &m.triggers {
                 match t.kind {
                     TriggerKind::Teleport(d) => match c.role(t, d) {
-                        Role::Finish(_) if last => goals.push((t.mins, t.maxs)),
-                        Role::Move if !last && c.stage_of(d) == Some(k as u8 + 1) => goals.push((t.mins, t.maxs)),
+                        Role::Finish(_) => goals.push((t.mins, t.maxs)),
+                        Role::Move if !finish_only && c.stage_of(d).map(|s| s as usize > k).unwrap_or(false) => {
+                            goals.push((t.mins, t.maxs))
+                        }
                         Role::Move => {
                             if let Some((to, _)) = m.destination(d) {
                                 portals.push((to, t.mins, t.maxs, &t.planes[..]));
                             }
                         }
                         Role::Restart | Role::Exit(_) => bad.push((t.mins, t.maxs, &t.planes[..])),
-                        _ => {}
                     },
                     TriggerKind::Hurt(_) => bad.push((t.mins, t.maxs, &t.planes[..])),
                     _ => {}
                 }
             }
-            if last {
-                if let Some(z) = &c.finish_zone {
-                    goals.push((z.mins, z.maxs));
-                }
+            if let Some(z) = &c.finish_zone {
+                goals.push((z.mins, z.maxs));
             }
             let f = bfs(gr, &goals, &bad, &portals);
             if std::env::var("RUNNER_DEBUG").is_ok() {
@@ -675,7 +679,7 @@ struct Outcome {
 }
 
 /// Searches one course for a finished run, for at most `budget` seconds.
-fn search(id: &str, seed: u64, budget: f32) -> Outcome {
+fn search(id: &str, seed: u64, budget: f32, stop: &AtomicBool) -> Outcome {
     let (m, c) = load(id);
     let mut mv = Mover::new(&m);
     let mut rng = Rng(seed | 1);
@@ -685,11 +689,8 @@ fn search(id: &str, seed: u64, budget: f32) -> Outcome {
     let progress = |s: &Surfer| {
         let f = &fs[(s.stage as usize).min(fs.len() - 1)];
         let d = f.at(s.body.origin);
-        if d == FAR {
-            0.0
-        } else {
-            70_000.0 - d as f32
-        }
+        let st = if fs.len() == 1 { 0.0 } else { s.stage as f32 };
+        st * 100_000.0 + if d == FAR { 0.0 } else { 70_000.0 - d as f32 }
     };
     let mut nodes: Vec<Node> = Vec::new();
     let mut archive: HashMap<Key, Cell> = HashMap::new();
@@ -720,12 +721,13 @@ fn search(id: &str, seed: u64, budget: f32) -> Outcome {
     let mut simulated = 0u64;
     let mut best_stage = 0u8;
     let mut keys: Vec<Key> = archive.keys().copied().collect();
+    let mut all_keys: Vec<Key> = keys.clone();
     let mut iter = 0u64;
     let mut best = f32::MIN;
     let mut region_fails: HashMap<(u8, i32, i32, i32), u32> = HashMap::new();
-    while clock.elapsed().as_secs_f32() < budget {
+    while clock.elapsed().as_secs_f32() < budget && !stop.load(Ordering::Relaxed) {
         iter += 1;
-        if iter % 128 == 1 {
+        if iter % 64 == 1 {
             // the most promising first: furthest along, least tried
             let mut ranked: Vec<(f32, Key)> = archive
                 .iter()
@@ -739,7 +741,14 @@ fn search(id: &str, seed: u64, budget: f32) -> Outcome {
                     )
                 })
                 .collect();
-            ranked.sort_by(|a, b| b.0.total_cmp(&a.0).then(a.1.cmp(&b.1)));
+            // only the best few thousand need an order
+            let order = |a: &(f32, Key), b: &(f32, Key)| b.0.total_cmp(&a.0).then(a.1.cmp(&b.1));
+            const TOP: usize = 4096;
+            if ranked.len() > TOP {
+                ranked.select_nth_unstable_by(TOP, order);
+                ranked.truncate(TOP);
+            }
+            ranked.sort_by(order);
             keys = ranked.into_iter().map(|(_, k)| k).collect();
         }
         if iter.is_multiple_of(20000) && std::env::var("RUNNER_DEBUG").is_ok() {
@@ -761,7 +770,12 @@ fn search(id: &str, seed: u64, budget: f32) -> Outcome {
             );
         }
         let u = rng.unit();
-        let pick = keys[((u * u * u) * keys.len() as f32) as usize % keys.len()];
+        // mostly the best few, now and then anywhere already reached
+        let pick = if rng.below(10) == 0 {
+            all_keys[rng.below(all_keys.len() as u64) as usize]
+        } else {
+            keys[((u * u) * keys.len() as f32) as usize % keys.len()]
+        };
         let cell = archive.get_mut(&pick).unwrap();
         cell.chosen += 1;
         let mut s = cell.surfer.clone();
@@ -950,6 +964,9 @@ fn search(id: &str, seed: u64, budget: f32) -> Outcome {
                 let p = progress(&s);
                 best = best.max(p);
                 let fails = archive.get(&k).map(|o| o.fails).unwrap_or(0);
+                if !archive.contains_key(&k) {
+                    all_keys.push(k);
+                }
                 archive.insert(
                     k,
                     Cell {
@@ -978,7 +995,13 @@ fn search(id: &str, seed: u64, budget: f32) -> Outcome {
         ticks_simulated: simulated,
         best_stage,
         seconds: clock.elapsed().as_secs_f32(),
-        closest: 70_000.0 - best,
+        closest: 70_000.0
+            - (best
+                - if c.stages.len() > 1 && c.id != "surf_deadline" {
+                    best_stage as f32 * 100_000.0
+                } else {
+                    0.0
+                }),
     }
 }
 
@@ -997,12 +1020,40 @@ fn find_runs() {
         .filter(|id| wanted.as_ref().map(|w| w.contains(id)).unwrap_or(true))
         .collect();
     fs::create_dir_all(runs_dir()).unwrap();
+    // RUNNER_SEEDS searches each course from that many seeds at once; the
+    // first to finish stops the others
+    let seeds: u64 = std::env::var("RUNNER_SEEDS")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(1);
     let handles: Vec<_> = ids
         .into_iter()
         .map(|id| {
             std::thread::spawn(move || {
-                let o = search(&id, 0x5eed_0000 + id.len() as u64 * 7919, budget);
-                let line = match &o.found {
+                let stop = Arc::new(AtomicBool::new(false));
+                let tries: Vec<_> = (0..seeds)
+                    .map(|k| {
+                        let (id, stop) = (id.clone(), stop.clone());
+                        std::thread::spawn(move || {
+                            let o = search(&id, 0x5eed_0000 + id.len() as u64 * 7919 + k * 104_729, budget, &stop);
+                            if o.found.is_some() {
+                                stop.store(true, Ordering::Relaxed);
+                            }
+                            o
+                        })
+                    })
+                    .collect();
+                let outcomes: Vec<Outcome> = tries.into_iter().map(|h| h.join().unwrap()).collect();
+                let cells: usize = outcomes.iter().map(|o| o.cells).sum();
+                let simulated: u64 = outcomes.iter().map(|o| o.ticks_simulated).sum();
+                let seconds = outcomes.iter().map(|o| o.seconds).fold(0.0f32, f32::max);
+                let closest = outcomes.iter().map(|o| o.closest).fold(f32::MAX, f32::min);
+                let best_stage = outcomes.iter().map(|o| o.best_stage).max().unwrap_or(0);
+                let found = outcomes
+                    .into_iter()
+                    .filter_map(|o| o.found)
+                    .min_by_key(|f| f.run.ticks);
+                let line = match &found {
                     Some(f) => {
                         let (m, c) = load(&id);
                         let checked = replay(&m, &c, f);
@@ -1011,16 +1062,9 @@ fn find_runs() {
                         fs::write(runs_dir().join(format!("{id}.json")), text + "\n").unwrap();
                         format!("{id}: FINISHED in {:.2}s", f.run.ticks as f32 / 64.0)
                     }
-                    None => format!(
-                        "{id}: no finish (furthest stage {}, {} steps from its goal)",
-                        o.best_stage + 1,
-                        o.closest
-                    ),
+                    None => format!("{id}: no finish (furthest stage {}, {} steps from its goal)", best_stage + 1, closest),
                 };
-                println!(
-                    "{line} [searched {:.0}s, {} cells, {} ticks simulated]",
-                    o.seconds, o.cells, o.ticks_simulated
-                );
+                println!("{line} [searched {seconds:.0}s, {cells} cells, {simulated} ticks simulated, {seeds} seed(s)]");
                 line
             })
         })
