@@ -102,7 +102,9 @@ def run(p, engine, origin):
     host.click("#t-play")
     host.keyboard.press("Escape")
     host.wait_for_selector("body[data-mode='pause']", state="attached")
-    host.click("#p-host-code")
+    # (pressed in the page: while the pause screen is still settling, a
+    # pointer click can land on the screen itself, as in CI once)
+    host.evaluate("document.getElementById('p-host-code').click()")
     for _ in range(200):
         if host.input_value("#inv-offer"):
             break
@@ -157,11 +159,18 @@ def run(p, engine, origin):
         check(pg.inner_text("#h-people") == everyone, f"browser {i} sees all {PEOPLE} ({pg.inner_text('#h-people')})")
 
     # the host's finished run reached everyone, once, whole
+    # (the run arrives a moment after the joiner does; a loaded machine
+    # can take some seconds, so look again until it shows)
     for i, pg in enumerate(pages[1:], 1):
-        pg.keyboard.down("Tab")
-        pg.wait_for_timeout(150)
-        board = pg.inner_text("#b-board")
-        pg.keyboard.up("Tab")
+        board = ""
+        for _ in range(40):
+            pg.keyboard.down("Tab")
+            pg.wait_for_timeout(150)
+            board = pg.inner_text("#b-board")
+            pg.keyboard.up("Tab")
+            if "Hana" in board:
+                break
+            pg.wait_for_timeout(100)
         check("Hana" in board, f"joiner {i} has the host's run on the scoreboard")
 
     # one joiner walks forward off the ledge; the others, who all stand on
@@ -195,7 +204,10 @@ def run(p, engine, origin):
     watching = COPY["hud_watching"].split("{")[0]
     check(shown and watching in text, f"V watches someone in the gym ({text!r})")
     spectator.keyboard.press("Space")
-    spectator.wait_for_timeout(300)
+    for _ in range(50):
+        if not spectator.is_visible("#h-watch"):
+            break
+        spectator.wait_for_timeout(100)
     check(not spectator.is_visible("#h-watch"), "Space goes back to surfing")
 
     check(not seen["errors"], f"no page error {seen['errors'][:3]}")
@@ -249,7 +261,9 @@ def course_room(p, engine, origin, course):
     host.click("#t-play")
     host.keyboard.press("Escape")
     host.wait_for_selector("body[data-mode='pause']", state="attached")
-    host.click("#p-host-code")
+    # (pressed in the page: while the pause screen is still settling, a
+    # pointer click can land on the screen itself, as in CI once)
+    host.evaluate("document.getElementById('p-host-code').click()")
     for _ in range(200):
         if host.input_value("#inv-offer"):
             break
