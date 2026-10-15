@@ -46,6 +46,7 @@ Valve's CS:S and CS:GO game DLL movement code (`cs_gamemovement.cpp`) is **not**
 | S27 | Momentum Mod docs, "Fixing Entities" | https://docs.momentum-mod.org/guide/map_submission/fixing_entities/ | Teleport velocity modes ("Keep negative Z … generally only relevant to Surf") |
 | S28 | CS2Fixes-RampbugFix (search result only, **not read**) | https://github.com/rcnoob/CS2Fixes-RampbugFix | Says the CS2 rampbug cause is unconfirmed |
 | S29 | Knife speed 250: search summaries of cs.money / bo3.gg / csdb (**weak**) | https://cs.money/blog/esports/based-movement-in-csgo/ | CS:GO knife max speed 250 |
+| S30 | Momentum Mod, `mom_gamerules.cpp` (develop), `g_ViewVectorsMom` | https://github.com/momentum-mod/game/blob/develop/mp/src/game/shared/momentum/mom_gamerules.cpp | Its CS:S-style view vectors: duck hull max (16, 16, 45), duck view (0, 0, 47) |
 
 ---
 
@@ -97,14 +98,14 @@ Valve's CS:S and CS:GO game DLL movement code (`cs_gamemovement.cpp`) is **not**
 
 ### 2.3 Player hull and eyes
 
-| | SDK 2013 default [SRC] S5 | CS:GO [DOC] S13 |
-|---|---|---|
-| Standing hull | (-16,-16,0)–(16,16,72) | 32 × 32 × **72** |
-| Ducked hull | (-16,-16,0)–(16,16,36) | 32 × 32 × **54** |
-| Eye (view offset) standing | 64 | 64.093811 (S13 lists "feet level 0.031250", which is roughly the DIST_EPSILON hover) |
-| Eye ducked | 28 | 46.076218 |
+| | SDK 2013 default [SRC] S5 | CS:GO [DOC] S13 | CS:S-style (Momentum) [SRC] S30 |
+|---|---|---|---|
+| Standing hull | (-16,-16,0)–(16,16,72) | 32 × 32 × **72** | (Momentum's own 62; CS:S is 72) |
+| Ducked hull | (-16,-16,0)–(16,16,36) | 32 × 32 × **54** | 32 × 32 × **45** |
+| Eye (view offset) standing | 64 | 64.093811 (S13 lists "feet level 0.031250", which is roughly the DIST_EPSILON hover) | 64 |
+| Eye ducked | 28 | 46.076218 | 47 |
 
-The origin is at the **feet** (mins.z = 0). CS:S's ducked hull height is [UNVERIFIED]: I believe it is 45 in CS:S versus 54 in CS:GO, but I did not confirm this.
+The origin is at the **feet** (mins.z = 0). CS:S's ducked hull is 45 tall with the eyes at 47: Momentum Mod's CS:S-style view vectors give exactly this [SRC] S30 (its standing hull, 62, is Momentum's own choice). The game uses 45 and 47 since PHYSICS 3: every course here is a CS:S-era map, and bhop_eazy's last hole (80 units over a sill that sends you back) is built for a 45-unit crouch: with 54 a crouch-hop fits through only from the very edge of the block before it.
 
 ### 2.4 Derived per-tick numbers [DERIVED]
 
@@ -310,7 +311,7 @@ The `velocity.z = 0` on landing, together with the 2-unit snap distance, is the 
 
 - The air cap is a cvar, `sv_air_max_wishspeed` = 30 [DOC] S14. Implement it as a constant of 30 unless you want to tune it.
 - Default `sv_airaccelerate` is 12 and `sv_accelerate` 5.5. Friction is 5.2 and stopspeed 80 [DOC] S14, S15, S18. **Surf servers override airaccelerate to 150**, so the 12 never matters for surf.
-- Ducked hull is 54 (not 36), with eyes at 64.09 / 46.08 [DOC] S13.
+- Ducked hull is 54 (not 36), with eyes at 64.09 / 46.08 [DOC] S13. CS:S's is 45, eyes 47 [SRC] S30; the game uses CS:S's.
 - Stamina (`sv_staminamax 80`, jump and land costs) slows you after jumps in stock CS:GO. Surf servers zero it [DOC] S17.
 - `sv_enablebunnyhopping 0` caps speed on jumps in stock CS:GO; surf servers set it to 1 [DOC] S14, S17. The exact CS:GO cap formula is [UNVERIFIED]; I believe it is about 1.1× max speed, but did not confirm.
 - Weapon-dependent max speed (knife 250) feeds `m_flMaxSpeed`, and therefore `wishspeed` [DOC, weak] S29.
@@ -433,7 +434,7 @@ KZTimer's definitions were **not checked** [UNVERIFIED].
 | **Gravity half-steps** | StartGravity/FinishGravity [SRC] S1 | **Reproduce.** It makes jump arcs and ramp exits tick-consistent. |
 | **surfaceFriction 0.25 while rising** | CategorizePosition [SRC] S1 | Reproduce (cheap). It slightly reduces air control rate right after launching off something. |
 | **Pitch ±90 null forward** | AirMove zeroes z, then normalises [SRC] S1 | Harmless, but clamp pitch to ±89 like CS. |
-| **Ducking in air** | Changes the hull 72 → 54 (CS:GO) | Reproduce if you support duck. The surf-specific details (duck-jump hull shift) are [UNVERIFIED]. |
+| **Ducking in air** | Changes the hull 72 → 45 (CS:S, S30; 54 in CS:GO) | Reproduce if you support duck. The surf-specific details (duck-jump hull shift) are [UNVERIFIED]. |
 
 ### Surf map conventions (for content, not physics)
 
@@ -473,8 +474,8 @@ STEP_SIZE            = 18
 OVERBOUNCE           = 1.0         (sv_bounce 0)
 DIST_EPSILON         = 0.03125     collision skin
 MAX_CLIP_PLANES      = 5 ; BUMPS = 4 (use 8 with the anti-rampbug fixes)
-HULL                 = 32x32x72 standing, 32x32x54 ducked, origin at feet
-EYE                  = 64 standing (64.09), 46 ducked (46.08)
+HULL                 = 32x32x72 standing, 32x32x45 ducked (CS:S, S30), origin at feet
+EYE                  = 64 standing (64.09), 47 ducked (CS:S, S30)
 START ZONE CAP       = 260–350 u/s horizontal (map-configurable; shavit default 290)
 ```
 
@@ -494,6 +495,6 @@ START ZONE CAP       = 260–350 u/s horizontal (map-configurable; shavit defaul
 ### Open questions / not verified
 
 - The exact CS:GO `CCSGameMovement` overrides: the TryPlayerMove variant, the duck-jump hull handling, and the bunnyhop cap formula.
-- The exact CS:S defaults for sv_accelerate, sv_stopspeed, the ducked hull and the jump impulse. Momentum's CS:S-style base (accelerate 5, stopspeed 75, maxspeed 260) is the best public proxy.
+- The exact CS:S defaults for sv_accelerate, sv_stopspeed and the jump impulse (the ducked hull is now sourced, S30). Momentum's CS:S-style base (accelerate 5, stopspeed 75, maxspeed 260) is the best public proxy.
 - Which tick rate the big CS:GO surf networks used, and KZTimer's sync definition.
 - The cl_forwardspeed / cl_sidespeed values in CS:GO. They are irrelevant in practice because input is clamped to the 250 max speed.

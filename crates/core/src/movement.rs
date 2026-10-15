@@ -79,9 +79,12 @@ pub const TUNING: Tuning = Tuning {
 
 pub const HULL_MINS: V3 = v3(-16.0, -16.0, 0.0);
 pub const HULL_MAXS: V3 = v3(16.0, 16.0, 72.0);
-pub const DUCK_MAXS: V3 = v3(16.0, 16.0, 54.0);
+/// CS:S's ducked hull and eyes (Momentum Mod's CS:S-style view vectors,
+/// mom_gamerules.cpp; docs/RESEARCH-surf-movement.md S30). CS:GO's is 54
+/// tall: these are CS:S-era maps, and bhop_eazy's last hole needs 45.
+pub const DUCK_MAXS: V3 = v3(16.0, 16.0, 45.0);
 pub const EYE_STAND: f32 = 64.09;
-pub const EYE_DUCK: f32 = 46.08;
+pub const EYE_DUCK: f32 = 47.0;
 const MAX_CLIP_PLANES: usize = 5;
 /// Source makes four bumps a tick; the rampbug fixes (MomSurfFix) use eight,
 /// so a seam between two ramp brushes cannot use them all up.

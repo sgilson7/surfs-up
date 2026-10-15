@@ -20,6 +20,16 @@ pub const FULL_HEALTH: f32 = 100.0;
 /// Source's trigger_hurt deals its damage every half second while touched
 /// (CTriggerHurt::HurtThink, `HurtAllTouchers(0.5)`, triggers.cpp): 32 ticks.
 pub const HURT_EVERY: u16 = 32;
+/// How far under the feet triggers reach (RNGFix: a surfer within 2 units
+/// of landing touches what landing would have).
+pub const TRIGGER_REACH: f32 = 2.0;
+/// The reach stops this far short of the ground under the feet: Source's
+/// player rests DIST_EPSILON (1/32 unit) above the floor, so on the ground
+/// the reach is none.
+pub const GROUND_GAP: f32 = 0.0625;
+/// At most this many delayed renames wait at once (a surfer standing in a
+/// renaming trigger queues its outputs every tick until the first lands).
+pub const MAX_RENAMING: usize = 64;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Phase {
@@ -94,8 +104,26 @@ pub struct Surfer {
     pub health: f32,
     /// Ticks until a hurt trigger touched now hurts again (0: at once).
     pub hurt_wait: u16,
-    /// A delayed rename on its way: the name, and the ticks until it lands.
-    pub renaming: Option<(u16, u16)>,
+    /// Delayed renames on their way, in the order they were fired: the
+    /// name, and the ticks until it lands (Source's event queue).
+    pub renaming: Vec<(u16, u16)>,
+}
+
+/// The box a body that moved from `before` to where it is touches
+/// triggers with: the swept hull, reaching under the lower end up to
+/// TRIGGER_REACH, but no further than the ground there.
+pub fn touch_box(mv: &mut Mover, body: &Body, before: V3) -> (V3, V3) {
+    let a = body.origin;
+    let low = if before.z < a.z { before } else { a };
+    let ground = mv.trace(body, low, low - v3(0.0, 0.0, TRIGGER_REACH));
+    let reach = if ground.start_solid || ground.fraction >= 1.0 {
+        TRIGGER_REACH
+    } else {
+        (ground.fraction * TRIGGER_REACH - GROUND_GAP).max(0.0)
+    };
+    let lo = v3(before.x.min(a.x), before.y.min(a.y), before.z.min(a.z)) + HULL_MINS - v3(0.0, 0.0, reach);
+    let hi = v3(before.x.max(a.x), before.y.max(a.y), before.z.max(a.z)) + body.maxs();
+    (lo, hi)
 }
 
 impl Surfer {
@@ -110,7 +138,7 @@ impl Surfer {
             stage: 0,
             health: FULL_HEALTH,
             hurt_wait: 0,
-            renaming: None,
+            renaming: Vec::new(),
         }
     }
 
@@ -125,7 +153,7 @@ impl Surfer {
             stage: 0,
             health: FULL_HEALTH,
             hurt_wait: 0,
-            renaming: None,
+            renaming: Vec::new(),
         }
     }
 
@@ -138,7 +166,7 @@ impl Surfer {
         self.stage = 0;
         self.health = FULL_HEALTH;
         self.hurt_wait = 0;
-        self.renaming = None;
+        self.renaming.clear();
     }
 
     /// One tick. `mv` carries the map; `course` says what its teleports mean.
@@ -160,17 +188,19 @@ impl Surfer {
         }
 
         // Triggers fire along the whole swept box (not only where the move
-        // ended), and reach 2 units under the feet, so a fast surfer cannot
-        // pass through a thin trigger (RNGFix's telehop and trigger-jump fixes).
+        // ended), and reach up to 2 units under the feet, so a fast surfer
+        // cannot pass through a thin trigger (RNGFix's telehop and
+        // trigger-jump fixes). The reach stops at the ground: a surfer
+        // standing on a step touches nothing below its top, as in Source,
+        // where the player rests DIST_EPSILON above the floor (a kill
+        // trigger flush with a step's top, on bhop_lego's and bhop_japan's
+        // stairs, is under the step, not on it).
         // A filtered trigger fires only for a surfer with the name its filter
         // wants; a rename takes effect after this tick's teleports, as an
         // output fires after the touch that caused it. A delayed rename
         // lands that many ticks later, touched or not, as Source's delayed
         // output does (surf_summit's falls take a quarter second to name you).
-        let maxs = self.body.maxs();
-        let a = self.body.origin;
-        let lo = v3(before.x.min(a.x), before.y.min(a.y), before.z.min(a.z)) + HULL_MINS - v3(0.0, 0.0, 2.0);
-        let hi = v3(before.x.max(a.x), before.y.max(a.y), before.z.max(a.z)) + maxs;
+        let (lo, hi) = touch_box(mv, &self.body, before);
         let mut push = ZERO;
         let mut pushed = false;
         let mut jump: Option<(Role, u16)> = None;
@@ -199,9 +229,12 @@ impl Surfer {
                     pushed = true;
                 }
                 TriggerKind::Rename(n, 0) => rename = Some(n),
+                // a trigger_multiple fires its outputs again each tick it
+                // is touched (bhop_japan's blocks wait 0.01 s), each output
+                // queued with its own delay
                 TriggerKind::Rename(n, wait) => {
-                    if self.renaming.is_none() {
-                        self.renaming = Some((n, wait));
+                    if self.renaming.len() < MAX_RENAMING {
+                        self.renaming.push((n, wait));
                     }
                 }
                 TriggerKind::Hurt(per_second) => {
@@ -302,14 +335,15 @@ impl Surfer {
             }
             None => {}
         }
-        if let Some((n, wait)) = self.renaming {
-            if wait <= 1 {
-                self.name = n;
-                self.renaming = None;
-            } else {
-                self.renaming = Some((n, wait - 1));
+        // queued renames land in the order they were fired (bhop_japan's
+        // blocks name you "activator" for a tick, then "default" again)
+        for r in &mut self.renaming {
+            r.1 = r.1.saturating_sub(1);
+            if r.1 == 0 {
+                self.name = r.0;
             }
         }
+        self.renaming.retain(|r| r.1 > 0);
         if let Some(n) = rename {
             self.name = n;
         }
@@ -394,7 +428,7 @@ mod tests {
     use super::*;
     use crate::course::tests::load;
     use crate::map::{Trigger, HINT_TERRAIN};
-    use crate::movement::{B_FORWARD, B_JUMP};
+    use crate::movement::{B_DUCK, B_FORWARD, B_JUMP};
 
     #[test]
     fn the_clock_starts_when_you_leave_the_platform() {
@@ -1158,7 +1192,7 @@ mod tests {
                 back_at = Some(i);
                 break;
             }
-            assert!(i < 14 || d.name == fail || d.renaming.is_some());
+            assert!(i < 14 || d.name == fail || !d.renaming.is_empty());
         }
         let back_at = back_at.expect("the fall sends you back");
         assert!(
@@ -1172,6 +1206,239 @@ mod tests {
             d.step(&mut mv, &c, Cmd::new(0, 0.0, 0.0)).finished.is_some(),
             "the end zone"
         );
+    }
+
+    /// bhop_eazy's last obstacle is a hole in a wall, 80 units tall, over a
+    /// sill that sends you back: only a crouched surfer fits, in the air.
+    /// With CS:S's ducked hull (45 tall) a crouch-hop off the last block at
+    /// an ordinary bunnyhop speed goes through, hops on and finishes; with
+    /// CS:GO's (54) it needs the very edge of the block.
+    #[test]
+    fn eazys_last_hole_takes_a_crouch_hop_at_bhop_speed_and_then_finishes() {
+        let (m, c) = load("bhop_eazy");
+        let mut mv = Mover::new(&m);
+        let hole_x = 1632.0;
+        for (x, speed) in [(1720.0, 350.0), (1730.0, 400.0), (1740.0, 450.0)] {
+            let mut s = Surfer::at_start(&m);
+            s.phase = Phase::Running;
+            s.body.origin = v3(x, -864.0, 64.031_25);
+            s.body.ducked = true;
+            s.body.on_ground = true;
+            s.body.velocity = v3(-speed, 0.0, 0.0);
+            let mut through = false;
+            let mut finished = false;
+            for i in 0..192 {
+                let t = s.step(&mut mv, &c, Cmd::new(B_DUCK | B_JUMP, 180.0, 0.0));
+                if t.finished.is_some() {
+                    finished = true;
+                    break;
+                }
+                assert!(
+                    !t.teleported,
+                    "from x {x} at {speed} u/s: sent back at tick {i}, x {}",
+                    s.body.origin.x
+                );
+                through |= s.body.origin.x < hole_x - 16.0;
+            }
+            assert!(
+                through && finished,
+                "from x {x} at {speed} u/s: through {through}, finished {finished}"
+            );
+        }
+    }
+
+    /// A kill trigger flush with a step's top lies under the step: a surfer
+    /// standing on it rests above it and touches nothing (bhop_lego's
+    /// bricks at z 528 over its section 3 floor, bhop_japan's stairs), while
+    /// a surfer a unit over a floor trigger still touches it (RNGFix).
+    #[test]
+    fn a_kill_trigger_flush_with_a_step_top_does_not_catch_you_on_the_step() {
+        // (japan's steps are also its timed blocks, which send you back
+        // once their 0.09 s rename lands: until then, nothing)
+        let cases = [
+            ("bhop_lego", v3(-1248.0, -3704.0, 528.0), 64),
+            ("bhop_japan", v3(-7840.0, 512.0, 96.0), 5),
+            ("bhop_japan", v3(-7808.0, 768.0, 64.0), 5),
+        ];
+        for (id, top, ticks) in cases {
+            let (m, c) = load(id);
+            let mut mv = Mover::new(&m);
+            let mut s = Surfer::at_start(&m);
+            s.phase = Phase::Running;
+            s.body.origin = top + v3(0.0, 0.0, 0.5);
+            for i in 0..ticks {
+                let t = s.step(&mut mv, &c, Cmd::new(0, 0.0, 0.0));
+                assert!(
+                    !t.teleported,
+                    "{id}: standing on the step at {top:?}: sent away at tick {i}"
+                );
+            }
+            assert!(s.body.on_ground, "{id}: on the step");
+        }
+        // bhop_eazy's floor teleport (z 88 to 89, on its wall's top): a
+        // surfer a unit and a half above it, about to land, touches it
+        let (m, c) = load("bhop_eazy");
+        let mut mv = Mover::new(&m);
+        let mut s = Surfer::at_start(&m);
+        s.phase = Phase::Running;
+        s.body.origin = v3(2144.0, -864.0, 90.5);
+        s.body.velocity = v3(0.0, 0.0, 10.0);
+        assert!(
+            s.step(&mut mv, &c, Cmd::new(0, 0.0, 0.0)).teleported,
+            "just over a floor trigger, it catches you"
+        );
+    }
+
+    /// Every course, every surface you can stand on: a teleport or hurt
+    /// trigger catches a surfer standing there only if it overlaps the
+    /// standing hull itself, as in Source, where the player rests 1/32 unit
+    /// above the floor. One flush with the surface's top, or under it, is
+    /// under the floor; catching a stander on it is the bug bhop_lego's
+    /// bricks and bhop_japan's stairs had. Samples a grid on each walkable
+    /// face that has such a trigger near it, where a standing hull fits and
+    /// rests (ground within GROUND_GAP; a hull hovering higher is about to
+    /// land, and RNGFix's reach rightly catches it). A trigger rising a
+    /// sliver over a surface catches a stander here as it does in Source:
+    /// a quirk of the map, not failed.
+    #[test]
+    fn no_course_catches_a_stander_on_a_trigger_under_the_floor() {
+        use crate::map::{face_polygon, Plane};
+        use crate::movement::HULL_MAXS;
+        let inside = |poly: &[[f64; 3]], x: f64, y: f64| {
+            let mut sign = 0.0f64;
+            for i in 0..poly.len() {
+                let (a, b) = (poly[i], poly[(i + 1) % poly.len()]);
+                let c = (b[0] - a[0]) * (y - a[1]) - (b[1] - a[1]) * (x - a[0]);
+                if c.abs() < 1e-6 {
+                    continue;
+                }
+                if sign == 0.0 {
+                    sign = c.signum();
+                } else if c.signum() != sign {
+                    return false;
+                }
+            }
+            true
+        };
+        let mut report = Vec::new();
+        for l in crate::course::listed(crate::course::tests::MAPS).unwrap() {
+            let (m, c) = load(&l.id);
+            let mut mv = Mover::new(&m);
+            let catching: Vec<&Trigger> = m
+                .triggers
+                .iter()
+                .filter(|t| t.filter == NO_FILTER)
+                .filter(|t| match t.kind {
+                    TriggerKind::Teleport(d) => !matches!(c.role(t, d), Role::Finish(_)),
+                    TriggerKind::Hurt(_) => true,
+                    _ => false,
+                })
+                .collect();
+            let (mut faces, mut samples, mut bad) = (0, 0, 0);
+            for b in m.brushes.iter().filter(|b| b.kind.blocks()) {
+                let planes: Vec<Plane> = b.sides.iter().map(|s| s.plane).collect();
+                for (i, s) in b.sides.iter().enumerate() {
+                    if s.bevel || s.plane.n.z < 0.7 {
+                        continue;
+                    }
+                    let near: Vec<&&Trigger> = catching
+                        .iter()
+                        .filter(|t| {
+                            t.maxs.x >= b.mins.x - 16.0
+                                && t.mins.x <= b.maxs.x + 16.0
+                                && t.maxs.y >= b.mins.y - 16.0
+                                && t.mins.y <= b.maxs.y + 16.0
+                                && t.maxs.z >= b.mins.z - 2.0
+                                && t.mins.z <= b.maxs.z + HULL_MAXS.z
+                        })
+                        .collect();
+                    if near.is_empty() {
+                        continue;
+                    }
+                    let poly = face_polygon(&planes, i);
+                    if poly.is_empty() {
+                        continue;
+                    }
+                    faces += 1;
+                    let (x0, x1) = poly
+                        .iter()
+                        .fold((f64::MAX, f64::MIN), |(a, z), p| (a.min(p[0]), z.max(p[0])));
+                    let (y0, y1) = poly
+                        .iter()
+                        .fold((f64::MAX, f64::MIN), |(a, z), p| (a.min(p[1]), z.max(p[1])));
+                    let n = s.plane.n;
+                    for gx in 0..6 {
+                        for gy in 0..6 {
+                            let x = x0 + (x1 - x0) * (gx as f64 + 0.5) / 6.0;
+                            let y = y0 + (y1 - y0) * (gy as f64 + 0.5) / 6.0;
+                            if !inside(&poly, x, y) {
+                                continue;
+                            }
+                            let z = (s.plane.d - n.x * x as f32 - n.y * y as f32) / n.z;
+                            let lift = 16.0 * (n.x.abs() + n.y.abs()) / n.z + 0.031_25;
+                            let body = Body::at(v3(x as f32, y as f32, z + lift));
+                            let o = body.origin;
+                            if mv.trace(&body, o, o).start_solid
+                                || mv.trace(&body, o, o - v3(0.0, 0.0, GROUND_GAP)).fraction >= 1.0
+                            {
+                                continue;
+                            }
+                            samples += 1;
+                            let (lo, hi) = touch_box(&mut mv, &body, o);
+                            for t in &near {
+                                if !box_touches(&t.planes, lo, hi) {
+                                    continue;
+                                }
+                                if !box_touches(&t.planes, o + HULL_MINS, hi) {
+                                    bad += 1;
+                                    if bad <= 3 {
+                                        report.push(format!(
+                                            "{}: standing at {o:?} is caught by a trigger at {:?}..{:?}",
+                                            l.id, t.mins, t.maxs
+                                        ));
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            assert!(faces > 0 && samples > 0, "{}: the audit sampled nothing", l.id);
+        }
+        assert!(report.is_empty(), "{}", report.join("\n"));
+    }
+
+    /// bhop_japan's blocks each name you "activator" 0.09 s after you touch
+    /// them and "default" 0.1 s after, again every tick you touch them; a
+    /// blue block sends an "activator" back. Hopping on and off a block
+    /// leaves you "default"; standing on it sends you back.
+    #[test]
+    fn japans_blocks_let_a_hop_go_and_send_a_stander_back() {
+        let (m, c) = load("bhop_japan");
+        let mut mv = Mover::new(&m);
+        let block = v3(2592.0, -7392.0, 480.5);
+        let activator = m.name_index("activator").unwrap();
+        // hop on the first block for three seconds: never sent back
+        let mut s = Surfer::at_start(&m);
+        s.phase = Phase::Running;
+        s.body.origin = block;
+        let mut landings = 0;
+        for i in 0..192 {
+            let t = s.step(&mut mv, &c, Cmd::new(B_JUMP, 0.0, 0.0));
+            landings += t.moved.landed as u32;
+            assert!(!t.teleported, "hopping on the block: sent back at tick {i}");
+            if t.moved.landed {
+                assert_ne!(s.name, activator, "tick {i}: lands still \"activator\"");
+            }
+        }
+        assert!(landings >= 3, "{landings} landings");
+        // stand on it: back to the section's start within a quarter second
+        let mut s = Surfer::at_start(&m);
+        s.phase = Phase::Running;
+        s.body.origin = block;
+        let back = (0..16).find(|_| s.step(&mut mv, &c, Cmd::new(0, 0.0, 0.0)).teleported);
+        assert!(back.is_some(), "standing on a blue block sends you back");
+        assert_eq!(s.body.origin, m.destination_named("tele_dest_1").unwrap().0);
     }
 
     #[test]

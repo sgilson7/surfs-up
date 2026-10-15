@@ -406,8 +406,13 @@ impl Map {
                     TriggerKind::Push(f, speed)
                 }
                 3 => TriggerKind::Hurt(speed),
-                // the output's delay, in seconds, to the nearest tick
-                _ => TriggerKind::Rename(a, (speed.max(0.0) * 64.0).round().min(65535.0) as u16),
+                // the output's delay, in seconds, as ticks: Source's event
+                // queue fires it on the first tick at or after its time
+                // (bhop_japan's 0.09 s and 0.1 s outputs land a tick apart)
+                _ => TriggerKind::Rename(
+                    a,
+                    (speed.max(0.0) * 64.0 - 1e-3).ceil().clamp(0.0, 65535.0) as u16,
+                ),
             };
             triggers.push(Trigger {
                 kind,

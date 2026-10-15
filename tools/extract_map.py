@@ -24,7 +24,9 @@ What it keeps and drops (the rules for play are in the core; this only copies):
   - func_illusionary brushes (drawn, not solid);
   - trigger_teleport, trigger_push, and every trigger_multiple whose output
     renames its activator (AddOutput targetname), each with its filter's
-    required name and the output's delay; triggers that start disabled are dropped, and so are
+    required name and the output's delay (one trigger per rename output:
+    bhop_japan's blocks name you and then name you back); triggers that
+    start disabled are dropped, and so are
     triggers no plain player can pass: a negated name filter (surf_deadline's
     stage 4 route check) or a filter on a classname other than "player"
     (surf_summer's jetski boosts, for a player its falls have renamed), or
@@ -265,6 +267,10 @@ def main(path, map_id, floor, player_start=False):
             # sends a miss back to its checkpoint.
             continue
         entry = None
+        # a trigger_multiple's renames: one trigger for each output, so a
+        # name given and taken back (bhop_japan's blocks: "activator" at
+        # 0.09 s, "default" at 0.1 s) keeps both
+        renames = []
         if cls == "trigger_teleport":
             # a teleport with no target does nothing in Source (surf_egypt's
             # destination markers are targetless teleports)
@@ -294,7 +300,8 @@ def main(path, map_id, floor, player_start=False):
                     # the output's delay, in seconds: surf_summit's falls
                     # rename you only after a quarter second inside them
                     delay = float(parts[3]) if len(parts) > 3 and parts[3].strip() else 0.0
-                    entry = (2, name(parts[2][len("targetname"):]), required(e), (0.0, 0.0, 0.0, delay))
+                    renames.append((2, name(parts[2][len("targetname"):]), required(e), (0.0, 0.0, 0.0, delay)))
+            entry = renames[-1] if renames else None
         if entry is None:
             continue
         for bi in mbr:
@@ -306,7 +313,8 @@ def main(path, map_id, floor, player_start=False):
                 # pad would be a fall: the floor's teleport covers it), so the
                 # rename reaches BUTTON_REACH units over the pad
                 sides = [(n, d + BUTTON_REACH, b, t) if n[2] > 0.99 else (n, d, b, t) for n, d, b, t in sides]
-            triggers.append((*entry, sides))
+            for one in renames or [entry]:
+                triggers.append((*one, sides))
 
     dests = []
     for e in ents:

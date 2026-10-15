@@ -29,8 +29,10 @@ pub const PROTOCOL: u32 = 2;
 /// The movement rules a run was surfed under. A run replays to the same path
 /// only under the same rules, so a run from other rules is not replayed.
 /// 1: the first version. 2: teleports keep velocity, two air sub-steps a
-/// tick, no slow-rise air cut, CS2's snag offset (PLAN.md P10).
-pub const PHYSICS: u32 = 2;
+/// tick, no slow-rise air cut, CS2's snag offset (PLAN.md P10). 3: CS:S's
+/// ducked hull (45), triggers reach under the feet only to the ground, and
+/// delayed renames queue and land on the tick at or after their time.
+pub const PHYSICS: u32 = 3;
 /// The room holds eight surfers: you and seven others.
 pub const MAX_PEERS: usize = 7;
 /// Inputs go out every this many ticks.
@@ -372,7 +374,13 @@ impl Peer {
             // and a delayed rename still on its way
             s.renaming = b["rn"]
                 .as_array()
-                .and_then(|a| Some((a.first()?.as_u64()? as u16, a.get(1)?.as_u64()? as u16)));
+                .map(|q| {
+                    q.iter()
+                        .take(crate::run::MAX_RENAMING)
+                        .filter_map(|a| Some((a.get(0)?.as_u64()? as u16, a.get(1)?.as_u64()? as u16)))
+                        .collect()
+                })
+                .unwrap_or_default();
             match &mut self.live {
                 Some(l) => {
                     // the state is the truth: replace, but keep easing from where it was drawn
@@ -417,7 +425,7 @@ pub fn live_message(first: u64, cmds: &[Cmd], state: Option<&Surfer>) -> String 
         v["b"] = json!({
             "w": body_to_words(&s.body), "c": cmd_to(s.last_cmd),
             "ph": if s.phase == Phase::Start { 0 } else { 1 }, "n": s.name, "st": s.stage,
-            "hp": s.health, "hw": s.hurt_wait, "rn": s.renaming.map(|(n, w)| [n, w]),
+            "hp": s.health, "hw": s.hurt_wait, "rn": s.renaming.iter().map(|(n, w)| [*n, *w]).collect::<Vec<_>>(),
         });
     }
     v.to_string()
@@ -465,7 +473,7 @@ mod tests {
         s.stage = 3;
         s.health = 50.0;
         s.hurt_wait = 9;
-        s.renaming = Some((2, 5));
+        s.renaming = vec![(2, 5), (3, 6)];
         s.phase = Phase::Running;
         // the state alone, before any input moves it on
         let text = live_message(10, &[], Some(&s));
@@ -485,7 +493,7 @@ mod tests {
         );
         assert_eq!(
             l.confirmed.renaming,
-            Some((2, 5)),
+            vec![(2, 5), (3, 6)],
             "a fall half way to naming you names you on every screen"
         );
     }
