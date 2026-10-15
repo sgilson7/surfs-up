@@ -24,7 +24,7 @@ What it keeps and drops (the rules for play are in the core; this only copies):
   - func_illusionary brushes (drawn, not solid);
   - trigger_teleport, trigger_push, and every trigger_multiple whose output
     renames its activator (AddOutput targetname), each with its filter's
-    required name; triggers that start disabled are dropped, and so are
+    required name and the output's delay; triggers that start disabled are dropped, and so are
     triggers no plain player can pass: a negated name filter (surf_deadline's
     stage 4 route check) or a filter on a classname other than "player"
     (surf_summer's jetski boosts, for a player its falls have renamed);
@@ -49,7 +49,7 @@ Format v3 (little endian), all counts u32:
   u32 names; per name: u8 len, bytes
   u32 triggers; per trigger: u8 kind, u16 a, u16 filter, f32 pitch yaw roll speed, u16 sides; per side f32 nx ny nz d
      kind 0 teleport (a: destination name), 1 push (a unused), 2 rename (a: the new name),
-       3 hurt (a unused, speed: damage a second)
+       3 hurt (a unused, speed: damage a second); a rename's speed is its output's delay in seconds
      filter: the name the activator must have, or 65535 for none
   u32 destinations; per destination: u16 name, f32 x y z yaw
   u32 displacements; per displacement: u8 power, f32 face normal xyz, then
@@ -246,7 +246,10 @@ def main(path, map_id, floor, player_start=False):
             for v in outs:
                 parts = v.split(",")
                 if len(parts) >= 3 and parts[0] == "!activator" and parts[1] == "AddOutput" and parts[2].startswith("targetname"):
-                    entry = (2, name(parts[2][len("targetname"):]), required(e), (0.0, 0.0, 0.0, 0.0))
+                    # the output's delay, in seconds: surf_summit's falls
+                    # rename you only after a quarter second inside them
+                    delay = float(parts[3]) if len(parts) > 3 and parts[3].strip() else 0.0
+                    entry = (2, name(parts[2][len("targetname"):]), required(e), (0.0, 0.0, 0.0, delay))
         if entry is None:
             continue
         for bi in mbr:

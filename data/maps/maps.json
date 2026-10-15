@@ -305,6 +305,115 @@
    ]
   },
   {
+   "id": "surf_beginner",
+   "name": "surf_beginner",
+   "author": "Kiiru",
+   "tier": 1,
+   "tier_source": "SurfHeaven and SharpTimer: tier 1 (SurfHeaven's most played map)",
+   "spawn": "failman1",
+   "start_zone": [
+    [
+     -448,
+     -64,
+     320
+    ],
+    [
+     192,
+     256,
+     560
+    ]
+   ],
+   "roles": [
+    {
+     "target": "endman_poop",
+     "role": "finish",
+     "ending": 1
+    },
+    {
+     "target": "spawnman",
+     "role": "restart"
+    }
+   ],
+   "stages": [
+    "failman1",
+    "failman2",
+    "failman3",
+    "failman4",
+    "failman5",
+    "failman6",
+    "failman7"
+   ],
+   "medals": {
+    "record": 70,
+    "gold": 90,
+    "silver": 120,
+    "bronze": 170
+   },
+   "things": [
+    "floaties",
+    "whistle",
+    "gold_star",
+    "swim_ring",
+    "grad_cap"
+   ]
+  },
+  {
+   "id": "surf_summit",
+   "name": "surf_summit",
+   "author": "Juxtapo & Phurix",
+   "tier": 1,
+   "tier_source": "SurfHeaven and SharpTimer: tier 1",
+   "spawn": "td_mapstart",
+   "start_zone": [
+    [
+     296,
+     -1316,
+     11424
+    ],
+    [
+     1888,
+     1316,
+     11700
+    ]
+   ],
+   "finish_zone": [
+    [
+     -15360,
+     -2560,
+     -6144
+    ],
+    [
+     -13328,
+     2560,
+     -4096
+    ]
+   ],
+   "roles": [
+    {
+     "target": "td_mapstart",
+     "role": "restart"
+    },
+    {
+     "target": "td_spawn",
+     "role": "restart"
+    }
+   ],
+   "stages": [],
+   "medals": {
+    "record": 55,
+    "gold": 70,
+    "silver": 90,
+    "bronze": 125
+   },
+   "things": [
+    "ice_axe",
+    "snowflake",
+    "compass",
+    "summit_flag",
+    "yeti"
+   ]
+  },
+  {
    "id": "surf_sandtrap",
    "name": "surf_sandtrap",
    "author": "ArcticPanda",

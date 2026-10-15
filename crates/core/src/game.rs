@@ -1882,6 +1882,8 @@ mod tests {
             "surf_summer" => include_bytes!("../../../data/maps/surf_summer.bin"),
             "surf_deadline" => include_bytes!("../../../data/maps/surf_deadline.bin"),
             "bhop_ambience" => include_bytes!("../../../data/maps/bhop_ambience.bin"),
+            "surf_beginner" => include_bytes!("../../../data/maps/surf_beginner.bin"),
+            "surf_summit" => include_bytes!("../../../data/maps/surf_summit.bin"),
             _ => UTOPIA,
         }
     }
