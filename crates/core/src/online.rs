@@ -369,6 +369,10 @@ impl Peer {
             // and what the map's hurt triggers have left them
             s.health = b["hp"].as_f64().map(|h| h as f32).unwrap_or(s.health);
             s.hurt_wait = b["hw"].as_u64().map(|w| w as u16).unwrap_or(s.hurt_wait);
+            // and a delayed rename still on its way
+            s.renaming = b["rn"]
+                .as_array()
+                .and_then(|a| Some((a.first()?.as_u64()? as u16, a.get(1)?.as_u64()? as u16)));
             match &mut self.live {
                 Some(l) => {
                     // the state is the truth: replace, but keep easing from where it was drawn
@@ -413,7 +417,7 @@ pub fn live_message(first: u64, cmds: &[Cmd], state: Option<&Surfer>) -> String 
         v["b"] = json!({
             "w": body_to_words(&s.body), "c": cmd_to(s.last_cmd),
             "ph": if s.phase == Phase::Start { 0 } else { 1 }, "n": s.name, "st": s.stage,
-            "hp": s.health, "hw": s.hurt_wait,
+            "hp": s.health, "hw": s.hurt_wait, "rn": s.renaming.map(|(n, w)| [n, w]),
         });
     }
     v.to_string()
@@ -461,6 +465,7 @@ mod tests {
         s.stage = 3;
         s.health = 50.0;
         s.hurt_wait = 9;
+        s.renaming = Some((2, 5));
         s.phase = Phase::Running;
         // the state alone, before any input moves it on
         let text = live_message(10, &[], Some(&s));
@@ -477,6 +482,11 @@ mod tests {
             (l.confirmed.health, l.confirmed.hurt_wait),
             (50.0, 9),
             "a surfer half way through a hurt trigger is half hurt on every screen"
+        );
+        assert_eq!(
+            l.confirmed.renaming,
+            Some((2, 5)),
+            "a fall half way to naming you names you on every screen"
         );
     }
 

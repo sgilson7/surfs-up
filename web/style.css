@@ -98,16 +98,22 @@ input {
 .title-panel h1 { margin: 0.2rem 0; font-size: 3rem; color: var(--accent); letter-spacing: 0.03em; text-shadow: 0 3px 0 var(--red); }
 .tagline { color: var(--muted); margin: 0 0 1rem; }
 .maps { display: flex; gap: 0.6rem; justify-content: center; margin-bottom: 1rem; flex-wrap: wrap; }
-.map-card { display: flex; flex-direction: column; align-items: center; gap: 0.15rem; width: 12.5rem; padding: 0.6rem; }
-.map-card strong { color: var(--ink); font-size: 1.05rem; }
-.map-card span { color: var(--muted); font-size: 0.8rem; }
-.map-card .tier { font-weight: 700; font-size: 0.78rem; color: #10141c; border-radius: 0.6rem; padding: 0.05rem 0.55rem; }
+.map-tabs { display: flex; gap: 0.3rem; justify-content: center; margin-bottom: 0.6rem; flex-wrap: wrap; }
+.map-tab { padding: 0.3rem 0.8rem; font-size: 0.9rem; border-radius: 999px; }
+.map-tab.open { border-color: var(--accent); background: var(--accent); color: var(--accent-ink); }
+.map-icon { width: 52px; height: 52px; flex: none; }
+.map-card { display: flex; flex-direction: row; align-items: center; gap: 0.6rem; width: 13.2rem; padding: 0.45rem 0.6rem; text-align: left; }
+.map-card .text { display: flex; flex-direction: column; align-items: flex-start; gap: 0.05rem; min-width: 0; }
+.map-card .rank { display: flex; align-items: center; gap: 0.35rem; flex-wrap: wrap; }
+.map-card strong { color: var(--ink); font-size: 0.98rem; overflow-wrap: anywhere; }
+.map-card span { color: var(--muted); font-size: 0.75rem; }
+.map-card .tier { font-weight: 700; font-size: 0.72rem; color: #10141c; border-radius: 0.6rem; padding: 0.05rem 0.55rem; }
 .map-card .tier.easy { background: #6fd38a; }
 .map-card .tier.medium { background: #ffd23f; }
 .map-card .tier.hard { background: #ff9d4d; }
 .map-card .tier.expert { background: #ff6b6b; }
 .map-card .tier.unranked { background: #c9ced8; }
-.map-card .band { font-size: 0.72rem; }
+.map-card .band { font-size: 0.68rem; }
 .map-card.chosen { border-color: var(--accent); background: rgba(255, 207, 63, 0.16); }
 .name-row { display: flex; gap: 0.6rem; align-items: center; justify-content: center; margin-bottom: 1rem; }
 .name-row input { width: 12rem; }

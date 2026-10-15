@@ -1351,14 +1351,21 @@ impl Game {
                     .find(|r| r.map == m.id)
                     .map(|r| format_time(r.ticks));
                 json!({"id": m.id, "name": m.name, "author": m.author, "best": best,
-                    "tier": m.tier, "band": m.band(), "mode": m.mode,
+                    "tier": m.tier, "band": m.band(), "mode": m.mode, "group": m.group(),
                     "chosen": m.id == self.wanted, "loaded": m.id == self.loaded})
             })
+            .collect();
+        // the title's tabs: those with a course under them, in their order
+        let groups: Vec<&str> = course::GROUPS
+            .iter()
+            .copied()
+            .filter(|g| maps.iter().any(|m| m["group"] == *g))
             .collect();
         let s = &self.settings;
         json!({
             "mode": mode,
             "maps": maps,
+            "map_groups": groups,
             "map": self.loaded,
             "map_name": self.course.name,
             "room": self.room.as_ref().map(|r| r.code.clone()),
@@ -1475,6 +1482,46 @@ fn squeak_sound(h: Held) -> &'static str {
         Held::Pogo => "boing",
         Held::Acorn => "knock",
         Held::Bunny => "squeak",
+        Held::Floaties => "squeak",
+        Held::Whistle => "whistle",
+        Held::GoldStar => "ding",
+        Held::SwimRing => "squeak",
+        Held::GradCap => "swish",
+        Held::IceAxe => "clack",
+        Held::Snowflake => "jingle",
+        Held::Compass => "clack",
+        Held::SummitFlag => "rustle",
+        Held::Yeti => "howl",
+        Held::IceCream => "squeak",
+        Held::BeachBall => "boing",
+        Held::FlipFlop => "clack",
+        Held::Watermelon => "crunch",
+        Held::Crab => "clack",
+        Held::AlarmClock => "ring",
+        Held::CoffeeMug => "ding",
+        Held::Paperclip => "jingle",
+        Held::Pencil => "swish",
+        Held::Owl => "hoot",
+        Held::Sneaker => "squeak",
+        Held::Feather => "swish",
+        Held::Spring => "boing",
+        Held::Stopwatch => "tick",
+        Held::Frog => "ribbit",
+        Held::ToyBrick => "clack",
+        Held::BlockFigure => "clack",
+        Held::ToyCar => "whirr",
+        Held::ToyDino => "groan",
+        Held::ToyCrown => "jingle",
+        Held::FoldingFan => "swish",
+        Held::Koi => "squeak",
+        Held::Daruma => "knock",
+        Held::Bonsai => "rustle",
+        Held::PaperCrane => "rustle",
+        Held::BananaPeel => "swish",
+        Held::Lollipop => "crunch",
+        Held::Whoopee => "pfft",
+        Held::TopHat => "swish",
+        Held::Anvil => "clang",
     }
 }
 
@@ -1832,7 +1879,11 @@ mod tests {
             "surf_sandtrap" => include_bytes!("../../../data/maps/surf_sandtrap.bin"),
             "surf_aircontrol" => include_bytes!("../../../data/maps/surf_aircontrol.bin"),
             "surf_mesa" => include_bytes!("../../../data/maps/surf_mesa.bin"),
+            "surf_summer" => include_bytes!("../../../data/maps/surf_summer.bin"),
+            "surf_deadline" => include_bytes!("../../../data/maps/surf_deadline.bin"),
             "bhop_ambience" => include_bytes!("../../../data/maps/bhop_ambience.bin"),
+            "surf_beginner" => include_bytes!("../../../data/maps/surf_beginner.bin"),
+            "surf_summit" => include_bytes!("../../../data/maps/surf_summit.bin"),
             "bhop_japan" => include_bytes!("../../../data/maps/bhop_japan.bin"),
             "bhop_cartoons" => include_bytes!("../../../data/maps/bhop_cartoons.bin"),
             _ => UTOPIA,
