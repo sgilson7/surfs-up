@@ -148,7 +148,7 @@ impl Game {
         let listed = course::listed(maps_json)?;
         let first = listed
             .first()
-            .map(|m| m.0.clone())
+            .map(|m| m.id.clone())
             .ok_or("maps.json lists no maps")?;
         let map = Map::empty();
         let world = (Vec::new(), 0);
@@ -215,7 +215,7 @@ impl Game {
     /// Choose a course (from the title). False if it is not listed.
     pub fn choose_map(&mut self, id: &str) -> bool {
         let ok = course::listed(&self.maps_json)
-            .map(|l| l.iter().any(|m| m.0 == id))
+            .map(|l| l.iter().any(|m| m.id == id))
             .unwrap_or(false);
         if ok {
             self.wanted = id.to_string();
@@ -1344,14 +1344,15 @@ impl Game {
         let maps: Vec<Value> = course::listed(&self.maps_json)
             .unwrap_or_default()
             .into_iter()
-            .map(|(id, name, author)| {
+            .map(|m| {
                 let best = self
                     .bests
                     .iter()
-                    .find(|r| r.map == id)
+                    .find(|r| r.map == m.id)
                     .map(|r| format_time(r.ticks));
-                json!({"id": id, "name": name, "author": author, "best": best,
-                    "chosen": id == self.wanted, "loaded": id == self.loaded})
+                json!({"id": m.id, "name": m.name, "author": m.author, "best": best,
+                    "tier": m.tier, "band": m.band(), "mode": m.mode,
+                    "chosen": m.id == self.wanted, "loaded": m.id == self.loaded})
             })
             .collect();
         let s = &self.settings;
@@ -1459,6 +1460,21 @@ fn squeak_sound(h: Held) -> &'static str {
         Held::Sandcastle => "shake",
         Held::Hourglass => "trickle",
         Held::Cactus => "squeak",
+        Held::PaperPlane => "swish",
+        Held::Balloon => "squeak",
+        Held::Kite => "rustle",
+        Held::Beanie => "whirr",
+        Held::Eagle => "screech",
+        Held::PetRock => "clack",
+        Held::HardHat => "knock",
+        Held::Crystal => "ding",
+        Held::Crowbar => "noodle",
+        Held::Scorpion => "clack",
+        Held::Carrot => "crunch",
+        Held::Leaf => "rustle",
+        Held::Pogo => "boing",
+        Held::Acorn => "knock",
+        Held::Bunny => "squeak",
     }
 }
 
@@ -1814,6 +1830,9 @@ mod tests {
             "surf_egypt" => include_bytes!("../../../data/maps/surf_egypt.bin"),
             "surf_anubis" => include_bytes!("../../../data/maps/surf_anubis.bin"),
             "surf_sandtrap" => include_bytes!("../../../data/maps/surf_sandtrap.bin"),
+            "surf_aircontrol" => include_bytes!("../../../data/maps/surf_aircontrol.bin"),
+            "surf_mesa" => include_bytes!("../../../data/maps/surf_mesa.bin"),
+            "bhop_ambience" => include_bytes!("../../../data/maps/bhop_ambience.bin"),
             _ => UTOPIA,
         }
     }
@@ -1825,7 +1844,7 @@ mod tests {
     /// stage doors and (on egypt) the fatal fall.
     #[test]
     fn every_course_works_online_live_and_as_a_ghost() {
-        for (id, _, _) in course::listed(MAPS).unwrap() {
+        for course::Listed { id, .. } in course::listed(MAPS).unwrap() {
             let bytes = map_bytes(&id);
             let mut a = game();
             let mut b = game();
@@ -1860,7 +1879,10 @@ mod tests {
                 let before = a.me.body.origin;
                 a.advance(t, keys, dx, 0.0);
                 b.advance(t, 0, 0.0, 0.0);
-                if (a.me.body.origin - before).length() > 300.0 {
+                // a tick moves at most sv_maxvelocity / 64 (about 55 units):
+                // anything further is a teleport (ambience's first pit
+                // sends you back only about 130 units)
+                if (a.me.body.origin - before).length() > 100.0 {
                     teleports += 1;
                 }
                 if let Some((start, cmds)) = &a.recording {

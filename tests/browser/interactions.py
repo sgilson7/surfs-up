@@ -22,7 +22,7 @@ def run(page, check, engine):
     page.wait_for_selector("#locker:not([hidden])", timeout=5000)
     items = page.locator("#items .item").count()
     locked = page.locator("#items .item.locked").count()
-    check(items == 26 and locked == 25, f"the cubby has twenty-six things, twenty-five still to earn ({items}, {locked} locked)")
+    check(items == 41 and locked == 40, f"the cubby has forty-one things, forty still to earn ({items}, {locked} locked)")
     check("Rubber chicken" in page.inner_text("#items"), "the rubber chicken is in the cubby")
     page.click("#locker .close")
 
@@ -75,7 +75,11 @@ def run(page, check, engine):
     # developer's ?at= shortcut sets the walker down 150 units short of the door.
     page.goto(page.url.split("?")[0].split("#")[0] + "?at=0,-700,200,90")
     page.wait_for_selector("body[data-mode='title']", state="attached", timeout=10000)
-    check(page.locator("#maps .map-card").count() == 5, "five courses on the title")
+    check(page.locator("#maps .map-card").count() == 8, "eight courses on the title")
+    tiers = [page.locator("#maps .map-card .tier").nth(i).inner_text() for i in range(8)]
+    check(tiers[0] == "Tier 1" and "Tier 8" in tiers and tiers[-1].startswith("Bhop"), f"each course card shows its tier, easiest first, the bhop course last {tiers}")
+    anubis = page.locator("#maps .map-card:has-text('surf_anubis')").inner_text()
+    check("Experts only" in anubis, "anubis warns that it is for experts")
     # a name typed just before choosing: leaving the box redraws the menus,
     # which must not swallow the click on the course
     page.fill("#name", "Tester K")

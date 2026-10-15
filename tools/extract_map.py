@@ -6,6 +6,8 @@
 surf_utopia:  python3 -I tools/extract_map.py surf_utopia_v3.bsp surf_utopia --floor -8250
 surf_kitsune: python3 -I tools/extract_map.py surf_kitsune.bsp surf_kitsune
 surf_egypt:   python3 -I tools/extract_map.py surf_egypt.bsp surf_egypt --player-start
+surf_aircontrol: python3 -I tools/extract_map.py surf_AirControl_v3.bsp surf_aircontrol --player-start
+Every other course: python3 -I tools/extract_map.py <map.bsp> <id>
 
 It copies the brushes (the convex solids the Source engine itself collides
 the player against, bevel planes included), the trigger brushes, the
@@ -25,23 +27,29 @@ What it keeps and drops (the rules for play are in the core; this only copies):
     required name; triggers that start disabled are dropped;
   - nothing below --floor (surf_utopia's TF2 jail sits under the course);
   - water brushes (drawn as a ball pit, not solid: Source does not block on water);
-  - displacements (curved terrain, solid in Source): each triangle of the
-    surface becomes a thin solid wedge under it (its top drawn, 4 units
-    deep, with axial bevels), so the core's brush collision holds them.
+  - displacements (curved terrain, solid in Source), as their grids: the
+    core makes each triangle a thin solid wedge under it (its top drawn,
+    4 units deep, with axial bevels), so its brush collision holds them;
+  - func_wall brushes (solid and drawn);
+  - trigger_hurt (Source's damage triggers: what kills a fall on old maps).
 
 Names are lower-cased: Source matches entity names without regard to case.
 
-Format v2 (little endian), all counts u32:
-  b"SURF" u32 2
+Format v3 (little endian), all counts u32:
+  b"SURF" u32 3
   u32 brushes; per brush: u8 kind, u32 group, u16 sides; per side f32 nx ny nz d, u8 flags, u8 hint
      kind: 0 solid, 1 clip (solid, never drawn), 2 window (solid, see-through), 3 visual (not solid), 4 water
      flags: bit0 bevel, bit1 drawn;  hint: 0 wall, 1 glass, 2 light, 3 black, 4 metal, 5 water, 6 terrain (a displacement's top),
        16 + k a neon strip and 32 + k a grid, in colour k of COLOURS (kitsune's stage colours)
   u32 names; per name: u8 len, bytes
   u32 triggers; per trigger: u8 kind, u16 a, u16 filter, f32 pitch yaw roll speed, u16 sides; per side f32 nx ny nz d
-     kind 0 teleport (a: destination name), 1 push (a unused), 2 rename (a: the new name)
+     kind 0 teleport (a: destination name), 1 push (a unused), 2 rename (a: the new name),
+       3 hurt (a unused, speed: damage a second)
      filter: the name the activator must have, or 65535 for none
   u32 destinations; per destination: u16 name, f32 x y z yaw
+  u32 displacements; per displacement: u8 power, f32 face normal xyz, then
+     (2^power + 1)^2 points f32 xyz, row by row from the corner nearest its
+     start position (the core builds the solid wedges from them)
 """
 import re, struct, sys
 from pathlib import Path
@@ -138,54 +146,15 @@ def main(path, map_id, floor, player_start=False):
         elif c & CONTENTS_PLAYERCLIP:
             add(bi, 1, bi)
 
-    # displacements: one thin wedge per triangle, its top the surface
-    def sub(a, b):
-        return (a[0] - b[0], a[1] - b[1], a[2] - b[2])
-
-    def cross(a, b):
-        return (a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0])
-
-    def dot(a, b):
-        return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
-
-    def unit(a):
-        m = dot(a, a) ** 0.5
-        return (a[0] / m, a[1] / m, a[2] / m) if m > 1e-9 else None
-
-    DEPTH = 4.0
-    for tex, contents, face_n, tris, _ in B.displacements():
+    # displacements: their grids, which the core turns into thin solid
+    # wedges (one per triangle, its top the surface)
+    terrain = []
+    for tex, contents, face_n, tris, _, power, grid in B.displacements():
         if not contents & CONTENTS_SOLID and contents != 0:
             continue
-        for a, b, c in tris:
-            nrm = unit(cross(sub(b, a), sub(c, a)))
-            if nrm is None:
-                continue
-            if dot(nrm, face_n) < 0:
-                nrm = (-nrm[0], -nrm[1], -nrm[2])
-            sides = [(nrm, dot(nrm, a), False, "TERRAIN:" + tex)]
-            low = [tuple(p[i] - nrm[i] * DEPTH for i in range(3)) for p in (a, b, c)]
-            sides.append(((-nrm[0], -nrm[1], -nrm[2]), -dot(nrm, a) + DEPTH, False, "TOOLS/TOOLSNODRAW"))
-            centre = tuple((a[i] + b[i] + c[i]) / 3 for i in range(3))
-            for p, q in ((a, b), (b, c), (c, a)):
-                en = unit(cross(sub(q, p), nrm))
-                if en is None:
-                    continue
-                if dot(en, sub(centre, p)) > 0:
-                    en = (-en[0], -en[1], -en[2])
-                sides.append((en, dot(en, p), False, "TOOLS/TOOLSNODRAW"))
-            pts = [a, b, c] + low
-            for i in range(3):
-                lo = min(p[i] for p in pts)
-                hi = max(p[i] for p in pts)
-                ax = [0.0, 0.0, 0.0]
-                ax[i] = 1.0
-                sides.append((tuple(ax), hi, True, "TOOLS/TOOLSNODRAW"))
-                ax = [0.0, 0.0, 0.0]
-                ax[i] = -1.0
-                sides.append((tuple(ax), -lo, True, "TOOLS/TOOLSNODRAW"))
-            if max(p[2] for p in pts) < floor:
-                continue
-            brushes.append((0, len(brushes), sides))
+        if max(p[2] for p in grid) < floor:
+            continue
+        terrain.append((power, face_n, grid))
 
     names = [""]
 
@@ -222,6 +191,11 @@ def main(path, map_id, floor, player_start=False):
             for bi in mbr:
                 add(bi, kind, bi, origin)
             continue
+        if cls == "func_wall":
+            # a func_wall is a solid, drawn brush (surf_aircontrol's)
+            for bi in mbr:
+                add(bi, 0, bi, origin)
+            continue
         if cls == "func_illusionary":
             for bi in mbr:
                 add(bi, 3, bi, origin)
@@ -235,6 +209,9 @@ def main(path, map_id, floor, player_start=False):
             if not e.get("target", "").strip():
                 continue
             entry = (0, name(e.get("target", "")), required(e), (0.0, 0.0, 0.0, 0.0))
+        elif cls == "trigger_hurt":
+            # damage a second; the core deals it as Source's HurtThink does
+            entry = (3, NONE, required(e), (0.0, 0.0, 0.0, float(e.get("damage", "10"))))
         elif cls == "trigger_push":
             pitch, yaw, _ = [float(x) for x in e.get("pushdir", "0 0 0").split()]
             entry = (1, NONE, required(e), (pitch, yaw, 0.0, float(e.get("speed", "40"))))
@@ -284,7 +261,7 @@ def main(path, map_id, floor, player_start=False):
                 dests.append((name("player_start"), x, y, z, yaw))
                 break
 
-    out = bytearray(b"SURF") + struct.pack("<I", 2)
+    out = bytearray(b"SURF") + struct.pack("<I", 3)
     out += struct.pack("<I", len(brushes))
     for kind, group, sides in brushes:
         out += struct.pack("<BIH", kind, group, len(sides))
@@ -303,6 +280,11 @@ def main(path, map_id, floor, player_start=False):
     out += struct.pack("<I", len(dests))
     for d in dests:
         out += struct.pack("<Hffff", *d)
+    out += struct.pack("<I", len(terrain))
+    for power, face_n, grid in terrain:
+        out += struct.pack("<Bfff", power, *face_n)
+        for p in grid:
+            out += struct.pack("<fff", *p)
     target = MAPS / f"{map_id}.bin"
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_bytes(bytes(out))

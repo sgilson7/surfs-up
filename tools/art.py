@@ -67,6 +67,8 @@ COLOURS = {
     "stick": "7CF25C", "sticklit": "C8FFB0", "night": "24222B", "nightlit": "3A3744",
     "gold": "F5C231", "goldlit": "FFE07A", "golddark": "B98A12", "wrap": "F0EBD6", "wrapdark": "C9C2A8",
     "ink": "1E2B45", "netline": "9AA9BF", "glow": "FFF4C2",
+    "stone": "8C8C93", "stonelit": "A9A9B0", "crystal": "8CF2D9", "crystaldark": "4CBFB2",
+    "brown": "73492E", "brownlit": "93623F", "paper": "F4F4F0", "paperdark": "CDD1D8",
 }
 
 PREAMBLE = (
@@ -585,6 +587,171 @@ def cactus():
     return b, (S, S)
 
 
+def paper_plane():
+    b = "% a paper plane seen from above and behind: two swept wings and a keel\n"
+    b += poly([(0.4, 1.2), (2.7, 2.2), (1.5, 1.35)], "paper")
+    b += poly([(0.4, 1.2), (2.7, 2.2), (1.4, 0.7)], "paperdark")
+    b += poly([(1.5, 1.35), (2.7, 2.2), (1.45, 1.05)], "netline")
+    return b, (S, S)
+
+
+def balloon():
+    b = "% a red balloon on a string, with a knot and a shine\n"
+    b += "\\draw[netline,line width=1pt] (1.5,1.3) .. controls (1.3,0.9) and (1.7,0.6) .. (1.5,0.2);\n"
+    b += ellipse(1.5, 2.1, 0.7, 0.85, "red")
+    b += poly([(1.4, 1.2), (1.6, 1.2), (1.5, 1.3)], "reddark")
+    b += ellipse(1.25, 2.4, 0.12, 0.2, "redlit")
+    return b, (S, S)
+
+
+KITE_BOWS = 3
+
+
+def kite():
+    b = "% a diamond kite in four panels, two spars, a tail with three bows\n"
+    top, left, bot, right, mid = (1.6, 2.85), (0.85, 2.0), (1.6, 0.9), (2.35, 2.0), (1.6, 2.0)
+    b += poly([top, left, mid], "stripeblue") + poly([top, right, mid], "yellow")
+    b += poly([bot, left, mid], "yellow") + poly([bot, right, mid], "stripeblue")
+    b += f"\\draw[wooddark,line width=1pt] {P(*top)} -- {P(*bot)} {P(*left)} -- {P(*right)};\n"
+    b += "\\draw[netline,line width=1pt] (1.6,0.9) .. controls (1.3,0.6) and (1.0,0.6) .. (0.7,0.3);\n"
+    b += "\\foreach \\i in {0,1,2} {\\fill[red] ({1.35-\\i*0.3},{0.72-\\i*0.12}) -- ++(0.12,0.08) -- ++(0,-0.16) -- cycle;}\n"
+    assert KITE_BOWS == 3
+    return b, (S, S)
+
+
+BEANIE_PANELS = 4
+
+
+def beanie():
+    b = "% a propeller beanie: four coloured panels, a brim, a two-blade propeller\n"
+    cols = ["red", "yellow", "stripeblue", "green"]
+    for k in range(BEANIE_PANELS):
+        a0, a1 = 180 - 45 * k, 180 - 45 * (k + 1)
+        b += f"\\fill[{cols[k]}] (1.5,1.0) -- ({f(1.5 + 0.95 * math.cos(math.radians(a0)))},{f(1.0 + 0.95 * math.sin(math.radians(a0)))}) arc ({a0}:{a1}:0.95) -- cycle;\n"
+    b += poly([(1.5, 1.0), (2.75, 0.95), (2.7, 0.8), (0.55, 0.85)], "reddark")
+    b += rect(1.47, 1.95, 1.53, 2.3, "netline")
+    b += poly([(1.5, 2.3), (0.75, 2.45), (0.75, 2.25)], "yellow") + poly([(1.5, 2.3), (2.25, 2.15), (2.25, 2.35)], "yellow")
+    assert BEANIE_PANELS == 4
+    return b, (S, S)
+
+
+def eagle():
+    b = "% an eagle plush: brown body and wings, white head, yellow beak and feet\n"
+    b += poly([(0.5, 1.9), (1.1, 1.0), (1.2, 1.9)], "brownlit") + poly([(2.5, 1.9), (1.9, 1.0), (1.8, 1.9)], "brownlit")
+    b += facet_ball(1.5, 1.25, 0.65, "brownlit", "brown", "brown")
+    b += rect(1.2, 0.45, 1.35, 0.65, "yellow") + rect(1.65, 0.45, 1.8, 0.65, "yellow")
+    b += facet_ball(1.5, 2.15, 0.5, "white", "white", "paperdark")
+    b += poly([(1.75, 2.15), (2.15, 2.0), (1.75, 1.95)], "yellow")
+    b += circle(1.62, 2.28, 0.06, "ink")
+    return b, (S, S)
+
+
+def pet_rock():
+    b = "% a pet rock: a grey stone, two googly eyes, a blue bow on top\n"
+    b += poly([(0.55, 0.5), (2.45, 0.5), (2.65, 1.2), (2.1, 1.9), (0.9, 1.9), (0.35, 1.2)], "stone")
+    b += poly([(0.9, 1.9), (2.1, 1.9), (1.7, 1.4), (1.0, 1.5)], "stonelit")
+    for x in (1.2, 1.8):
+        b += circle(x, 1.25, 0.2, "white") + circle(x + 0.05, 1.22, 0.09, "ink")
+    b += poly([(1.5, 1.95), (1.15, 2.2), (1.15, 1.75)], "stripeblue") + poly([(1.5, 1.95), (1.85, 2.2), (1.85, 1.75)], "stripeblue")
+    return b, (S, S)
+
+
+def hard_hat():
+    b = "% a yellow hard hat: a dome with a ridge, a wide brim\n"
+    b += "\\fill[yellow] (0.6,1.0) arc (180:0:0.9) -- cycle;\n"
+    b += "\\fill[yellowlit] (0.9,1.2) arc (180:120:0.6) -- (1.5,1.0) -- cycle;\n"
+    b += rect(1.4, 1.0, 1.6, 1.95, "yellowdark")
+    b += poly([(0.3, 1.0), (2.7, 1.0), (2.8, 0.8), (0.2, 0.8)], "yellowdark")
+    return b, (S, S)
+
+
+CRYSTAL_POINTS = 3
+
+
+def crystal():
+    b = "% a glowing crystal cluster: three points on a rock\n"
+    b += poly([(0.6, 0.35), (2.4, 0.35), (2.2, 0.75), (0.8, 0.75)], "stone")
+    for x, h, w in ((1.5, 2.8, 0.32), (1.0, 1.9, 0.22), (2.0, 2.1, 0.24)):
+        b += poly([(x - w, 0.7), (x + w, 0.7), (x + w, h - 0.45), (x, h), (x - w, h - 0.45)], "crystal")
+        b += poly([(x, 0.7), (x + w, 0.7), (x + w, h - 0.45), (x, h)], "crystaldark")
+    assert CRYSTAL_POINTS == 3
+    return b, (S, S)
+
+
+def crowbar():
+    b = "% a foam crowbar: a long orange bar, hooked and split at the top\n"
+    b += "\\draw[orange,line width=7pt,line cap=round] (1.2,0.3) -- (1.7,2.3) .. controls (1.85,2.85) and (2.35,2.85) .. (2.45,2.45);\n"
+    b += "\\draw[orangedark,line width=7pt,line cap=round] (1.2,0.3) -- (0.95,0.45);\n"
+    b += rect(1.32, 0.8, 1.52, 1.25, "ink")
+    return b, (S, S)
+
+
+def scorpion():
+    b = "% a scorpion plush seen from above: body, two claws, legs, a curled tail\n"
+    b += "\\foreach \\y in {1.2,1.45,1.7} {\\fill[sanddark] (0.9,\\y) rectangle (2.1,\\y+0.07);}\n"
+    b += ellipse(1.5, 1.45, 0.45, 0.55, "sand")
+    for x in (0.95, 2.05):
+        b += f"\\draw[sanddark,line width=3pt] {P(1.5 + (x - 1.5) * 0.5, 1.85)} -- {P(x, 2.35)};\n"
+        b += ellipse(x, 2.5, 0.22, 0.17, "sand")
+    b += "\\draw[sand,line width=6pt,line cap=round] (1.5,0.95) .. controls (1.5,0.35) and (2.4,0.3) .. (2.3,0.95);\n"
+    b += circle(2.3, 1.05, 0.12, "sanddark")
+    b += circle(1.38, 1.85, 0.05, "ink") + circle(1.62, 1.85, 0.05, "ink")
+    return b, (S, S)
+
+
+def carrot():
+    b = "% a toy carrot: an orange taper with ridges, three green leaves\n"
+    b += poly([(1.2, 2.2), (1.8, 2.2), (1.55, 0.3), (1.45, 0.3)], "orange")
+    b += poly([(1.5, 2.2), (1.8, 2.2), (1.55, 0.3), (1.5, 0.3)], "orangedark")
+    b += "\\foreach \\y in {0.8,1.3,1.8} {\\fill[orangelit] (1.3,\\y) rectangle (1.5,\\y+0.05);}\n"
+    for dx in (-0.35, 0.0, 0.35):
+        b += poly([(1.45, 2.2), (1.55, 2.2), (1.5 + dx + 0.1, 2.85), (1.5 + dx - 0.1, 2.85)], "green")
+    return b, (S, S)
+
+
+LEAF_LOBES = 5
+
+
+def leaf():
+    b = "% a maple leaf on its stem: five lobes\n"
+    b += rect(1.47, 0.3, 1.53, 1.2, "wooddark")
+    for k in range(LEAF_LOBES):
+        a = math.radians(90 + (k - 2) * 50)
+        x, y = 1.5 + 0.75 * math.cos(a), 1.6 + 0.75 * math.sin(a)
+        b += poly([(1.5, 1.4), (x - 0.25 * math.sin(a), y + 0.25 * math.cos(a)), (x + 0.15 * math.cos(a), y + 0.15 * math.sin(a)), (x + 0.25 * math.sin(a), y - 0.25 * math.cos(a))], "red" if k % 2 == 0 else "orange")
+    assert LEAF_LOBES == 5
+    return b, (S, S)
+
+
+def pogo():
+    b = "% a pogo stick: a red pole, a coiled spring, foot pegs, a grip bar\n"
+    b += rect(1.42, 1.0, 1.58, 2.7, "red") + rect(1.5, 1.0, 1.58, 2.7, "reddark")
+    b += "\\foreach \\i in {0,...,4} {\\fill[netline] (1.25,{0.45+\\i*0.11}) rectangle (1.75,{0.5+\\i*0.11});}\n"
+    b += rect(1.47, 0.2, 1.53, 1.0, "ink")
+    b += rect(1.0, 1.1, 2.0, 1.2, "netline")
+    b += rect(0.9, 2.7, 2.1, 2.82, "ink")
+    return b, (S, S)
+
+
+def acorn():
+    b = "% an acorn: a brown nut, a scaly cap, a stalk\n"
+    b += ellipse(1.5, 1.2, 0.6, 0.75, "wood") + ellipse(1.3, 1.3, 0.15, 0.3, "woodline")
+    b += "\\fill[brown] (0.8,1.75) arc (180:0:0.7 and 0.45) -- cycle;\n"
+    b += "\\foreach \\x in {1.0,1.3,1.6,1.9} {\\fill[brownlit] (\\x,1.85) circle (0.07);}\n"
+    b += poly([(1.45, 2.15), (1.55, 2.15), (1.75, 2.6), (1.65, 2.62)], "brown")
+    return b, (S, S)
+
+
+def bunny():
+    b = "% a bunny plush: white body and head, long ears with pink insides\n"
+    b += facet_ball(1.5, 1.1, 0.7, "white", "white", "paperdark")
+    b += facet_ball(1.5, 2.0, 0.48, "white", "white", "paperdark")
+    for x in (1.28, 1.72):
+        b += ellipse(x, 2.7, 0.14, 0.42, "white") + ellipse(x, 2.7, 0.07, 0.3, "pinklit")
+    b += circle(1.35, 2.05, 0.06, "ink") + circle(1.65, 2.05, 0.06, "ink") + circle(1.5, 1.9, 0.06, "pink")
+    return b, (S, S)
+
+
 def how_to_surf():
     """A ramp seen end-on: the surfer on its right face, the ramp's top to the
     surfer's left, so the key to hold is A."""
@@ -651,6 +818,21 @@ PICTURES = {
     "items/sandcastle": sandcastle,
     "items/hourglass": hourglass,
     "items/cactus": cactus,
+    "items/paper_plane": paper_plane,
+    "items/balloon": balloon,
+    "items/kite": kite,
+    "items/beanie": beanie,
+    "items/eagle": eagle,
+    "items/pet_rock": pet_rock,
+    "items/hard_hat": hard_hat,
+    "items/crystal": crystal,
+    "items/crowbar": crowbar,
+    "items/scorpion": scorpion,
+    "items/carrot": carrot,
+    "items/leaf": leaf,
+    "items/pogo": pogo,
+    "items/acorn": acorn,
+    "items/bunny": bunny,
 }
 DPI = {"title": 150, "icon": 81, "how-to-surf": 110}
 CLEAR = {"items"}

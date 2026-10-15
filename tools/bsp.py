@@ -71,7 +71,7 @@ class Bsp:
 
     def displacements(self):
         """Every displacement as (texture, contents, face normal, triangles,
-        the base face's plane number),
+        the base face's plane number, power, grid of (2^power + 1)^2 points),
         triangles in world space, built as Source's CCoreDispInfo builds them:
         the base face's corners from the one nearest startPosition, the grid
         interpolated across them, each vertex moved by its offset vector times
@@ -125,7 +125,7 @@ class Bsp:
             pn = planes[planenum][0:3]
             normal = tuple(-c for c in pn) if side else tuple(pn)
             tex = texinfo[tinfo][1][0] if tinfo >= 0 else ""
-            out.append((tex, contents, normal, tris, planenum))
+            out.append((tex, contents, normal, tris, planenum, power, grid))
         return out
 
 

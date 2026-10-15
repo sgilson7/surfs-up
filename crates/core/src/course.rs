@@ -152,15 +152,47 @@ fn box_of(v: &Value) -> Result<(V3, V3), String> {
     Ok((vec_of(&v[0])?, vec_of(&v[1])?))
 }
 
-/// Every course listed in maps.json, as (id, name, author).
-pub fn listed(maps_json: &str) -> Result<Vec<(String, String, String)>, String> {
+/// A course as the title lists it.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Listed {
+    pub id: String,
+    pub name: String,
+    pub author: String,
+    /// Its difficulty as surf servers rank it (1 the easiest; 0 unranked).
+    pub tier: u8,
+    /// "surf", or "bhop" for a bunnyhop course.
+    pub mode: String,
+}
+
+impl Listed {
+    /// How the title describes the tier to someone choosing: tiers 1 and 2
+    /// are where surf servers send beginners, 7 and up only the best.
+    pub fn band(&self) -> &'static str {
+        match self.tier {
+            0 => "unranked",
+            1..=2 => "easy",
+            3..=4 => "medium",
+            5..=6 => "hard",
+            _ => "expert",
+        }
+    }
+}
+
+/// Every course listed in maps.json, in its order.
+pub fn listed(maps_json: &str) -> Result<Vec<Listed>, String> {
     let v: Value = serde_json::from_str(maps_json).map_err(|e| e.to_string())?;
     let list = v["maps"].as_array().ok_or("maps.json lists no maps")?;
     Ok(list
         .iter()
         .map(|m| {
             let s = |k: &str| m[k].as_str().unwrap_or("").to_string();
-            (s("id"), s("name"), s("author"))
+            Listed {
+                id: s("id"),
+                name: s("name"),
+                author: s("author"),
+                tier: m["tier"].as_u64().unwrap_or(0).min(255) as u8,
+                mode: m["mode"].as_str().unwrap_or("surf").to_string(),
+            }
         })
         .collect())
 }
@@ -301,6 +333,9 @@ pub mod tests {
             "surf_egypt" => include_bytes!("../../../data/maps/surf_egypt.bin"),
             "surf_anubis" => include_bytes!("../../../data/maps/surf_anubis.bin"),
             "surf_sandtrap" => include_bytes!("../../../data/maps/surf_sandtrap.bin"),
+            "surf_aircontrol" => include_bytes!("../../../data/maps/surf_aircontrol.bin"),
+            "surf_mesa" => include_bytes!("../../../data/maps/surf_mesa.bin"),
+            "bhop_ambience" => include_bytes!("../../../data/maps/bhop_ambience.bin"),
             _ => include_bytes!("../../../data/maps/surf_utopia.bin"),
         };
         let mut map = Map::parse(bytes).expect("parse");
@@ -310,7 +345,7 @@ pub mod tests {
 
     #[test]
     fn every_listed_course_resolves_against_its_map() {
-        for (id, _, _) in listed(MAPS).unwrap() {
+        for Listed { id, .. } in listed(MAPS).unwrap() {
             let (map, course) = load(&id);
             assert!(course.has_finish(), "{id} can be finished");
             assert!(
@@ -353,5 +388,24 @@ pub mod tests {
         );
         let red = map.name_index("red").unwrap();
         assert_eq!(course.stage_of(red), Some(0));
+    }
+
+    #[test]
+    fn every_course_has_a_tier_and_the_list_runs_easiest_first_bhop_last() {
+        let l = listed(MAPS).unwrap();
+        assert!(l.iter().all(|m| m.tier > 0), "every course is ranked");
+        let surf: Vec<&Listed> = l.iter().filter(|m| m.mode == "surf").collect();
+        assert!(
+            surf.windows(2).all(|w| w[0].tier <= w[1].tier),
+            "surf courses run easiest first"
+        );
+        let first_bhop = l.iter().position(|m| m.mode == "bhop").expect("a bhop course");
+        assert!(
+            l[first_bhop..].iter().all(|m| m.mode == "bhop"),
+            "bhop after surf"
+        );
+        let band = |id: &str| l.iter().find(|m| m.id == id).unwrap().band();
+        assert_eq!(band("surf_utopia"), "easy", "where beginners start");
+        assert_eq!(band("surf_anubis"), "expert", "KSF's tier 8");
     }
 }

@@ -1,86 +1,482 @@
 {
- "_about": "The courses, and what each teleport means for a run, which a BSP does not say (a timer plugin's zones do, on a server). The core reads this file and holds every rule in it. `spawn` is the teleport destination you start at. `start_zone` is the box [min, max] the clock waits in; leaving it starts the clock. `roles` are tried in order for each teleport touched: `target` is the destination's name, `box` (optional) limits the rule to triggers whose centre is inside it; a `finish` stops the clock, an `exit` ends the run with no time, a `restart` sends you to the spawn and stops the clock, and `move` (the default for any target not listed) teleports you and keeps the clock running, as a stage's fall or its door to the next stage does. `finish_zone` (optional) is a box the clock stops in, for a map whose end is a timer zone rather than a teleport. `stages` names the destination each stage starts at, in order. `fall_damage` (default false) is Source's fatal fall: a landing out of water at 1024 u/s or faster sends you to the start, for a map with plain ground under its ramps. Medal times are seconds, and provisional until people have surfed the course. `things` is the course's set of things to hold, earned on that course only: the first for finishing it, then bronze, silver and gold times, and the last for the best time in the gym.",
+ "_about": "The courses, and what each teleport means for a run, which a BSP does not say (a timer plugin's zones do, on a server). The core reads this file and holds every rule in it. `spawn` is the teleport destination you start at. `start_zone` is the box [min, max] the clock waits in; leaving it starts the clock. `roles` are tried in order for each teleport touched: `target` is the destination's name, `box` (optional) limits the rule to triggers whose centre is inside it; a `finish` stops the clock, an `exit` ends the run with no time, a `restart` sends you to the spawn and stops the clock, and `move` (the default for any target not listed) teleports you and keeps the clock running, as a stage's fall or its door to the next stage does. `finish_zone` (optional) is a box the clock stops in, for a map whose end is a timer zone rather than a teleport. `stages` names the destination each stage starts at, in order. `fall_damage` (default false) is Source's fatal fall: a landing out of water at 1024 u/s or faster sends you to the start, for a map with plain ground under its ramps. `tier` is the course's difficulty as surf servers rank it (1 the easiest), with the server lists it comes from in `tier_source`; `mode` is surf (the default) or bhop. Medal times are seconds, and provisional until people have surfed the course. `things` is the course's set of things to hold, earned on that course only: the first for finishing it, then bronze, silver and gold times, and the last for the best time in the gym.",
  "maps": [
   {
    "id": "surf_utopia",
    "name": "surf_utopia",
    "author": "Panzerhandschuh",
+   "tier": 1,
+   "tier_source": "KSF and SharpTimer list surf_utopia_njv as tier 1",
    "spawn": "start",
-   "start_zone": [[-14336, -1088, 12992], [-13760, 1088, 13312]],
+   "start_zone": [
+    [
+     -14336,
+     -1088,
+     12992
+    ],
+    [
+     -13760,
+     1088,
+     13312
+    ]
+   ],
    "roles": [
-    {"target": "jail1", "role": "restart"},
-    {"target": "start", "role": "restart"},
-    {"target": "jail_control_room1", "role": "finish", "ending": 4},
-    {"target": "jail_bottom1", "role": "finish", "ending": 5},
-    {"target": "jail_center", "role": "finish", "ending": 6},
-    {"target": "jail_mid1", "role": "exit", "ending": 1},
-    {"target": "jail_mid2", "role": "exit", "ending": 1},
-    {"target": "jail_rear", "role": "exit", "ending": 2},
-    {"target": "jail_top", "role": "exit", "ending": 3}
+    {
+     "target": "jail1",
+     "role": "restart"
+    },
+    {
+     "target": "start",
+     "role": "restart"
+    },
+    {
+     "target": "jail_control_room1",
+     "role": "finish",
+     "ending": 4
+    },
+    {
+     "target": "jail_bottom1",
+     "role": "finish",
+     "ending": 5
+    },
+    {
+     "target": "jail_center",
+     "role": "finish",
+     "ending": 6
+    },
+    {
+     "target": "jail_mid1",
+     "role": "exit",
+     "ending": 1
+    },
+    {
+     "target": "jail_mid2",
+     "role": "exit",
+     "ending": 1
+    },
+    {
+     "target": "jail_rear",
+     "role": "exit",
+     "ending": 2
+    },
+    {
+     "target": "jail_top",
+     "role": "exit",
+     "ending": 3
+    }
    ],
    "stages": [],
-   "medals": {"record": 80, "gold": 100, "silver": 130, "bronze": 180},
-   "things": ["noodle", "kickball", "duck", "foam_finger", "chicken"]
+   "medals": {
+    "record": 80,
+    "gold": 100,
+    "silver": 130,
+    "bronze": 180
+   },
+   "things": [
+    "noodle",
+    "kickball",
+    "duck",
+    "foam_finger",
+    "chicken"
+   ]
   },
   {
    "id": "surf_kitsune",
    "name": "surf_kitsune",
    "author": "Arblarg",
+   "tier": 1,
+   "tier_source": "KSF, SurfHeaven and SharpTimer: tier 1",
    "spawn": "start",
-   "start_zone": [[-512, -2032, 0], [512, -512, 544]],
-   "roles": [
-    {"target": "start", "box": [[-16100, 9000, -12500], [-15900, 11200, -11000]], "role": "finish", "ending": 1},
-    {"target": "start", "role": "restart"}
+   "start_zone": [
+    [
+     -512,
+     -2032,
+     0
+    ],
+    [
+     512,
+     -512,
+     544
+    ]
    ],
-   "stages": ["red", "orange", "yellow", "green", "teal", "blue", "purple", "pink", "white"],
-   "medals": {"record": 150, "gold": 190, "silver": 240, "bronze": 330},
-   "things": ["pinwheel", "ribbon", "lantern", "bell", "fox"]
+   "roles": [
+    {
+     "target": "start",
+     "box": [
+      [
+       -16100,
+       9000,
+       -12500
+      ],
+      [
+       -15900,
+       11200,
+       -11000
+      ]
+     ],
+     "role": "finish",
+     "ending": 1
+    },
+    {
+     "target": "start",
+     "role": "restart"
+    }
+   ],
+   "stages": [
+    "red",
+    "orange",
+    "yellow",
+    "green",
+    "teal",
+    "blue",
+    "purple",
+    "pink",
+    "white"
+   ],
+   "medals": {
+    "record": 150,
+    "gold": 190,
+    "silver": 240,
+    "bronze": 330
+   },
+   "things": [
+    "pinwheel",
+    "ribbon",
+    "lantern",
+    "bell",
+    "fox"
+   ]
   },
   {
    "id": "surf_egypt",
    "name": "surf_egypt",
    "author": "Seabass45",
+   "tier": 1,
+   "tier_source": "Flowstate's timer data: tier 1",
    "spawn": "player_start",
-   "start_zone": [[-3, 1213, 4680], [951, 2197, 5310]],
+   "start_zone": [
+    [
+     -3,
+     1213,
+     4680
+    ],
+    [
+     951,
+     2197,
+     5310
+    ]
+   ],
    "roles": [
-    {"target": "top", "role": "finish", "ending": 1},
-    {"target": "t_spawn", "role": "finish", "ending": 2},
-    {"target": "ct_spawn", "role": "finish", "ending": 3}
+    {
+     "target": "top",
+     "role": "finish",
+     "ending": 1
+    },
+    {
+     "target": "t_spawn",
+     "role": "finish",
+     "ending": 2
+    },
+    {
+     "target": "ct_spawn",
+     "role": "finish",
+     "ending": 3
+    }
    ],
    "stages": [],
    "fall_damage": true,
-   "medals": {"record": 20, "gold": 26, "silver": 34, "bronze": 48},
-   "things": ["bucket", "camel", "pyramid", "scarab", "mummy"]
+   "medals": {
+    "record": 20,
+    "gold": 26,
+    "silver": 34,
+    "bronze": 48
+   },
+   "things": [
+    "bucket",
+    "camel",
+    "pyramid",
+    "scarab",
+    "mummy"
+   ]
   },
   {
-   "id": "surf_anubis",
-   "name": "surf_anubis",
-   "author": "Sneakyyy",
-   "spawn": "stage1",
-   "start_zone": [[-128, -128, -80], [256, 128, 128]],
-   "finish_zone": [[1680, -2240, -2880], [2320, -1842, -2576]],
-   "roles": [
-    {"target": "spawn", "role": "restart"},
-    {"target": "credits", "role": "restart"}
+   "id": "surf_aircontrol",
+   "name": "surf_aircontrol",
+   "author": "SnoopSh",
+   "tier": 1,
+   "tier_source": "KSF, SurfHeaven and SharpTimer list surf_aircontrol_ksf as tier 1",
+   "spawn": "player_start",
+   "start_zone": [
+    [
+     -2912,
+     -10016,
+     14336
+    ],
+    [
+     -800,
+     -9248,
+     14600
+    ]
    ],
-   "stages": ["stage1", "stage2", "stage3"],
-   "medals": {"record": 70, "gold": 90, "silver": 120, "bronze": 170},
-   "things": ["jumprope", "cat", "glowstick", "sceptre", "jackal"]
+   "finish_zone": [
+    [
+     8512,
+     400,
+     -14800
+    ],
+    [
+     15936,
+     4800,
+     -12900
+    ]
+   ],
+   "roles": [],
+   "stages": [],
+   "fall_damage": true,
+   "medals": {
+    "record": 60,
+    "gold": 75,
+    "silver": 95,
+    "bronze": 130
+   },
+   "things": [
+    "paper_plane",
+    "balloon",
+    "kite",
+    "beanie",
+    "eagle"
+   ]
+  },
+  {
+   "id": "surf_mesa",
+   "name": "surf_mesa",
+   "author": "Arblarg",
+   "tier": 1,
+   "tier_source": "SurfHeaven and SharpTimer list surf_mesa_fix and surf_mesa_revo as tier 1",
+   "spawn": "spawn",
+   "start_zone": [
+    [
+     -784,
+     -880,
+     10140
+    ],
+    [
+     784,
+     -80,
+     10500
+    ]
+   ],
+   "roles": [
+    {
+     "target": "spawn",
+     "box": [
+      [
+       -200,
+       15500,
+       -12400
+      ],
+      [
+       200,
+       15700,
+       -12100
+      ]
+     ],
+     "role": "finish",
+     "ending": 1
+    },
+    {
+     "target": "spawn",
+     "role": "restart"
+    }
+   ],
+   "stages": [],
+   "medals": {
+    "record": 60,
+    "gold": 75,
+    "silver": 95,
+    "bronze": 130
+   },
+   "things": [
+    "pet_rock",
+    "hard_hat",
+    "crystal",
+    "crowbar",
+    "scorpion"
+   ]
   },
   {
    "id": "surf_sandtrap",
    "name": "surf_sandtrap",
    "author": "ArcticPanda",
+   "tier": 2,
+   "tier_source": "KSF, SurfHeaven and SharpTimer: tier 2",
    "spawn": "s1",
-   "start_zone": [[48, -1040, 14232], [2096, -16, 14700]],
+   "start_zone": [
+    [
+     48,
+     -1040,
+     14232
+    ],
+    [
+     2096,
+     -16,
+     14700
+    ]
+   ],
    "roles": [
-    {"target": "start", "box": [[400, -15500, -5800], [1700, -14400, -4800]], "role": "finish", "ending": 1},
-    {"target": "start", "role": "restart"},
-    {"target": "s1", "role": "restart"}
+    {
+     "target": "start",
+     "box": [
+      [
+       400,
+       -15500,
+       -5800
+      ],
+      [
+       1700,
+       -14400,
+       -4800
+      ]
+     ],
+     "role": "finish",
+     "ending": 1
+    },
+    {
+     "target": "start",
+     "role": "restart"
+    },
+    {
+     "target": "s1",
+     "role": "restart"
+    }
    ],
    "stages": [],
-   "medals": {"record": 60, "gold": 75, "silver": 95, "bronze": 130},
-   "things": ["sunglasses", "lizard", "sandcastle", "hourglass", "cactus"]
+   "medals": {
+    "record": 60,
+    "gold": 75,
+    "silver": 95,
+    "bronze": 130
+   },
+   "things": [
+    "sunglasses",
+    "lizard",
+    "sandcastle",
+    "hourglass",
+    "cactus"
+   ]
+  },
+  {
+   "id": "surf_anubis",
+   "name": "surf_anubis",
+   "author": "Sneakyyy",
+   "tier": 8,
+   "tier_source": "KSF (surf_anubis_ksf) and SharpTimer: tier 8",
+   "spawn": "stage1",
+   "start_zone": [
+    [
+     -128,
+     -128,
+     -80
+    ],
+    [
+     256,
+     128,
+     128
+    ]
+   ],
+   "finish_zone": [
+    [
+     1680,
+     -2240,
+     -2880
+    ],
+    [
+     2320,
+     -1842,
+     -2576
+    ]
+   ],
+   "roles": [
+    {
+     "target": "spawn",
+     "role": "restart"
+    },
+    {
+     "target": "credits",
+     "role": "restart"
+    }
+   ],
+   "stages": [
+    "stage1",
+    "stage2",
+    "stage3"
+   ],
+   "medals": {
+    "record": 70,
+    "gold": 90,
+    "silver": 120,
+    "bronze": 170
+   },
+   "things": [
+    "jumprope",
+    "cat",
+    "glowstick",
+    "sceptre",
+    "jackal"
+   ]
+  },
+  {
+   "id": "bhop_ambience",
+   "name": "bhop_ambience",
+   "author": "leaf",
+   "tier": 1,
+   "mode": "bhop",
+   "tier_source": "SharpTimer's bhop list: tier 1",
+   "spawn": "tp1",
+   "start_zone": [
+    [
+     -1024,
+     64,
+     64
+    ],
+    [
+     -512,
+     576,
+     300
+    ]
+   ],
+   "finish_zone": [
+    [
+     1600,
+     29,
+     64
+    ],
+    [
+     2752,
+     1088,
+     300
+    ]
+   ],
+   "roles": [
+    {
+     "target": "tp1",
+     "role": "restart"
+    }
+   ],
+   "stages": [],
+   "medals": {
+    "record": 18,
+    "gold": 22,
+    "silver": 28,
+    "bronze": 40
+   },
+   "things": [
+    "carrot",
+    "leaf",
+    "pogo",
+    "acorn",
+    "bunny"
+   ]
   }
  ]
 }

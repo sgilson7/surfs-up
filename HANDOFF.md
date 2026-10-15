@@ -75,3 +75,8 @@ Utopia's start flickered because the kitsune glass-ramp look reached its glass s
 
 "make sure all the online still works with the new map": every course is checked online in the core and in browsers (row 47). anubis is tier 7+; after a survey Sam chose surf_sandtrap, added as the fifth course with displacement collision (rows 48 to 52).
 `./scripts/check.sh`: BUILDER CHECK PASSED (the online check now includes a pair of browsers on every course).
+
+## Eleventh request (14 October 2026): tiers, surf_aircontrol, surf_mesa, bhop_ambience
+
+From Sam's friend, a long-time surfer: add bhop_ambience and surf_aircontrol, show tiers on the course choice "so people who don't know how to surf dont imemdiately ruin themselves", and add surf_mesa. Every card now shows its tier from the server lists (row 55) in a coloured badge with a plain word ("Good for beginners" to "Experts only"), easiest first, bhop last. anubis is tier 8 by KSF and SharpTimer, not 5. The three maps are courses six to eight, each with a set of five things: map format v3 carries displacement grids (mesa went from 38 MB to 2.2 MB, row 56); Source's trigger_hurt is honoured (aircontrol's kill floors, and egypt's ground Killzone, rows 57 and 58); the zones are in rows 59 to 61. Medal times are provisional; nobody has played the three through.
+`./scripts/check.sh`: BUILDER CHECK PASSED (eight courses, tiers shown in chromium, firefox and webkit; online pairs on every course).

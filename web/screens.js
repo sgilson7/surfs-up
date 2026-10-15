@@ -110,11 +110,17 @@ export function makeScreens(copy) {
       b.className = "map-card" + (m.chosen ? " chosen" : "");
       const name = document.createElement("strong");
       name.textContent = m.name;
+      const tier = document.createElement("span");
+      tier.className = "tier " + m.band;
+      tier.textContent = fill(copy["course_tier_" + m.mode], { tier: m.tier });
+      const band = document.createElement("span");
+      band.className = "band";
+      band.textContent = copy["band_" + m.band];
       const by = document.createElement("span");
       by.textContent = fill(copy.course_by, { author: m.author });
       const best = document.createElement("span");
       best.textContent = m.best ? fill(copy.course_best, { time: m.best }) : copy.course_none;
-      b.append(name, by, best);
+      b.append(name, tier, band, by, best);
       b.addEventListener("click", () => onPick(m.id));
       box.append(b);
     }

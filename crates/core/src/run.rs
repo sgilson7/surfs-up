@@ -15,6 +15,11 @@ pub const START_SPEED_CAP: f32 = 290.0;
 /// Source's PLAYER_FATAL_FALL_SPEED (shareddefs.h, "approx 60 feet"): a
 /// landing this fast takes all of a full 100 health.
 pub const FATAL_FALL_SPEED: f32 = 1024.0;
+/// A player's full health in Counter-Strike.
+pub const FULL_HEALTH: f32 = 100.0;
+/// Source's trigger_hurt deals its damage every half second while touched
+/// (CTriggerHurt::HurtThink, `HurtAllTouchers(0.5)`, triggers.cpp): 32 ticks.
+pub const HURT_EVERY: u16 = 32;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Phase {
@@ -85,6 +90,10 @@ pub struct Surfer {
     pub name: u16,
     /// The furthest stage reached this run (0 is the first).
     pub stage: u8,
+    /// Health, which only a map's hurt triggers take: at none, back to the start.
+    pub health: f32,
+    /// Ticks until a hurt trigger touched now hurts again (0: at once).
+    pub hurt_wait: u16,
 }
 
 impl Surfer {
@@ -97,6 +106,8 @@ impl Surfer {
             snap_yaw: Some(map.spawn_yaw),
             name: 0,
             stage: 0,
+            health: FULL_HEALTH,
+            hurt_wait: 0,
         }
     }
 
@@ -109,6 +120,8 @@ impl Surfer {
             snap_yaw: None,
             name: 0,
             stage: 0,
+            health: FULL_HEALTH,
+            hurt_wait: 0,
         }
     }
 
@@ -119,6 +132,8 @@ impl Surfer {
         self.snap_yaw = Some(map.spawn_yaw);
         self.name = 0;
         self.stage = 0;
+        self.health = FULL_HEALTH;
+        self.hurt_wait = 0;
     }
 
     /// One tick. `mv` carries the map; `course` says what its teleports mean.
@@ -153,6 +168,8 @@ impl Surfer {
         let mut pushed = false;
         let mut jump: Option<(Role, u16)> = None;
         let mut rename: Option<u16> = None;
+        let mut hurt = 0.0f32;
+        let mut hurting = false;
         for t in &map.triggers {
             if t.maxs.x < lo.x
                 || t.mins.x > hi.x
@@ -175,6 +192,10 @@ impl Surfer {
                     pushed = true;
                 }
                 TriggerKind::Rename(n) => rename = Some(n),
+                TriggerKind::Hurt(per_second) => {
+                    hurting = true;
+                    hurt += per_second * HURT_EVERY as f32 / 64.0;
+                }
                 TriggerKind::Teleport(d) => {
                     let r = course.role(t, d);
                     // a finish outranks anything else touched in the same tick
@@ -193,6 +214,21 @@ impl Surfer {
                     jump = Some((Role::Finish(1), 0));
                 }
             }
+        }
+        // Source's trigger_hurt: the first touch hurts at once, then every
+        // half second while touched; leaving it lets the next touch hurt at
+        // once again. With no health left, back to the start.
+        if hurting {
+            if self.hurt_wait == 0 {
+                self.health -= hurt;
+                self.hurt_wait = HURT_EVERY;
+            }
+            self.hurt_wait -= 1;
+        } else {
+            self.hurt_wait = 0;
+        }
+        if jump.is_none() && self.health <= 0.0 {
+            jump = Some((Role::Restart, 0));
         }
         // Source's CheckFalling with a full 100 health: a landing at
         // PLAYER_FATAL_FALL_SPEED (1024, shareddefs.h) or faster kills,
@@ -279,6 +315,9 @@ impl Surfer {
             } else if self.phase == Phase::Start {
                 self.phase = Phase::Running;
                 self.stats = Stats::default();
+                // a run starts whole (a recorded run replays from here)
+                self.health = FULL_HEALTH;
+                self.hurt_wait = 0;
                 out.started = true;
             }
         }
@@ -504,10 +543,11 @@ mod tests {
         let (m, c) = load("surf_egypt");
         assert!(c.fall_damage);
         let mut mv = Mover::new(&m);
-        // dropped from 1000 units onto the plain ground beside the pyramid's pool
+        // dropped from 1000 units onto the start room's roof (its top at
+        // z 5312, open to the sky): a fatal fall
         let mut s = Surfer::at_start(&m);
         s.phase = Phase::Running;
-        s.body.origin = v3(2000.0, 4000.0, 1018.0);
+        s.body.origin = v3(510.0, 1705.0, 6312.0);
         let mut fell = false;
         for _ in 0..200 {
             let t = s.step(&mut mv, &c, Cmd::new(0, 0.0, 0.0));
@@ -521,10 +561,10 @@ mod tests {
         }
         assert!(fell, "a 1000-unit drop lands at over 1024 u/s and restarts");
         assert_eq!(s.phase, Phase::Start);
-        // a short hop down does not hurt
+        // a short hop down onto it does not hurt
         let mut s = Surfer::at_start(&m);
         s.phase = Phase::Running;
-        s.body.origin = v3(2000.0, 4000.0, 218.0);
+        s.body.origin = v3(510.0, 1705.0, 5512.0);
         for _ in 0..200 {
             let t = s.step(&mut mv, &c, Cmd::new(0, 0.0, 0.0));
             assert!(!t.fell, "a 200-unit drop is safe");
@@ -532,6 +572,21 @@ mod tests {
                 break;
             }
         }
+        assert!(s.body.on_ground);
+        // the plain ground beside the pyramid's pool is under the map's
+        // Killzone (a trigger_hurt of 6666 a second): even a short hop
+        // down onto it ends the run
+        let mut s = Surfer::at_start(&m);
+        s.phase = Phase::Running;
+        s.body.origin = v3(2000.0, 4000.0, 218.0);
+        let mut fell = false;
+        for _ in 0..200 {
+            if s.step(&mut mv, &c, Cmd::new(0, 0.0, 0.0)).fell {
+                fell = true;
+                break;
+            }
+        }
+        assert!(fell, "the Killzone over egypt's ground");
         // the same big drop into the pyramid's pool, beside the pyramid, is
         // safe (the pool's floor is under water)
         let mut s = Surfer::at_start(&m);
@@ -680,6 +735,197 @@ mod tests {
         n.body.origin = (namer.mins + namer.maxs) * 0.5 - v3(0.0, 0.0, 36.0);
         n.step(&mut mv, &c, Cmd::new(0, 90.0, 0.0));
         assert_eq!(n.name, x);
+    }
+
+    #[test]
+    fn aircontrols_hurt_triggers_hurt_every_half_second_and_its_kill_floors_at_once() {
+        let (m, c) = load("surf_aircontrol");
+        let mut mv = Mover::new(&m);
+        let hurts = |dps: f32| {
+            m.triggers
+                .iter()
+                .filter(move |t| t.kind == TriggerKind::Hurt(dps))
+                .collect::<Vec<_>>()
+        };
+        // the plate of 100 a second: held in it, half a second's worth (50)
+        // at once, the rest half a second later, and back to the start
+        let plate = hurts(100.0)[0];
+        let inside = (plate.mins + plate.maxs) * 0.5 - v3(0.0, 0.0, 30.0);
+        let mut s = Surfer::at_start(&m);
+        s.phase = Phase::Running;
+        let mut died = None;
+        for i in 0..64 {
+            s.body.origin = inside;
+            s.body.velocity = ZERO;
+            if s.step(&mut mv, &c, Cmd::new(0, 0.0, 0.0)).fell {
+                died = Some(i);
+                break;
+            }
+            if i == 0 {
+                assert_eq!(s.health, 50.0, "half a second's damage at the first touch");
+            }
+        }
+        assert_eq!(
+            died,
+            Some(HURT_EVERY as i32),
+            "the second hurt, half a second on, kills"
+        );
+        // stepping out and back in hurts again at once
+        let mut s = Surfer::at_start(&m);
+        s.phase = Phase::Running;
+        for (i, at) in [inside, inside + v3(0.0, 0.0, 400.0), inside]
+            .into_iter()
+            .enumerate()
+        {
+            s.body.origin = at;
+            s.body.velocity = ZERO;
+            let t = s.step(&mut mv, &c, Cmd::new(0, 0.0, 0.0));
+            assert_eq!(t.fell, i == 2, "tick {i}: health {}", s.health);
+        }
+        // a kill floor under the first ramps (1000 a second) ends a run at once
+        let floor = hurts(1000.0)
+            .into_iter()
+            .find(|t| t.maxs.z - t.mins.z < 32.0 && t.mins.z > 12000.0)
+            .expect("the kill floor under the first ramps");
+        let mut s = Surfer::at_start(&m);
+        s.phase = Phase::Running;
+        s.body.origin = (floor.mins + floor.maxs) * 0.5 + v3(0.0, 0.0, 40.0);
+        let mut fell = false;
+        for _ in 0..64 {
+            if s.step(&mut mv, &c, Cmd::new(0, 0.0, 0.0)).fell {
+                fell = true;
+                break;
+            }
+        }
+        assert!(fell, "the kill floor");
+        assert_eq!(s.body.origin, m.spawn);
+    }
+
+    #[test]
+    fn aircontrol_starts_in_its_spawn_room_and_finishes_in_its_arena() {
+        let (m, c) = load("surf_aircontrol");
+        let mut mv = Mover::new(&m);
+        // past the foot of the first ramp, in the gap beside it
+        let mut s = Surfer::at_start(&m);
+        s.body.origin = v3(-1680.0, -9600.0, 14340.0);
+        let mut started = false;
+        for _ in 0..640 {
+            if s.step(&mut mv, &c, Cmd::new(B_FORWARD, 90.0, 0.0)).started {
+                started = true;
+                break;
+            }
+        }
+        assert!(
+            started,
+            "walking out of the spawn room starts the clock at {:?}",
+            s.body.origin
+        );
+        // dropped into the arena where the weapons lie, the clock stops
+        s.body.origin = v3(12160.0, 3072.0, -12800.0);
+        let mut finished = None;
+        for _ in 0..200 {
+            if let Some(f) = s.step(&mut mv, &c, Cmd::new(0, 0.0, 0.0)).finished {
+                finished = Some(f);
+                break;
+            }
+        }
+        assert!(matches!(finished, Some((1, _))), "the arena is the end");
+    }
+
+    #[test]
+    fn mesa_stands_on_its_canyon_and_its_end_tunnel_finishes() {
+        let (m, c) = load("surf_mesa");
+        let mut mv = Mover::new(&m);
+        let mut s = Surfer::at_start(&m);
+        for _ in 0..200 {
+            s.step(&mut mv, &c, Cmd::new(0, 0.0, 0.0));
+        }
+        assert!(
+            s.body.on_ground && s.phase == Phase::Start,
+            "you stand on the spawn platform"
+        );
+        // the terrain, built from the displacement grids, holds you up
+        let tri = m
+            .brushes
+            .iter()
+            .find(|b| b.sides[0].hint == HINT_TERRAIN && b.sides[0].plane.n.z > 0.95)
+            .expect("a flat bit of canyon floor");
+        let mut d = Surfer::at_start(&m);
+        d.phase = Phase::Running;
+        d.body.origin = v3(
+            (tri.mins.x + tri.maxs.x) * 0.5,
+            (tri.mins.y + tri.maxs.y) * 0.5,
+            tri.maxs.z + 8.0,
+        );
+        let mut stood = false;
+        for _ in 0..64 {
+            let mut b = d.body;
+            mv.player_move(&mut b, Cmd::new(0, 0.0, 0.0), Cmd::new(0, 0.0, 0.0));
+            d.body = b;
+            if d.body.on_ground {
+                stood = true;
+                break;
+            }
+        }
+        assert!(
+            stood && d.body.origin.z > tri.mins.z - 1.0,
+            "on the canyon at {:?}",
+            d.body.origin
+        );
+        // the door at the end of the last tunnel finishes; every other
+        // teleport to the spawn is a fall
+        let spawn = m.name_index("spawn").unwrap();
+        let mut ends = 0;
+        let mut falls = 0;
+        for t in m
+            .triggers
+            .iter()
+            .filter(|t| t.kind == TriggerKind::Teleport(spawn))
+        {
+            match c.role(t, spawn) {
+                Role::Finish(_) => ends += 1,
+                Role::Restart => falls += 1,
+                r => panic!("{r:?}"),
+            }
+        }
+        assert_eq!(ends, 1, "one end door");
+        assert!(falls > 8, "the falls (one record per brush): {falls}");
+    }
+
+    #[test]
+    fn ambience_runs_from_the_green_pad_to_the_red_pad_and_its_first_pit_restarts() {
+        let (m, c) = load("bhop_ambience");
+        let mut mv = Mover::new(&m);
+        let mut s = Surfer::at_start(&m);
+        for _ in 0..64 {
+            s.step(&mut mv, &c, Cmd::new(0, 270.0, 0.0));
+        }
+        assert!(s.body.on_ground && s.phase == Phase::Start, "on the start pad");
+        // hop forward (auto-hop, holding jump) off the pad: the clock starts,
+        // and the first pit sends you back to the pad
+        let mut started = false;
+        let mut fell = false;
+        for _ in 0..640 {
+            let t = s.step(&mut mv, &c, Cmd::new(B_FORWARD | B_JUMP, 270.0, 0.0));
+            started |= t.started;
+            if t.fell {
+                fell = true;
+                break;
+            }
+        }
+        assert!(started && fell, "off the pad and into the first pit");
+        assert_eq!((s.body.origin, s.phase), (m.spawn, Phase::Start));
+        // landing on the red pad stops the clock
+        s.phase = Phase::Running;
+        s.body.origin = v3(2176.0, 600.0, 200.0);
+        let mut finished = false;
+        for _ in 0..200 {
+            if s.step(&mut mv, &c, Cmd::new(0, 90.0, 0.0)).finished.is_some() {
+                finished = true;
+                break;
+            }
+        }
+        assert!(finished, "the red pad is the end");
     }
 
     #[test]

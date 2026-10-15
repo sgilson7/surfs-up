@@ -366,6 +366,9 @@ impl Peer {
             // it) and their stage come with the state
             s.name = b["n"].as_u64().map(|n| n as u16).unwrap_or(s.name);
             s.stage = b["st"].as_u64().map(|n| n as u8).unwrap_or(s.stage);
+            // and what the map's hurt triggers have left them
+            s.health = b["hp"].as_f64().map(|h| h as f32).unwrap_or(s.health);
+            s.hurt_wait = b["hw"].as_u64().map(|w| w as u16).unwrap_or(s.hurt_wait);
             match &mut self.live {
                 Some(l) => {
                     // the state is the truth: replace, but keep easing from where it was drawn
@@ -410,6 +413,7 @@ pub fn live_message(first: u64, cmds: &[Cmd], state: Option<&Surfer>) -> String 
         v["b"] = json!({
             "w": body_to_words(&s.body), "c": cmd_to(s.last_cmd),
             "ph": if s.phase == Phase::Start { 0 } else { 1 }, "n": s.name, "st": s.stage,
+            "hp": s.health, "hw": s.hurt_wait,
         });
     }
     v.to_string()
@@ -455,8 +459,11 @@ mod tests {
         let mut s = Surfer::at_start(&m);
         s.name = 7;
         s.stage = 3;
+        s.health = 50.0;
+        s.hurt_wait = 9;
         s.phase = Phase::Running;
-        let text = live_message(10, &[Cmd::new(0, 0.0, 0.0); 2], Some(&s));
+        // the state alone, before any input moves it on
+        let text = live_message(10, &[], Some(&s));
         let mut p = Peer::new("a", false);
         p.hear_live(&mut mv, &c, &serde_json::from_str(&text).unwrap(), 10)
             .unwrap();
@@ -465,6 +472,11 @@ mod tests {
             (l.confirmed.name, l.confirmed.stage),
             (7, 3),
             "kitsune's filtered teleports read the name"
+        );
+        assert_eq!(
+            (l.confirmed.health, l.confirmed.hurt_wait),
+            (50.0, 9),
+            "a surfer half way through a hurt trigger is half hurt on every screen"
         );
     }
 

@@ -333,10 +333,25 @@ pub enum Held {
     Sandcastle,
     Hourglass,
     Cactus,
+    PaperPlane,
+    Balloon,
+    Kite,
+    Beanie,
+    Eagle,
+    PetRock,
+    HardHat,
+    Crystal,
+    Crowbar,
+    Scorpion,
+    Carrot,
+    Leaf,
+    Pogo,
+    Acorn,
+    Bunny,
 }
 
 impl Held {
-    pub const ALL: [Held; 26] = [
+    pub const ALL: [Held; 41] = [
         Held::Prayer,
         Held::Noodle,
         Held::Kickball,
@@ -363,6 +378,21 @@ impl Held {
         Held::Sandcastle,
         Held::Hourglass,
         Held::Cactus,
+        Held::PaperPlane,
+        Held::Balloon,
+        Held::Kite,
+        Held::Beanie,
+        Held::Eagle,
+        Held::PetRock,
+        Held::HardHat,
+        Held::Crystal,
+        Held::Crowbar,
+        Held::Scorpion,
+        Held::Carrot,
+        Held::Leaf,
+        Held::Pogo,
+        Held::Acorn,
+        Held::Bunny,
     ];
     pub fn id(self) -> &'static str {
         match self {
@@ -392,6 +422,21 @@ impl Held {
             Held::Sandcastle => "sandcastle",
             Held::Hourglass => "hourglass",
             Held::Cactus => "cactus",
+            Held::PaperPlane => "paper_plane",
+            Held::Balloon => "balloon",
+            Held::Kite => "kite",
+            Held::Beanie => "beanie",
+            Held::Eagle => "eagle",
+            Held::PetRock => "pet_rock",
+            Held::HardHat => "hard_hat",
+            Held::Crystal => "crystal",
+            Held::Crowbar => "crowbar",
+            Held::Scorpion => "scorpion",
+            Held::Carrot => "carrot",
+            Held::Leaf => "leaf",
+            Held::Pogo => "pogo",
+            Held::Acorn => "acorn",
+            Held::Bunny => "bunny",
         }
     }
     pub fn from_id(id: &str) -> Option<Held> {
@@ -1117,6 +1162,372 @@ pub fn thing(out: &mut Vec<f32>, f: &Xf, held: Held, k: f32, m: f32) {
                 [0.98, 0.45, 0.68],
                 m,
             );
+        }
+        Held::PaperPlane => {
+            // a paper plane: a long folded keel and two swept wings
+            let paper = [0.96, 0.96, 0.94];
+            let crease = [0.80, 0.82, 0.86];
+            for side in [-1.0f32, 1.0] {
+                for i in 0..5 {
+                    let t = i as f32;
+                    cuboid(
+                        out,
+                        &sq,
+                        v3(4.0 - t * 1.6, side * (0.4 + t * 0.55), 5.0 + t * 0.05),
+                        v3(0.8, 0.3 + t * 0.55, 0.08),
+                        paper,
+                        m,
+                    );
+                }
+            }
+            bar(out, &sq, v3(4.8, 0.0, 5.0), v3(-3.6, 0.0, 3.8), 0.35, crease, m);
+            bar(out, &sq, v3(0.0, 0.0, 0.0), v3(0.0, 0.0, 4.4), 0.25, crease, m);
+        }
+        Held::Balloon => {
+            // a red balloon on a string, a little knot under it
+            let red = [0.90, 0.20, 0.22];
+            bar(
+                out,
+                &sq,
+                v3(0.0, 0.0, 0.0),
+                v3(0.4, 0.0, 7.0),
+                0.06,
+                [0.9, 0.9, 0.9],
+                m,
+            );
+            cuboid(out, &sq, v3(0.4, 0.0, 7.3), v3(0.3, 0.3, 0.3), red, m);
+            ball(out, &sq, v3(0.4, 0.0, 11.0), v3(3.0, 3.0, 3.6), red, m);
+            ball(
+                out,
+                &sq,
+                v3(1.8, 1.2, 12.4),
+                v3(0.5, 0.5, 0.7),
+                [0.98, 0.55, 0.55],
+                m,
+            );
+        }
+        Held::Kite => {
+            // a diamond kite on two cross spars, a bow-tied tail
+            let a = [0.18, 0.45, 0.85];
+            let b = [0.98, 0.78, 0.18];
+            let top = v3(0.0, 0.0, 12.0);
+            let bottom = v3(0.0, 0.0, 2.0);
+            let left = v3(0.0, 3.2, 9.0);
+            let right = v3(0.0, -3.2, 9.0);
+            for (p, q, col) in [
+                (top, left, a),
+                (left, bottom, b),
+                (bottom, right, a),
+                (right, top, b),
+            ] {
+                let mid = (p + q + v3(0.0, 0.0, 9.0)) * (1.0 / 3.0);
+                bar(out, &sq, p, mid, 0.9, col, m);
+                bar(out, &sq, q, mid, 0.9, col, m);
+            }
+            bar(out, &sq, top, bottom, 0.15, [0.55, 0.38, 0.22], m);
+            bar(out, &sq, left, right, 0.15, [0.55, 0.38, 0.22], m);
+            for i in 0..3 {
+                let z = 1.2 - i as f32 * 1.0;
+                cuboid(
+                    out,
+                    &sq,
+                    v3(0.0, 0.0, z),
+                    v3(0.1, 0.5, 0.15),
+                    [0.92, 0.22, 0.22],
+                    m,
+                );
+            }
+        }
+        Held::Beanie => {
+            // a propeller beanie: four coloured panels, a brim, a spinning prop
+            let cols = [
+                [0.90, 0.22, 0.20],
+                [0.98, 0.78, 0.18],
+                [0.20, 0.55, 0.90],
+                [0.30, 0.72, 0.36],
+            ];
+            for (i, col) in cols.iter().enumerate() {
+                let (x, y) = [(1.0f32, 1.0f32), (-1.0, 1.0), (-1.0, -1.0), (1.0, -1.0)][i];
+                ball(out, &sq, v3(x * 1.2, y * 1.2, 2.6), v3(1.8, 1.8, 2.2), *col, m);
+            }
+            cuboid(out, &sq, v3(2.8, 0.0, 1.2), v3(1.2, 2.4, 0.15), cols[0], m);
+            bar(
+                out,
+                &sq,
+                v3(0.0, 0.0, 4.6),
+                v3(0.0, 0.0, 6.0),
+                0.2,
+                [0.85, 0.85, 0.85],
+                m,
+            );
+            let prop = sq.at(v3(0.0, 0.0, 6.1)).yaw((1.0 - k) * 690.0);
+            cuboid(out, &prop, v3(0.0, 0.0, 0.0), v3(3.2, 0.4, 0.08), cols[1], m);
+        }
+        Held::Eagle => {
+            // an eagle plush: brown body and wings, white head, yellow beak and feet
+            let brown = [0.45, 0.30, 0.18];
+            let white = [0.96, 0.95, 0.92];
+            let yellow = [0.98, 0.78, 0.18];
+            ball(out, &sq, v3(0.0, 0.0, 4.4), v3(2.6, 2.4, 3.4), brown, m);
+            for side in [-1.0f32, 1.0] {
+                ball(out, &sq, v3(-0.4, side * 2.6, 4.8), v3(1.6, 0.8, 2.8), brown, m);
+                cuboid(out, &sq, v3(0.8, side * 0.9, 0.4), v3(0.6, 0.4, 0.4), yellow, m);
+                cuboid(
+                    out,
+                    &sq,
+                    v3(2.0, side * 0.75, 9.6),
+                    v3(0.15, 0.3, 0.3),
+                    [0.08, 0.08, 0.1],
+                    m,
+                );
+            }
+            ball(out, &sq, v3(0.4, 0.0, 9.2), v3(2.0, 2.0, 2.0), white, m);
+            bar(out, &sq, v3(2.0, 0.0, 9.0), v3(3.2, 0.0, 8.4), 0.5, yellow, m);
+        }
+        Held::PetRock => {
+            // a pet rock: a grey stone with googly eyes and a little blue bow
+            let grey = [0.55, 0.55, 0.58];
+            ball(out, &sq, v3(0.0, 0.0, 2.6), v3(3.4, 3.0, 2.6), grey, m);
+            ball(
+                out,
+                &sq,
+                v3(-1.0, 1.0, 3.6),
+                v3(1.6, 1.4, 1.2),
+                [0.62, 0.62, 0.65],
+                m,
+            );
+            for side in [-1.0f32, 1.0] {
+                ball(
+                    out,
+                    &sq,
+                    v3(2.9, side * 0.9, 3.6),
+                    v3(0.5, 0.7, 0.7),
+                    [0.98, 0.98, 0.98],
+                    m,
+                );
+                cuboid(
+                    out,
+                    &sq,
+                    v3(3.4, side * 0.9, 3.5),
+                    v3(0.1, 0.25, 0.25),
+                    [0.05, 0.05, 0.06],
+                    m,
+                );
+            }
+            cuboid(
+                out,
+                &sq,
+                v3(0.6, 0.0, 5.2),
+                v3(0.4, 0.9, 0.3),
+                [0.20, 0.45, 0.88],
+                m,
+            );
+        }
+        Held::HardHat => {
+            // a yellow hard hat: a dome, a ridge on top, a brim all round
+            let yellow = [0.98, 0.80, 0.12];
+            let dark = [0.86, 0.66, 0.08];
+            cuboid(out, &sq, v3(0.4, 0.0, 0.8), v3(4.2, 3.6, 0.3), dark, m);
+            ball(out, &sq, v3(0.0, 0.0, 1.0), v3(3.2, 3.0, 3.4), yellow, m);
+            cuboid(out, &sq, v3(0.0, 0.0, 4.2), v3(2.6, 0.4, 0.3), dark, m);
+            cuboid(
+                out,
+                &sq,
+                v3(3.2, 0.0, 2.0),
+                v3(0.1, 0.9, 0.6),
+                [0.96, 0.96, 0.96],
+                m,
+            );
+        }
+        Held::Crystal => {
+            // a glowing crystal cluster: a tall point and two short ones on a rock
+            let glow = [0.55, 0.95, 0.85];
+            let deep = [0.30, 0.75, 0.70];
+            ball(
+                out,
+                &sq,
+                v3(0.0, 0.0, 0.8),
+                v3(2.6, 2.4, 0.8),
+                [0.48, 0.42, 0.40],
+                m,
+            );
+            bar(out, &sq, v3(0.0, 0.0, 1.0), v3(0.0, 0.0, 9.0), 1.0, glow, m);
+            bar(out, &sq, v3(0.0, 0.0, 9.0), v3(0.0, 0.0, 11.0), 0.45, glow, m);
+            for (y, h) in [(1.6f32, 5.0f32), (-1.5, 4.0)] {
+                bar(out, &sq, v3(0.4, y * 0.6, 1.0), v3(0.6, y * 1.4, h), 0.7, deep, m);
+            }
+        }
+        Held::Crowbar => {
+            // a foam crowbar: a long orange bar, hooked and split at the top
+            let orange = [0.95, 0.45, 0.12];
+            bar(out, &sq, v3(0.0, 0.0, 0.0), v3(0.0, 0.0, 10.0), 0.45, orange, m);
+            bar(out, &sq, v3(0.0, 0.0, 10.0), v3(1.4, 0.0, 11.6), 0.45, orange, m);
+            bar(out, &sq, v3(1.4, 0.0, 11.6), v3(2.8, 0.0, 11.0), 0.45, orange, m);
+            bar(out, &sq, v3(0.0, 0.0, 0.0), v3(0.9, 0.0, -0.6), 0.45, orange, m);
+            cuboid(
+                out,
+                &sq,
+                v3(0.0, 0.0, 3.0),
+                v3(0.55, 0.55, 1.2),
+                [0.15, 0.15, 0.18],
+                m,
+            );
+        }
+        Held::Scorpion => {
+            // a scorpion plush: a sandy body, two claws forward, a curled tail
+            let body = [0.86, 0.62, 0.30];
+            let dark = [0.66, 0.44, 0.20];
+            ball(out, &sq, v3(0.0, 0.0, 1.4), v3(2.2, 1.6, 1.0), body, m);
+            for side in [-1.0f32, 1.0] {
+                bar(
+                    out,
+                    &sq,
+                    v3(1.6, side * 1.0, 1.4),
+                    v3(3.4, side * 2.2, 1.6),
+                    0.4,
+                    dark,
+                    m,
+                );
+                ball(out, &sq, v3(4.0, side * 2.4, 1.7), v3(0.9, 0.6, 0.5), body, m);
+                for x in [-1.0f32, 0.0, 1.0] {
+                    bar(
+                        out,
+                        &sq,
+                        v3(x, side * 1.2, 1.2),
+                        v3(x - 0.4, side * 2.4, 0.2),
+                        0.2,
+                        dark,
+                        m,
+                    );
+                }
+                cuboid(
+                    out,
+                    &sq,
+                    v3(2.1, side * 0.5, 1.9),
+                    v3(0.15, 0.2, 0.2),
+                    [0.05, 0.05, 0.06],
+                    m,
+                );
+            }
+            let mut prev = v3(-2.0, 0.0, 1.6);
+            for i in 1..6 {
+                let (sn, c) = sin_cos_deg(i as f64 * 31.5);
+                let p = v3(-2.2 - sn as f32 * 2.2, 0.0, 1.6 + (1.0 - c as f32) * 3.0);
+                bar(out, &sq, prev, p, 0.55 - i as f32 * 0.05, body, m);
+                prev = p;
+            }
+            ball(out, &sq, prev + v3(0.6, 0.0, 0.2), v3(0.5, 0.4, 0.5), dark, m);
+        }
+        Held::Carrot => {
+            // a toy carrot: an orange taper, ridges, green leaves on top
+            let orange = [0.96, 0.52, 0.12];
+            for i in 0..6 {
+                let t = i as f32;
+                let r = 0.4 + t * 0.32;
+                cuboid(out, &sq, v3(0.0, 0.0, 0.6 + t * 1.2), v3(r, r, 0.6), orange, m);
+            }
+            for (y, lean) in [(-0.6f32, -1.6f32), (0.0, 0.0), (0.6, 1.6)] {
+                bar(
+                    out,
+                    &sq,
+                    v3(0.0, y, 7.2),
+                    v3(0.0, y + lean, 10.4),
+                    0.3,
+                    [0.30, 0.70, 0.30],
+                    m,
+                );
+            }
+        }
+        Held::Leaf => {
+            // a big maple leaf on its stem: five lobes, red and orange
+            let red = [0.88, 0.25, 0.14];
+            let orange = [0.95, 0.52, 0.16];
+            bar(
+                out,
+                &sq,
+                v3(0.0, 0.0, 0.0),
+                v3(0.0, 0.0, 5.0),
+                0.2,
+                [0.45, 0.28, 0.16],
+                m,
+            );
+            ball(out, &sq, v3(0.0, 0.0, 7.0), v3(0.25, 2.0, 2.0), red, m);
+            for (y, z, col) in [
+                (0.0f32, 10.0f32, red),
+                (2.6, 8.4, orange),
+                (-2.6, 8.4, orange),
+                (2.0, 5.6, red),
+                (-2.0, 5.6, red),
+            ] {
+                ball(out, &sq, v3(0.0, y, z), v3(0.2, 1.3, 1.6), col, m);
+            }
+        }
+        Held::Pogo => {
+            // a pogo stick: a pole, a spring that squashes with you, foot pegs, a grip bar
+            let red = [0.88, 0.20, 0.20];
+            let steel = [0.75, 0.77, 0.80];
+            bar(
+                out,
+                &sq,
+                v3(0.0, 0.0, 0.0),
+                v3(0.0, 0.0, 2.6),
+                0.25,
+                [0.12, 0.12, 0.14],
+                m,
+            );
+            for i in 0..5 {
+                let z = 0.6 + i as f32 * 0.4 * k;
+                cuboid(out, &sq, v3(0.0, 0.0, z), v3(0.8, 0.8, 0.08), steel, m);
+            }
+            bar(out, &sq, v3(0.0, 0.0, 2.6), v3(0.0, 0.0, 11.0), 0.45, red, m);
+            cuboid(out, &sq, v3(0.0, 0.0, 3.4), v3(0.4, 1.8, 0.25), steel, m);
+            cuboid(
+                out,
+                &sq,
+                v3(0.0, 0.0, 11.0),
+                v3(0.4, 2.4, 0.35),
+                [0.12, 0.12, 0.14],
+                m,
+            );
+        }
+        Held::Acorn => {
+            // an acorn: a brown nut, a scaly cap, a stalk
+            let nut = [0.72, 0.48, 0.24];
+            let cap = [0.48, 0.32, 0.18];
+            ball(out, &sq, v3(0.0, 0.0, 3.2), v3(2.4, 2.4, 3.0), nut, m);
+            cuboid(out, &sq, v3(0.0, 0.0, 0.3), v3(0.3, 0.3, 0.3), cap, m);
+            ball(out, &sq, v3(0.0, 0.0, 6.0), v3(2.8, 2.8, 1.4), cap, m);
+            bar(out, &sq, v3(0.0, 0.0, 7.2), v3(0.6, 0.0, 8.6), 0.25, cap, m);
+            ball(
+                out,
+                &sq,
+                v3(1.6, 1.0, 4.0),
+                v3(0.5, 0.4, 0.9),
+                [0.84, 0.62, 0.36],
+                m,
+            );
+        }
+        Held::Bunny => {
+            // a bunny plush: white body and head, long ears with pink insides, a round tail
+            let white = [0.96, 0.95, 0.94];
+            let pink = [0.98, 0.62, 0.70];
+            ball(out, &sq, v3(0.0, 0.0, 3.0), v3(2.6, 2.4, 3.0), white, m);
+            ball(out, &sq, v3(0.6, 0.0, 7.4), v3(2.2, 2.2, 2.0), white, m);
+            ball(out, &sq, v3(-2.6, 0.0, 2.0), v3(0.9, 0.9, 0.9), white, m);
+            for side in [-1.0f32, 1.0] {
+                ball(out, &sq, v3(0.2, side * 1.0, 11.0), v3(0.6, 0.6, 2.4), white, m);
+                ball(out, &sq, v3(0.6, side * 1.0, 11.0), v3(0.3, 0.35, 1.8), pink, m);
+                cuboid(
+                    out,
+                    &sq,
+                    v3(2.6, side * 0.8, 7.8),
+                    v3(0.15, 0.25, 0.3),
+                    [0.05, 0.05, 0.06],
+                    m,
+                );
+                ball(out, &sq, v3(1.6, side * 1.0, 0.6), v3(1.0, 0.7, 0.5), white, m);
+            }
+            cuboid(out, &sq, v3(2.8, 0.0, 7.0), v3(0.15, 0.3, 0.2), pink, m);
         }
         Held::Mummy => {
             // a mummy plush, wrapped in strips, arms out, two eyes peeking

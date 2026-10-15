@@ -58,6 +58,9 @@ pub enum TriggerKind {
     /// Give the activator this name (a map's AddOutput targetname), which
     /// filters on other triggers test: how a map's secrets remember you.
     Rename(u16),
+    /// Source's trigger_hurt: this much damage a second, dealt half a
+    /// second's worth at a time while touched.
+    Hurt(f32),
 }
 
 /// The name a trigger's filter requires of the activator, if any.
@@ -98,6 +101,99 @@ pub fn grid_colour(hint: u8) -> Option<usize> {
     (HINT_GRID..HINT_GRID + STAGE_COLOURS)
         .contains(&hint)
         .then(|| (hint - HINT_GRID) as usize)
+}
+
+/// How deep under a displacement's surface its solid wedges reach.
+const TERRAIN_DEPTH: f64 = 4.0;
+
+/// A displacement (Source's curved terrain) as solid brushes: each triangle
+/// of its grid, split as the engine splits it (CCoreDispInfo: alternating
+/// with the vertex index), becomes a thin wedge under the surface (its top
+/// drawn, `TERRAIN_DEPTH` deep, with axial bevels), so the brush collision
+/// holds it. `face` is the base face's normal, which the top faces along.
+fn terrain_wedges(grid: &[[f64; 3]], n: usize, face: [f64; 3], out: &mut Vec<Brush>) {
+    let sub = |a: [f64; 3], b: [f64; 3]| [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+    let cross = |a: [f64; 3], b: [f64; 3]| {
+        [
+            a[1] * b[2] - a[2] * b[1],
+            a[2] * b[0] - a[0] * b[2],
+            a[0] * b[1] - a[1] * b[0],
+        ]
+    };
+    let dot = |a: [f64; 3], b: [f64; 3]| a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+    let unit = |a: [f64; 3]| {
+        let m = dot(a, a).sqrt();
+        (m > 1e-9).then(|| [a[0] / m, a[1] / m, a[2] / m])
+    };
+    let neg = |a: [f64; 3]| [-a[0], -a[1], -a[2]];
+    let side = |nrm: [f64; 3], d: f64, bevel: bool, drawn: bool, hint: u8| Side {
+        plane: Plane {
+            n: v3(nrm[0] as f32, nrm[1] as f32, nrm[2] as f32),
+            d: d as f32,
+        },
+        bevel,
+        drawn,
+        hint,
+    };
+    let mut tris = Vec::with_capacity(2 * (n - 1) * (n - 1));
+    for y in 0..n - 1 {
+        for x in 0..n - 1 {
+            let i = y * n + x;
+            if i % 2 == 1 {
+                tris.push((grid[i], grid[i + n], grid[i + 1]));
+                tris.push((grid[i + 1], grid[i + n], grid[i + n + 1]));
+            } else {
+                tris.push((grid[i], grid[i + n], grid[i + n + 1]));
+                tris.push((grid[i], grid[i + n + 1], grid[i + 1]));
+            }
+        }
+    }
+    for (a, b, c) in tris {
+        let Some(mut nrm) = unit(cross(sub(b, a), sub(c, a))) else {
+            continue;
+        };
+        if dot(nrm, face) < 0.0 {
+            nrm = neg(nrm);
+        }
+        let mut sides = vec![
+            side(nrm, dot(nrm, a), false, true, HINT_TERRAIN),
+            side(neg(nrm), -dot(nrm, a) + TERRAIN_DEPTH, false, false, 0),
+        ];
+        let centre = [0, 1, 2].map(|k| (a[k] + b[k] + c[k]) / 3.0);
+        for (p, q) in [(a, b), (b, c), (c, a)] {
+            let Some(mut en) = unit(cross(sub(q, p), nrm)) else {
+                continue;
+            };
+            if dot(en, sub(centre, p)) > 0.0 {
+                en = neg(en);
+            }
+            sides.push(side(en, dot(en, p), false, false, 0));
+        }
+        let low = [a, b, c].map(|p| [0, 1, 2].map(|k| p[k] - nrm[k] * TERRAIN_DEPTH));
+        let pts = [a, b, c, low[0], low[1], low[2]];
+        let mut lo = [f64::MAX; 3];
+        let mut hi = [f64::MIN; 3];
+        for k in 0..3 {
+            for p in &pts {
+                lo[k] = lo[k].min(p[k]);
+                hi[k] = hi[k].max(p[k]);
+            }
+            let mut ax = [0.0; 3];
+            ax[k] = 1.0;
+            sides.push(side(ax, hi[k], true, false, 0));
+            ax[k] = -1.0;
+            sides.push(side(ax, -lo[k], true, false, 0));
+        }
+        // the axial bevels are the bounds
+        let f = |p: [f64; 3]| v3(p[0] as f32, p[1] as f32, p[2] as f32);
+        out.push(Brush {
+            kind: BrushKind::Solid,
+            group: out.len() as u32,
+            sides,
+            mins: f(lo),
+            maxs: f(hi),
+        });
+    }
 }
 
 /// Edge of a broadphase cell in units.
@@ -246,8 +342,8 @@ impl Map {
             return Err("not a Surfs Up! map".into());
         }
         let version = r.u32()?;
-        if version != 2 {
-            return Err(format!("map version {version} is not 2"));
+        if version != 2 && version != 3 {
+            return Err(format!("map version {version} is not 2 or 3"));
         }
         let nb = r.u32()? as usize;
         let mut brushes = Vec::with_capacity(nb);
@@ -308,6 +404,7 @@ impl Map {
                     let (f, _, _) = crate::vec3::angle_vectors(pitch, yaw);
                     TriggerKind::Push(f, speed)
                 }
+                3 => TriggerKind::Hurt(speed),
                 _ => TriggerKind::Rename(a),
             };
             triggers.push(Trigger {
@@ -324,6 +421,22 @@ impl Map {
             let name = r.u16()?;
             let p = v3(r.f32()?, r.f32()?, r.f32()?);
             destinations.push((name, p, r.f32()?));
+        }
+        if version >= 3 {
+            let nt = r.u32()? as usize;
+            for _ in 0..nt {
+                let power = r.u8()? as u32;
+                if !(1..=4).contains(&power) {
+                    return Err(format!("a displacement of power {power}"));
+                }
+                let face = [r.f32()? as f64, r.f32()? as f64, r.f32()? as f64];
+                let n = (1usize << power) + 1;
+                let mut grid = Vec::with_capacity(n * n);
+                for _ in 0..n * n {
+                    grid.push([r.f32()? as f64, r.f32()? as f64, r.f32()? as f64]);
+                }
+                terrain_wedges(&grid, n, face, &mut brushes);
+            }
         }
         let mut map = Map::build(brushes, triggers, names, destinations);
         if let Some((p, yaw)) = map.destination_named("start") {
