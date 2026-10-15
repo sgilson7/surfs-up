@@ -112,7 +112,11 @@ export function makeScreens(copy) {
       t.dataset.group = g;
       t.setAttribute("role", "tab");
       t.setAttribute("aria-selected", String(g === tab));
-      t.textContent = copy["tab_" + g];
+      // the tab carries the coloured tier mark its cards no longer repeat
+      const mark = document.createElement("span");
+      mark.className = "tier " + s.tab_shades[g];
+      mark.textContent = copy["tab_" + g];
+      t.append(mark);
       t.addEventListener("click", () => {
         tab = g;
         maps(latest, onPick);
@@ -149,22 +153,28 @@ export function makeScreens(copy) {
       icon.alt = "";
       const name = document.createElement("strong");
       name.textContent = m.name;
-      const tier = document.createElement("span");
-      tier.className = "tier " + m.band;
-      tier.textContent = fill(copy["course_tier_" + m.mode], { tier: m.tier });
-      const band = document.createElement("span");
-      band.className = "band";
-      band.textContent = copy["band_" + m.band];
+      // the tier only where the tab holds several; a word only for the hard ones
+      const rank = document.createElement("span");
+      rank.className = "rank";
+      if (m.tier_shown) {
+        const tier = document.createElement("span");
+        tier.className = "tier " + m.shade;
+        tier.textContent = fill(copy["course_tier_" + m.mode], { tier: m.tier });
+        rank.append(tier);
+      }
+      if (copy["band_" + m.band]) {
+        const band = document.createElement("span");
+        band.className = "band";
+        band.textContent = copy["band_" + m.band];
+        rank.append(band);
+      }
       const by = document.createElement("span");
       by.textContent = fill(copy.course_by, { author: m.author });
       const best = document.createElement("span");
       best.textContent = m.best ? fill(copy.course_best, { time: m.best }) : copy.course_none;
-      const rank = document.createElement("span");
-      rank.className = "rank";
-      rank.append(tier, band);
       const text = document.createElement("span");
       text.className = "text";
-      text.append(name, rank, by, best);
+      text.append(name, ...(rank.childElementCount ? [rank] : []), by, best);
       b.append(icon, text);
       b.addEventListener("click", () => onPick(m.id));
       box.append(b);

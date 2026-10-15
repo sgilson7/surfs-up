@@ -12,8 +12,11 @@ saved_best.json, a real recording), which it sends once to each newcomer:
 every joiner must show it on the scoreboard. Then one joiner walks off the
 ledge, and every other browser must draw them (a name tag) and see them move.
 
-Then, for every other course, two browsers choose it and meet; one watches
-the other (V) while the other walks off the start, and must see their speed.
+Then, for every other course, a room of four: the host chooses it, and the
+three joiners, still on the first course from the title, must follow the host
+there; all four see four in the gym, and the host watches one joiner (V) walk
+off the start and must see their speed. Every course in the first engine;
+the other engines, whose transport differs but not their courses, one.
 
 It fails on: a joiner never connecting, a browser not seeing all eight, the
 run not reaching every joiner, a live surfer not moving on the others'
@@ -38,8 +41,10 @@ COPY = json.loads((ROOT / "data" / "copy.json").read_text())
 SAVED = (ROOT / "tests" / "browser" / "fixtures" / "saved_best.json").read_text()
 PEOPLE = int(os.environ.get("SURF_PEOPLE", "8"))
 MAPS = json.loads((ROOT / "data" / "maps" / "maps.json").read_text())
-# the eight-browser room surfs the first course; every other one gets a pair
-OTHER_COURSES = [m["id"] for m in MAPS["maps"][1:]]
+# the eight-browser room surfs the first course; every other one gets a room
+# of four, whose joiners start on the first course and follow the host
+OTHER_COURSES = [m["id"] for m in MAPS["maps"][1:] if not os.environ.get("SURF_COURSES") or m["id"] in os.environ["SURF_COURSES"].split(",")]
+ROOM = 4
 failures = []
 
 
@@ -199,9 +204,11 @@ def run(p, engine, origin):
     browser.close()
 
 
-def course_pair(p, engine, origin, course):
-    """Two browsers on one course: they meet, one walks, the other sees it."""
-    print(f"\n[{engine}] online on {course}")
+def course_room(p, engine, origin, course):
+    """Four browsers on one course, chosen by the host alone: the three
+    joiners come from the title as it opens (on the first course) and must
+    follow the host onto theirs. They meet, one walks, the host sees it."""
+    print(f"\n[{engine}] online on {course}, {ROOM} browsers")
     options = {
         "chromium": {"args": ["--disable-features=WebRtcHideLocalIpsWithMdns"]},
         "firefox": {"firefox_user_prefs": {"media.peerconnection.ice.obfuscate_host_addresses": False}},
@@ -216,26 +223,29 @@ def course_pair(p, engine, origin, course):
         page.goto(origin + "/index.html?ice=none")
         page.wait_for_selector("body[data-ready='true']", state="attached", timeout=30000)
         page.fill("#name", name)
-        # try the tabs in turn until the card shows (a redraw as a tab is
-        # pressed, on a slow machine, can take the press away)
-        card = f"#maps .map-card[data-map='{course}']"
-        tabs = page.locator("#map-tabs .map-tab")
-        for k in range(200):
-            if page.locator(card).count():
-                break
-            n = tabs.count()
-            if n:
-                tabs.nth(k % n).click()
-            page.wait_for_timeout(100)
-        page.click(card)
-        for _ in range(300):
-            if course in page.inner_text("#map-name"):
-                break
-            page.wait_for_timeout(100)
-        check(course in page.inner_text("#map-name"), f"{name} chose {course}")
         return page
 
+    def on_course(page):
+        return course in (page.text_content("#map-name") or "")
+
     host = open_page("Hana")
+    # try the tabs in turn until the card shows (a redraw as a tab is
+    # pressed, on a slow machine, can take the press away)
+    card = f"#maps .map-card[data-map='{course}']"
+    tabs = host.locator("#map-tabs .map-tab")
+    for k in range(200):
+        if host.locator(card).count():
+            break
+        n = tabs.count()
+        if n:
+            tabs.nth(k % n).click()
+        host.wait_for_timeout(100)
+    host.click(card)
+    for _ in range(300):
+        if on_course(host):
+            break
+        host.wait_for_timeout(100)
+    check(on_course(host), f"the host chose {course}")
     host.click("#t-play")
     host.keyboard.press("Escape")
     host.wait_for_selector("body[data-mode='pause']", state="attached")
@@ -244,26 +254,45 @@ def course_pair(p, engine, origin, course):
         if host.input_value("#inv-offer"):
             break
         host.wait_for_timeout(100)
-    j = open_page("J1")
-    j.click("#t-join")
-    j.click("#join-paste summary")
-    j.fill("#j-offer", host.input_value("#inv-offer"))
-    j.click("#j-make")
-    for _ in range(100):
-        if j.input_value("#j-reply"):
-            break
-        j.wait_for_timeout(100)
-    host.fill("#inv-reply", j.input_value("#j-reply"))
-    host.click("#inv-accept")
-    j.click("#join .close")
-    j.click("#t-play")
+    joiners = []
+    for i in range(1, ROOM):
+        j = open_page(f"J{i}")
+        j.click("#t-join")
+        j.click("#join-paste summary")
+        j.fill("#j-offer", host.input_value("#inv-offer"))
+        j.click("#j-make")
+        for _ in range(100):
+            if j.input_value("#j-reply"):
+                break
+            j.wait_for_timeout(100)
+        host.fill("#inv-reply", j.input_value("#j-reply"))
+        host.click("#inv-accept")
+        j.click("#join .close")
+        j.click("#t-play")
+        joiners.append(j)
+        want = COPY["hud_people"].replace("{n}", str(i + 1))
+        for _ in range(150):
+            if host.inner_text("#h-people") == want:
+                break
+            host.wait_for_timeout(100)
+        if i < ROOM - 1:
+            before = host.input_value("#inv-offer")
+            host.click("#inv-new")
+            for _ in range(100):
+                if host.input_value("#inv-offer") and host.input_value("#inv-offer") != before:
+                    break
+                host.wait_for_timeout(100)
     host.evaluate("document.getElementById('p-resume').click()")
-    both = COPY["hud_people"].replace("{n}", "2")
-    for _ in range(200):
-        if host.inner_text("#h-people") == both and j.inner_text("#h-people") == both:
+    pages = [host] + joiners
+    everyone = COPY["hud_people"].replace("{n}", str(ROOM))
+    for _ in range(300):
+        if all(pg.inner_text("#h-people") == everyone and on_course(pg) for pg in pages):
             break
         host.wait_for_timeout(100)
-    check(host.inner_text("#h-people") == both and j.inner_text("#h-people") == both, f"{course}: both browsers see two in the gym")
+    for i, j in enumerate(joiners, 1):
+        check(on_course(j), f"{course}: J{i} followed the host there ({j.text_content('#map-name')!r})")
+    for i, pg in enumerate(pages):
+        check(pg.inner_text("#h-people") == everyone, f"{course}: browser {i} sees all {ROOM} ({pg.inner_text('#h-people')})")
 
     # the host watches J1 (V) and J1 walks off the start: the host's display
     # shows J1's name and J1's speed, which only J1's live inputs can give.
@@ -273,15 +302,20 @@ def course_pair(p, engine, origin, course):
     if host.is_visible("#pause"):
         host.evaluate("document.getElementById('p-resume').click()")
     # (J1's first exact state reaches the host within half a second or so;
-    # until then there is nobody to watch, so try again)
+    # until then there is nobody to watch, so try again; V moves on to the
+    # next surfer each press)
     text = ""
-    for _ in range(40):
+    for _ in range(60):
         host.keyboard.press("KeyV")
         host.wait_for_timeout(250)
         text = host.inner_text("#h-watch") if host.is_visible("#h-watch") else ""
         if "J1" in text:
             break
+        if text:
+            host.keyboard.press("Space")
+            host.wait_for_timeout(100)
     check("J1" in text, f"{course}: the host watches J1 ({text!r})")
+    j = joiners[0]
     j.bring_to_front()
     if j.is_visible("#pause"):
         j.evaluate("document.getElementById('p-resume').click()")
@@ -304,10 +338,12 @@ def main():
     srv = serve()
     origin = f"http://127.0.0.1:{srv.server_address[1]}"
     with sync_playwright() as p:
-        for e in engines:
+        for k, e in enumerate(engines):
             run(p, e, origin)
-            for course in OTHER_COURSES:
-                course_pair(p, e, origin, course)
+            # every course in the first engine; the others (whose transport,
+            # not course, differs) one room of four, on the last course
+            for course in OTHER_COURSES if k == 0 else OTHER_COURSES[-1:]:
+                course_room(p, e, origin, course)
     srv.shutdown()
     if failures:
         print(f"\nONLINE CHECK FAILED: {len(failures)} problem(s)")

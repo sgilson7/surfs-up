@@ -116,8 +116,12 @@ def run(page, check, engine):
         check(icons, f"every {name} card has its TikZ icon")
     total = sum(len(v) for v in seen.values())
     check(total == COURSES, f"{COURSES} courses across the tabs ({total})")
-    check(all("Tier 1" in c for c in seen["Tier 1"]) and all("Tier 2" in c for c in seen["Tier 2"]), "each tier tab holds its tier")
-    check(all("Bhop" in c for c in seen["Bhop"]), "the bhop tab holds the bhop courses")
+    marks = page.locator("#map-tabs .map-tab .tier").count()
+    check(marks == len(tabs), f"every tab carries its coloured tier mark ({marks})")
+    plain = seen["Tier 1"] + seen["Tier 2"]
+    check(plain and not any("Tier" in c for c in plain), "a tier tab's cards leave the tier to the tab")
+    check(not any("Good for beginners" in c for v in seen.values() for c in v), "no card says it is good for beginners")
+    check(all("Tier" in c for c in seen["Advanced"] + seen["Bhop"]), "the advanced and bhop cards show their own tiers")
     anubis = [c for c in seen["Advanced"] if "surf_anubis" in c]
     check(anubis and "Experts only" in anubis[0], "anubis is under Advanced and warns that it is for experts")
     # a name typed just before choosing: leaving the box redraws the menus,

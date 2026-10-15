@@ -190,10 +190,39 @@ impl Listed {
             _ => "advanced",
         }
     }
+
+    /// The colour its tier is marked in, easiest to hardest.
+    pub fn shade(&self) -> &'static str {
+        match self.tier {
+            0 => "unranked",
+            1 => "t1",
+            2 => "t2",
+            3..=4 => "t3",
+            5..=6 => "t5",
+            _ => "t7",
+        }
+    }
+
+    /// Whether its card shows its tier: not under a tab that names one
+    /// (tier 1, tier 2), only where the tab holds several (advanced, bhop).
+    pub fn tier_on_card(&self) -> bool {
+        !matches!(self.group(), "tier1" | "tier2")
+    }
 }
 
 /// The title's tabs, in the order shown.
 pub const GROUPS: [&str; 4] = ["tier1", "tier2", "advanced", "bhop"];
+
+/// The colour a tab's tier mark is in: its tier's, the middle of the
+/// harder ones for advanced, and bhop's own.
+pub fn group_shade(group: &str) -> &'static str {
+    match group {
+        "tier1" => "t1",
+        "tier2" => "t2",
+        "advanced" => "t5",
+        _ => "bhop",
+    }
+}
 
 /// Every course listed in maps.json, in its order.
 pub fn listed(maps_json: &str) -> Result<Vec<Listed>, String> {
@@ -445,6 +474,26 @@ pub mod tests {
         assert!(
             l.iter().all(|m| GROUPS.contains(&m.group())),
             "every course is under a tab"
+        );
+        let shown = |id: &str| l.iter().find(|m| m.id == id).unwrap().tier_on_card();
+        assert!(
+            !shown("surf_utopia") && !shown("surf_sandtrap"),
+            "the tab says the tier"
+        );
+        assert!(
+            shown("surf_anubis") && shown("bhop_japan"),
+            "a tab of several tiers leaves it on the card"
+        );
+        let shade = |id: &str| l.iter().find(|m| m.id == id).unwrap().shade();
+        assert_eq!(
+            (shade("surf_utopia"), shade("surf_anubis")),
+            ("t1", "t7"),
+            "green to red"
+        );
+        assert_eq!(
+            group_shade("tier1"),
+            shade("surf_utopia"),
+            "a tier tab is its tier's colour"
         );
     }
 }

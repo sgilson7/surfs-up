@@ -91,6 +91,12 @@ async function start() {
             return bytes;
           });
     loadingPromise = got.then((bytes) => {
+      // the course wanted changed while this one came (a room's host is
+      // on another): fetch that one instead
+      if (game.map_wanted() !== want) {
+        loading = null;
+        return ensureMap();
+      }
       game.load_map(want, bytes);
       renderer.setWorld(game.world_vertices(), game.world_counts());
       loading = null;
@@ -356,6 +362,8 @@ async function start() {
       }
     }
     online.pump();
+    // the core can want another course without a click (a room follows its host)
+    if (!loading && game.map_wanted() !== game.map_loaded()) ensureMap();
     frames += 1;
     if (frames >= display.save_every) {
       frames = 0;

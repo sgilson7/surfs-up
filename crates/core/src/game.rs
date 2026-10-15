@@ -932,7 +932,9 @@ impl Game {
         let mut ghosts_changed = false;
         let mut full = false;
         let mut newcomer_best: Option<u32> = None;
+        let mut host_course: Option<String> = None;
         if let Some(room) = &mut self.room {
+            let joined = !room.host;
             if let Some(p) = room.peers.iter_mut().find(|p| p.id == id) {
                 match v["t"].as_str().unwrap_or("") {
                     "hi" => {
@@ -946,6 +948,10 @@ impl Game {
                         let m: String = v["m"].as_str().unwrap_or("").chars().take(40).collect();
                         if m != p.map {
                             p.live = None;
+                        }
+                        // the room surfs the host's course: a joiner follows it
+                        if joined && p.host && !m.is_empty() {
+                            host_course = Some(m.clone());
                         }
                         p.map = m;
                     }
@@ -981,6 +987,16 @@ impl Game {
             }
         }
         self.scratch = mv.scratch;
+        if let Some(m) = host_course {
+            if m != self.wanted && self.choose_map(&m) {
+                let name = course::listed(&self.maps_json)
+                    .ok()
+                    .and_then(|l| l.into_iter().find(|c| c.id == m))
+                    .map(|c| c.name)
+                    .unwrap_or_default();
+                self.show_banner("banner_follow_host", json!({ "course": name }));
+            }
+        }
         if ghosts_changed {
             self.rebuild_ghosts();
             if let Some(t) = newcomer_best {
@@ -1352,6 +1368,7 @@ impl Game {
                     .map(|r| format_time(r.ticks));
                 json!({"id": m.id, "name": m.name, "author": m.author, "best": best,
                     "tier": m.tier, "band": m.band(), "mode": m.mode, "group": m.group(),
+                    "tier_shown": m.tier_on_card(), "shade": m.shade(),
                     "chosen": m.id == self.wanted, "loaded": m.id == self.loaded})
             })
             .collect();
@@ -1366,6 +1383,7 @@ impl Game {
             "mode": mode,
             "maps": maps,
             "map_groups": groups,
+            "tab_shades": groups.iter().map(|g| (g.to_string(), json!(course::group_shade(g)))).collect::<serde_json::Map<_, _>>(),
             "map": self.loaded,
             "map_name": self.course.name,
             "room": self.room.as_ref().map(|r| r.code.clone()),
@@ -1987,6 +2005,159 @@ mod tests {
                 g.step(&mut mv, &b.course);
             }
             assert_eq!(g.surfer.body.origin, end, "{id}: the run replays to the bit");
+        }
+    }
+
+    /// Where a running clock stops on the loaded course: the first trigger
+    /// (or the timer's finish box) that finishes a run for a surfer in it.
+    fn finish_spot(g: &Game) -> V3 {
+        let mut mv = Mover::new(&g.map);
+        let mut spots: Vec<V3> = g
+            .course
+            .finish_zone
+            .iter()
+            .map(|z| (z.mins + z.maxs) * 0.5)
+            .collect();
+        spots.extend(g.map.triggers.iter().map(|t| (t.mins + t.maxs) * 0.5));
+        let finishes = |p: &V3| {
+            let mut s = Surfer::from_body(Body::at(*p), Cmd::new(0, 0.0, 0.0));
+            s.step(&mut mv, &g.course, Cmd::new(0, 0.0, 0.0))
+                .finished
+                .is_some()
+        };
+        spots
+            .into_iter()
+            .find(finishes)
+            .unwrap_or_else(|| panic!("{}: somewhere that finishes a run", g.loaded))
+    }
+
+    /// Every message each game has left for the others, handed on (to
+    /// one, or to everyone else), until nobody has anything left to say.
+    fn deliver(gs: &mut [Game], ids: &[&str]) {
+        loop {
+            let mut any = false;
+            for from in 0..gs.len() {
+                let out: Value = serde_json::from_str(&gs[from].net_outbox()).unwrap();
+                for m in out.as_array().unwrap() {
+                    any = true;
+                    let text = m[1].as_str().unwrap();
+                    for to in 0..gs.len() {
+                        let named = m[0].as_str().map(|n| n == ids[to]).unwrap_or(true);
+                        if to != from && named {
+                            gs[to].net_message(ids[from], text);
+                        }
+                    }
+                }
+            }
+            if !any {
+                return;
+            }
+        }
+    }
+
+    /// The room surfs the host's course: on every course, three joiners who
+    /// come from the title on another course (utopia, the first) follow the
+    /// host onto theirs, all four see each other surf it, and each in turn
+    /// reaches its finish with the clock running and every other runner gets
+    /// the run (a friend who joined always landed on utopia, alone).
+    #[test]
+    fn four_runners_meet_on_the_hosts_course_and_each_finishes_it() {
+        let ids = ["h", "j1", "j2", "j3"];
+        for course::Listed { id, .. } in course::listed(MAPS).unwrap() {
+            let mut gs: Vec<Game> = (0..ids.len()).map(|_| game()).collect();
+            assert!(gs[0].choose_map(&id));
+            gs[0].load_map(&id, map_bytes(&id)).unwrap();
+            let code = gs[0].host_online(42.0);
+            for (k, g) in gs.iter_mut().enumerate() {
+                g.set_name(ids[k]);
+                if k > 0 {
+                    assert!(g.join_online(&code));
+                }
+                g.play();
+            }
+            // the mesh introduces everyone to everyone, the host as the host
+            for (a, g) in gs.iter_mut().enumerate() {
+                for (b, other) in ids.iter().enumerate() {
+                    if a != b {
+                        g.net_peer(other, b == 0);
+                    }
+                }
+            }
+            let mut t = 0.0;
+            for i in 0..640u32 {
+                t += 1000.0 / 64.0;
+                for (k, g) in gs.iter_mut().enumerate() {
+                    // the page fetches whichever course the core wants
+                    if g.map_wanted() != g.map_loaded() {
+                        let w = g.map_wanted();
+                        g.load_map(&w, map_bytes(&w)).unwrap();
+                    }
+                    // the joiners wander: forward, turning, a jump now and then
+                    let phase = (i / 40 + k as u32) % 4;
+                    let keys = match (k, phase) {
+                        (0, _) => 0,
+                        (_, 0) => B_FORWARD | if i % 70 == 0 { B_JUMP } else { 0 },
+                        (_, 1) => B_LEFT,
+                        (_, 2) => B_FORWARD,
+                        _ => B_RIGHT,
+                    } as u32;
+                    let dx = if k > 0 && phase % 2 == 1 { 4.0 } else { 0.0 };
+                    g.advance(t, keys, dx, 0.0);
+                }
+                deliver(&mut gs, &ids);
+            }
+            for (k, g) in gs.iter().enumerate() {
+                assert_eq!(g.map_loaded(), id, "{id}: {} surfs the host's course", ids[k]);
+                let peers = &g.room.as_ref().unwrap().peers;
+                assert_eq!(
+                    peers.len(),
+                    ids.len() - 1,
+                    "{id}: {} meets the other three",
+                    ids[k]
+                );
+                for p in peers {
+                    assert!(
+                        p.map == id && p.live.is_some(),
+                        "{id}: {} sees {} surfing there",
+                        ids[k],
+                        p.id
+                    );
+                }
+            }
+            // each in turn, the clock running, reaches the finish
+            let spot = finish_spot(&gs[0]);
+            for k in 0..ids.len() {
+                let g = &mut gs[k];
+                if g.me.phase != Phase::Running {
+                    g.me.phase = Phase::Running;
+                    g.recording = Some((g.me.clone(), Vec::new()));
+                }
+                g.me.body = Body::at(spot);
+                t += 1000.0 / 64.0;
+                g.advance(t, 0, 0.0, 0.0);
+                assert!(
+                    g.bests.iter().any(|r| r.map == id),
+                    "{id}: {} finishes the course",
+                    ids[k]
+                );
+                deliver(&mut gs, &ids);
+                for (o, other) in gs.iter().enumerate().filter(|(o, _)| *o != k) {
+                    let p = other
+                        .room
+                        .as_ref()
+                        .unwrap()
+                        .peers
+                        .iter()
+                        .find(|p| p.id == ids[k])
+                        .unwrap();
+                    assert!(
+                        p.bests.iter().any(|r| r.map == id),
+                        "{id}: {} gets {}'s finished run",
+                        ids[o],
+                        ids[k]
+                    );
+                }
+            }
         }
     }
 

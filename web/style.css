@@ -99,20 +99,24 @@ input {
 .tagline { color: var(--muted); margin: 0 0 1rem; }
 .maps { display: flex; gap: 0.6rem; justify-content: center; margin-bottom: 1rem; flex-wrap: wrap; }
 .map-tabs { display: flex; gap: 0.3rem; justify-content: center; margin-bottom: 0.6rem; flex-wrap: wrap; }
-.map-tab { padding: 0.3rem 0.8rem; font-size: 0.9rem; border-radius: 999px; }
-.map-tab.open { border-color: var(--accent); background: var(--accent); color: var(--accent-ink); }
+.map-tab { padding: 0.2rem; font-size: 0.9rem; border-radius: 999px; opacity: 0.7; }
+.map-tab:hover { opacity: 1; }
+.map-tab.open { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); opacity: 1; }
 .map-icon { width: 52px; height: 52px; flex: none; }
 .map-card { display: flex; flex-direction: row; align-items: center; gap: 0.6rem; width: 13.2rem; padding: 0.45rem 0.6rem; text-align: left; }
 .map-card .text { display: flex; flex-direction: column; align-items: flex-start; gap: 0.05rem; min-width: 0; }
 .map-card .rank { display: flex; align-items: center; gap: 0.35rem; flex-wrap: wrap; }
 .map-card strong { color: var(--ink); font-size: 0.98rem; overflow-wrap: anywhere; }
 .map-card span { color: var(--muted); font-size: 0.75rem; }
-.map-card .tier { font-weight: 700; font-size: 0.72rem; color: #10141c; border-radius: 0.6rem; padding: 0.05rem 0.55rem; }
-.map-card .tier.easy { background: #6fd38a; }
-.map-card .tier.medium { background: #ffd23f; }
-.map-card .tier.hard { background: #ff9d4d; }
-.map-card .tier.expert { background: #ff6b6b; }
-.map-card .tier.unranked { background: #c9ced8; }
+.tier { font-weight: 700; font-size: 0.72rem; color: #10141c; border-radius: 0.6rem; padding: 0.05rem 0.55rem; background: #c9ced8; }
+.tier.t1 { background: #6fd38a; }
+.tier.t2 { background: #b9e35a; }
+.tier.t3 { background: #ffd23f; }
+.tier.t5 { background: #ff9d4d; }
+.tier.t7 { background: #ff6b6b; }
+.tier.bhop { background: #7cc4ff; }
+.map-tab .tier { font-size: 0.85rem; padding: 0.1rem 0.7rem; }
+.map-card .tier { color: #10141c; }
 .map-card .band { font-size: 0.68rem; }
 .map-card.chosen { border-color: var(--accent); background: rgba(255, 207, 63, 0.16); }
 .name-row { display: flex; gap: 0.6rem; align-items: center; justify-content: center; margin-bottom: 1rem; }
