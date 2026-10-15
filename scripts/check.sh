@@ -38,6 +38,6 @@ step "7/8 browser check (tests/browser/check.py)"
 "$PY" tests/browser/check.py
 
 step "8/8 online: eight browsers in one room, by pasted codes (tests/browser/online.py)"
-"$PY" tests/browser/online.py ${BUILDER_ENGINES:-chromium firefox webkit}
+"$PY" -u tests/browser/online.py ${BUILDER_ENGINES:-chromium firefox webkit}
 
 printf '\n\033[1mBUILDER CHECK PASSED\033[0m\n'
