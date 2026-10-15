@@ -1,5 +1,5 @@
 {
- "_about": "The courses, and what each teleport means for a run, which a BSP does not say (a timer plugin's zones do, on a server). The core reads this file and holds every rule in it. `spawn` is the teleport destination you start at. `start_zone` is the box [min, max] the clock waits in; leaving it starts the clock. `roles` are tried in order for each teleport touched: `target` is the destination's name, `box` (optional) limits the rule to triggers whose centre is inside it; a `finish` stops the clock, an `exit` ends the run with no time, a `restart` sends you to the spawn and stops the clock, and `move` (the default for any target not listed) teleports you and keeps the clock running, as a stage's fall or its door to the next stage does. `finish_zone` (optional) is a box the clock stops in, for a map whose end is a timer zone rather than a teleport. `stages` names the destination each stage starts at, in order. `fall_damage` (default false) is Source's fatal fall: a landing out of water at 1024 u/s or faster sends you to the start, for a map with plain ground under its ramps. `tier` is the course's difficulty as surf servers rank it (1 the easiest), with the server lists it comes from in `tier_source`; `mode` is surf (the default) or bhop. Medal times are seconds, and provisional until people have surfed the course. `things` is the course's set of things to hold, earned on that course only: the first for finishing it, then bronze, silver and gold times, and the last for the best time in the gym.",
+ "_about": "The courses, and what each teleport means for a run, which a BSP does not say (a timer plugin's zones do, on a server). The core reads this file and holds every rule in it. `spawn` is the teleport destination you start at. `start_zone` is the box [min, max] the clock waits in; leaving it starts the clock. `roles` are tried in order for each teleport touched: `target` is the destination's name, `box` (optional) limits the rule to triggers whose centre is inside it; a `finish` stops the clock, an `exit` ends the run with no time, a `restart` sends you to the spawn and stops the clock, and `move` (the default for any target not listed) teleports you and keeps the clock running, as a stage's fall or its door to the next stage does. `finish_zone` (optional) is a box the clock stops in, for a map whose end is a timer zone rather than a teleport. `stages` names the destination each stage starts at, in order. `stage_zones` (optional) are boxes, each beginning the stage that starts at its `target` when entered with the clock running: a bhop course's levels are walked into, not reached by a door's teleport. `fall_damage` (default false) is Source's fatal fall: a landing out of water at 1024 u/s or faster sends you to the start, for a map with plain ground under its ramps. `tier` is the course's difficulty as surf servers rank it (1 the easiest), with the server lists it comes from in `tier_source`; `mode` is surf (the default) or bhop. Medal times are seconds, and provisional until people have surfed the course. `things` is the course's set of things to hold, earned on that course only: the first for finishing it, then bronze, silver and gold times, and the last for the best time in the gym.",
  "maps": [
   {
    "id": "surf_utopia",
@@ -690,7 +690,15 @@
      "role": "restart"
     }
    ],
-   "stages": [],
+   "stages": [
+    "tp1",
+    "ayy",
+    "tplol",
+    "tp2",
+    "tp3",
+    "liff",
+    "laff"
+   ],
    "medals": {
     "record": 18,
     "gold": 22,
@@ -703,6 +711,98 @@
     "pogo",
     "acorn",
     "bunny"
+   ],
+   "stage_zones": [
+    {
+     "target": "ayy",
+     "box": [
+      [
+       -1344,
+       -1984,
+       64
+      ],
+      [
+       -192,
+       -1472,
+       192
+      ]
+     ]
+    },
+    {
+     "target": "tplol",
+     "box": [
+      [
+       -1344,
+       -4096,
+       64
+      ],
+      [
+       -192,
+       -3584,
+       192
+      ]
+     ]
+    },
+    {
+     "target": "tp2",
+     "box": [
+      [
+       -1104,
+       -8000,
+       64
+      ],
+      [
+       -192,
+       -6976,
+       192
+      ]
+     ]
+    },
+    {
+     "target": "tp3",
+     "box": [
+      [
+       1600,
+       -7757,
+       64
+      ],
+      [
+       2711,
+       -6976,
+       192
+      ]
+     ]
+    },
+    {
+     "target": "liff",
+     "box": [
+      [
+       1600,
+       -4032,
+       64
+      ],
+      [
+       2752,
+       -3520,
+       192
+      ]
+     ]
+    },
+    {
+     "target": "laff",
+     "box": [
+      [
+       1600,
+       -1984,
+       64
+      ],
+      [
+       2752,
+       -1472,
+       192
+      ]
+     ]
+    }
    ]
   },
   {
@@ -748,7 +848,12 @@
      "ending": 1
     }
    ],
-   "stages": [],
+   "stages": [
+    "t11",
+    "t1111",
+    "t1717",
+    "t2121"
+   ],
    "medals": {
     "record": 40,
     "gold": 50,
@@ -805,7 +910,15 @@
      "role": "restart"
     }
    ],
-   "stages": [],
+   "stages": [
+    "1a",
+    "2a",
+    "3a",
+    "4a",
+    "5a",
+    "6a",
+    "7a"
+   ],
    "medals": {
     "record": 75,
     "gold": 95,
@@ -818,6 +931,98 @@
     "toy_car",
     "toy_dino",
     "toy_crown"
+   ],
+   "stage_zones": [
+    {
+     "target": "2a",
+     "box": [
+      [
+       640,
+       -1856,
+       304
+      ],
+      [
+       912,
+       -1600,
+       432
+      ]
+     ]
+    },
+    {
+     "target": "3a",
+     "box": [
+      [
+       -304,
+       -2816,
+       576
+      ],
+      [
+       32,
+       -2752,
+       704
+      ]
+     ]
+    },
+    {
+     "target": "4a",
+     "box": [
+      [
+       -880,
+       -4816,
+       576
+      ],
+      [
+       -672,
+       -4608,
+       704
+      ]
+     ]
+    },
+    {
+     "target": "5a",
+     "box": [
+      [
+       -2112,
+       -10272,
+       448
+      ],
+      [
+       -1952,
+       -10128,
+       576
+      ]
+     ]
+    },
+    {
+     "target": "6a",
+     "box": [
+      [
+       -3888,
+       -9520,
+       384
+      ],
+      [
+       -3680,
+       -9376,
+       512
+      ]
+     ]
+    },
+    {
+     "target": "7a",
+     "box": [
+      [
+       -3200,
+       -12768,
+       -2240
+      ],
+      [
+       -3120,
+       -11936,
+       -2112
+      ]
+     ]
+    }
    ]
   },
   {
@@ -853,7 +1058,14 @@
     ]
    ],
    "roles": [],
-   "stages": [],
+   "stages": [
+    "spawn",
+    "tele_dest_12",
+    "tele_dest_18",
+    "tele_dest_23",
+    "tele_dest_27",
+    "tele_dest_29"
+   ],
    "medals": {
     "record": 75,
     "gold": 90,
@@ -866,6 +1078,83 @@
     "daruma",
     "bonsai",
     "paper_crane"
+   ],
+   "stage_zones": [
+    {
+     "target": "tele_dest_12",
+     "box": [
+      [
+       -3744,
+       -1120,
+       226
+      ],
+      [
+       -3488,
+       -864,
+       354
+      ]
+     ]
+    },
+    {
+     "target": "tele_dest_18",
+     "box": [
+      [
+       -7264,
+       2656,
+       128
+      ],
+      [
+       -6752,
+       2784,
+       256
+      ]
+     ]
+    },
+    {
+     "target": "tele_dest_23",
+     "box": [
+      [
+       -7968,
+       2480,
+       544
+      ],
+      [
+       -7712,
+       2736,
+       672
+      ]
+     ]
+    },
+    {
+     "target": "tele_dest_27",
+     "box": [
+      [
+       -408,
+       4266,
+       650
+      ],
+      [
+       -241,
+       4446,
+       778
+      ]
+     ]
+    },
+    {
+     "target": "tele_dest_29",
+     "box": [
+      [
+       4928,
+       -640,
+       480
+      ],
+      [
+       5504,
+       -400,
+       608
+      ]
+     ]
+    }
    ]
   },
   {
@@ -899,7 +1188,14 @@
      "role": "restart"
     }
    ],
-   "stages": [],
+   "stages": [
+    "spawn",
+    "7",
+    "10",
+    "18",
+    "29",
+    "33"
+   ],
    "medals": {
     "record": 60,
     "gold": 75,
@@ -912,6 +1208,83 @@
     "whoopee",
     "top_hat",
     "anvil"
+   ],
+   "stage_zones": [
+    {
+     "target": "7",
+     "box": [
+      [
+       2875,
+       10925,
+       -153
+      ],
+      [
+       3307,
+       11146,
+       -25
+      ]
+     ]
+    },
+    {
+     "target": "10",
+     "box": [
+      [
+       1998,
+       11054,
+       -1095
+      ],
+      [
+       2231,
+       11282,
+       -967
+      ]
+     ]
+    },
+    {
+     "target": "18",
+     "box": [
+      [
+       -1506,
+       10094,
+       -1670
+      ],
+      [
+       -987,
+       10292,
+       -1542
+      ]
+     ]
+    },
+    {
+     "target": "29",
+     "box": [
+      [
+       6727,
+       4546,
+       -2731
+      ],
+      [
+       7324,
+       4750,
+       -2603
+      ]
+     ]
+    },
+    {
+     "target": "33",
+     "box": [
+      [
+       6502,
+       1217,
+       -3669
+      ],
+      [
+       6735,
+       1445,
+       -3541
+      ]
+     ]
+    }
    ]
   }
  ]

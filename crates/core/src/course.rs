@@ -65,6 +65,11 @@ pub struct Course {
     rules: Vec<Rule>,
     /// The destination (name index) each stage starts at, in order.
     pub stages: Vec<u16>,
+    /// Boxes that begin a stage when entered with the clock running (the
+    /// stage, 0 the first, and its box): a bhop course's levels are walked
+    /// into, not reached by a door's teleport, and its falls only send you
+    /// back to the checkpoint each level starts at.
+    pub stage_zones: Vec<(u8, Zone)>,
     pub medals: Medals,
     /// The course's things to hold, by tier (see `TIERS`).
     pub things: Vec<String>,
@@ -228,6 +233,7 @@ impl Course {
             },
             rules: Vec::new(),
             stages: Vec::new(),
+            stage_zones: Vec::new(),
             things: Vec::new(),
             fall_damage: false,
             finish_zone: None,
@@ -287,6 +293,16 @@ impl Course {
                 .ok_or(format!("{id}: no stage start named {name}"))?;
             stages.push(i);
         }
+        let mut stage_zones = Vec::new();
+        for z in m["stage_zones"].as_array().map(|a| a.as_slice()).unwrap_or(&[]) {
+            let name = z["target"].as_str().unwrap_or("");
+            let st = map
+                .name_index(name)
+                .and_then(|i| stages.iter().position(|s| *s == i))
+                .ok_or(format!("{id}: a stage zone for {name}, which starts no stage"))?;
+            let (lo, hi) = box_of(&z["box"])?;
+            stage_zones.push((st as u8, Zone { mins: lo, maxs: hi }));
+        }
         Ok(Course {
             id: id.to_string(),
             name: m["name"].as_str().unwrap_or(id).to_string(),
@@ -294,6 +310,7 @@ impl Course {
             zone: Zone { mins: lo, maxs: hi },
             rules,
             stages,
+            stage_zones,
             medals: medals_of(m),
             things: things_of(m),
             fall_damage: m["fall_damage"].as_bool().unwrap_or(false),
