@@ -8,6 +8,7 @@ surf_kitsune: python3 -I tools/extract_map.py surf_kitsune.bsp surf_kitsune
 surf_egypt:   python3 -I tools/extract_map.py surf_egypt.bsp surf_egypt --player-start
 surf_aircontrol: python3 -I tools/extract_map.py surf_AirControl_v3.bsp surf_aircontrol --player-start
 surf_summer: python3 -I tools/extract_map.py surf_summer.bsp surf_summer --props
+surf_mesa:   python3 -I tools/extract_map.py Surf_Mesa.bsp surf_mesa --props
 Every other course: python3 -I tools/extract_map.py <map.bsp> <id>
 
 It copies the brushes (the convex solids the Source engine itself collides

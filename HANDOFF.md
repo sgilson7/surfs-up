@@ -114,3 +114,7 @@ Checks: `tests/browser/online.py` in chromium PASSED locally (the eight-browser 
 ## Sixteenth request (15 October 2026): surf_summer's start floor
 
 "fix surf_summer's missing start floor". The deck is a static prop, solid by its collision model, and so are many of summer's ramps; the extractor read no props. `tools/phy.py` reads a model's .phy and `extract_map.py --props` makes each convex piece a brush; summer is extracted with it (314 props, rows 115, 116). `summers_start_deck_holds_you_and_you_can_walk_off_it` stands on the deck and walks off it. Other maps with packed solid props (summit, mesa, japan, sandtrap, ambience) are unchanged and wait for Sam's call.
+
+## Seventeenth request (15 October 2026): mesa's props
+
+"test mesa next". surf_mesa is extracted with `--props` (212 props, row 117): its rock clusters, cliffs, stalactites and cacti are solid, as in Source. The runner's kept mesa run had gone through a rock and was found again (194 s); the sweep's 23 new stops on mesa are all on props. A room of four on mesa passes the online check.
