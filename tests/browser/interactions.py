@@ -7,6 +7,7 @@ with Escape, and leaving to the title. Selectors and waits only: Firefox's
 CSP blocks Playwright's string-form wait_for_function. Headless browsers
 cannot capture the mouse, so the view never turns here; the keys still work.
 """
+import pathlib
 
 # every course in data/maps/maps.json
 COURSES = 16
@@ -50,6 +51,33 @@ def run(page, check, engine):
     bottom = page.locator("#locker .close").evaluate("b => b.getBoundingClientRect().bottom - innerHeight")
     check(top >= 0 and bottom <= 0, f"the whole cubby scrolls into view (title at {top:.0f}, close {bottom:.0f} past the bottom)")
     page.click("#locker .close")
+
+    # your times in a file: saved as a download, loaded back, and a changed
+    # copy refused (the core's tests replay real runs; this checks the page
+    # carries the file both ways)
+    if engine == "chromium":
+        page.click("#title .open-settings")
+        page.wait_for_selector("#settings:not([hidden])", timeout=5000)
+        with page.expect_download() as d:
+            page.click("#s-backup-save")
+        download = d.value
+        saved = pathlib.Path(download.path()).read_text()
+        check(download.suggested_filename == "surfs-up-times.json", f"the times file downloads ({download.suggested_filename})")
+        check('"surfs-up-times"' in saved, "the download is a times file")
+        page.set_input_files("#s-backup-file", files=[{"name": "t.json", "mimeType": "application/json", "buffer": saved.encode()}])
+        for _ in range(100):
+            if page.inner_text("#s-backup-note"):
+                break
+            page.wait_for_timeout(100)
+        check("back on your record" in page.inner_text("#s-backup-note"), f"loading it back reports the runs ({page.inner_text('#s-backup-note')!r})")
+        changed = saved.replace("Surfer", "Surfex", 1)
+        page.set_input_files("#s-backup-file", files=[{"name": "t.json", "mimeType": "application/json", "buffer": changed.encode()}])
+        for _ in range(100):
+            if "changed or damaged" in page.inner_text("#s-backup-note"):
+                break
+            page.wait_for_timeout(100)
+        check("changed or damaged" in page.inner_text("#s-backup-note"), f"a changed file is refused ({page.inner_text('#s-backup-note')!r})")
+        page.click("#settings .close")
 
     page.fill("#name", "Tester")
     page.click("#t-play")

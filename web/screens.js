@@ -91,6 +91,8 @@ export function makeScreens(copy) {
     el("s-ghosts").checked = st.ghosts;
     el("s-own-ghost").checked = st.own_ghost;
     el("s-shirt").style.background = st.shirt;
+    // what the last times file did
+    el("s-backup-note").textContent = s.backup ? fill(copy[s.backup.key], s.backup.args) : "";
   }
 
   // the courses on the title, under tabs (tier 1, tier 2, advanced, bhop):
