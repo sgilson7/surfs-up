@@ -151,6 +151,21 @@ fn edited_runs_do_not_count() {
         backup::verify(&ahead, &map, &c),
         Err("it starts away from the start")
     );
+    // started standing on a teleport's landing spot that no door out of
+    // the start leads to (a forged run would start near the end)
+    for (_, p, _) in &map.destinations {
+        if c.zone.contains(*p) {
+            continue;
+        }
+        let mut landed = good.clone();
+        landed.start.origin = *p;
+        landed.start.velocity = v3(0.0, 0.0, 0.0);
+        assert_eq!(
+            backup::start_ok(&landed, &map, &c),
+            Err("it starts away from the start"),
+            "a start on the landing at {p:?}"
+        );
+    }
     // started with a running jump
     let mut fast = good.clone();
     fast.start.velocity.x += 800.0;

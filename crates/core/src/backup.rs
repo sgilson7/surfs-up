@@ -129,7 +129,21 @@ pub fn start_ok(run: &RunRecord, map: &Map, course: &Course) -> Result<(), &'sta
     };
     let z = &course.zone;
     let pad = v3(1.0, 1.0, 1.0);
-    let by_door = map.destinations.iter().any(|(_, p, _)| near(*p - pad, *p + pad));
+    // or just through a door out of the start (kitsune's red door): only the
+    // destinations of teleports that touch the start zone, not any on the map
+    let doors: Vec<u16> = map
+        .triggers
+        .iter()
+        .filter(|t| z.contains_box(t.mins, t.maxs))
+        .filter_map(|t| match t.kind {
+            TriggerKind::Teleport(d) => Some(d),
+            _ => None,
+        })
+        .collect();
+    let by_door = map
+        .destinations
+        .iter()
+        .any(|(n, p, _)| doors.contains(n) && near(*p - pad, *p + pad));
     if !near(z.mins, z.maxs) && !by_door {
         return Err("it starts away from the start");
     }
