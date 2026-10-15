@@ -1461,6 +1461,42 @@ mod tests {
     }
 
     #[test]
+    fn summers_start_deck_holds_you_and_you_can_walk_off_it() {
+        // the deck is a static prop (models/fnatic/pier/shack_floor), read
+        // from its collision model (tools/phy.py); without it the start is
+        // air over stage 1's fall, which sends you back to it forever
+        let (m, c) = load("surf_summer");
+        let mut mv = Mover::new(&m);
+        let mut s = Surfer::at_start(&m);
+        for i in 0..128 {
+            let t = s.step(&mut mv, &c, Cmd::new(0, 0.0, 0.0));
+            assert!(
+                !t.teleported && !t.fell,
+                "standing at the start: sent back at tick {i}"
+            );
+        }
+        assert!(s.body.on_ground, "on the deck ({:?})", s.body.origin);
+        assert!(
+            (s.body.origin.z - 12064.0).abs() < 1.0,
+            "on the deck's top, z 12064 ({:?})",
+            s.body.origin
+        );
+        let yaw = m.spawn_yaw;
+        let mut started = false;
+        for _ in 0..320 {
+            started |= s.step(&mut mv, &c, Cmd::new(B_FORWARD, yaw, 0.0)).started;
+            if started {
+                break;
+            }
+        }
+        assert!(
+            started,
+            "walking off the start starts the clock ({:?})",
+            s.body.origin
+        );
+    }
+
+    #[test]
     fn cartoons_blocks_hold_you_over_its_pits_and_the_win_room_finishes() {
         let (m, c) = load("bhop_cartoons");
         let mut mv = Mover::new(&m);

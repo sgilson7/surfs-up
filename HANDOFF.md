@@ -110,3 +110,7 @@ The first push failed CI (a tab press lost to a redraw on the slow runner, row 8
 - CI: the every-course online rooms took about an hour on GitHub's two-core runner and ran past the job's 40-minute limit, so (Sam's choice) CI now runs `BUILDER_ONLINE=0 ./scripts/check.sh` and the online rooms run locally before each push. The online check's three fixed waits now poll.
 
 Checks: `tests/browser/online.py` in chromium PASSED locally (the eight-browser room and a room of four on each of the fifteen other courses, about 24 minutes); `cargo test` and the kept runs passed after the runner merge; CI runs steps 1 to 7. The full three-engine `./scripts/check.sh` was not run for this request. Deployed at Sam's word.
+
+## Sixteenth request (15 October 2026): surf_summer's start floor
+
+"fix surf_summer's missing start floor". The deck is a static prop, solid by its collision model, and so are many of summer's ramps; the extractor read no props. `tools/phy.py` reads a model's .phy and `extract_map.py --props` makes each convex piece a brush; summer is extracted with it (314 props, rows 115, 116). `summers_start_deck_holds_you_and_you_can_walk_off_it` stands on the deck and walks off it. Other maps with packed solid props (summit, mesa, japan, sandtrap, ambience) are unchanged and wait for Sam's call.

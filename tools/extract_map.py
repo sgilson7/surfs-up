@@ -7,6 +7,7 @@ surf_utopia:  python3 -I tools/extract_map.py surf_utopia_v3.bsp surf_utopia --f
 surf_kitsune: python3 -I tools/extract_map.py surf_kitsune.bsp surf_kitsune
 surf_egypt:   python3 -I tools/extract_map.py surf_egypt.bsp surf_egypt --player-start
 surf_aircontrol: python3 -I tools/extract_map.py surf_AirControl_v3.bsp surf_aircontrol --player-start
+surf_summer: python3 -I tools/extract_map.py surf_summer.bsp surf_summer --props
 Every other course: python3 -I tools/extract_map.py <map.bsp> <id>
 
 It copies the brushes (the convex solids the Source engine itself collides
@@ -37,6 +38,9 @@ What it keeps and drops (the rules for play are in the core; this only copies):
   - displacements (curved terrain, solid in Source), as their grids: the
     core makes each triangle a thin solid wedge under it (its top drawn,
     4 units deep, with axial bevels), so its brush collision holds them;
+  - with --props, static props solid by their collision model whose .phy
+    is packed into the map, each convex piece a brush with vbsp's bevels
+    (tools/phy.py; surf_summer's start deck and ramps are props);
   - func_wall brushes (solid and drawn);
   - func_door brushes (solid and drawn where they rest: a bhop map's
     blocks, which the timer servers hold still);
@@ -69,11 +73,14 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import bsp  # noqa: E402
+import phy  # noqa: E402
 
 MAPS = Path(__file__).resolve().parents[1] / "data" / "maps"
 NONE = 65535
 # how far over a shot button's pad touching stands in for the shot (units)
 BUTTON_REACH = 128.0
+# a static prop's brushes share a group (the core colours by group), past any brush index
+PROP_GROUP = 1 << 20
 CONTENTS_SOLID, CONTENTS_WINDOW, CONTENTS_GRATE = 0x1, 0x2, 0x8
 CONTENTS_WATER, CONTENTS_PLAYERCLIP, CONTENTS_MONSTERCLIP = 0x20, 0x10000, 0x20000
 
@@ -113,7 +120,7 @@ def drawn(tex):
     return not t.startswith("TOOLS/") or t == "TOOLS/TOOLSBLACK"
 
 
-def main(path, map_id, floor, player_start=False):
+def main(path, map_id, floor, player_start=False, props=False):
     B = bsp.Bsp(path)
     P, BR, BS, TI, M = B.planes(), B.brushes(), B.brushsides(), B.texnames(), B.models()
     ents = B.entities()
@@ -160,6 +167,30 @@ def main(path, map_id, floor, player_start=False):
             add(bi, 0, bi)
         elif c & CONTENTS_PLAYERCLIP:
             add(bi, 1, bi)
+
+    # --props: static props solid by their collision model (Source's
+    # SOLID_VPHYSICS), each convex piece of the model's .phy a brush placed
+    # where the prop stands; a prop whose model is not packed into the map
+    # (a stock game model) is left out and counted
+    if props:
+        pak = B.pakfile()
+        kept = skipped = 0
+        for k, (model, origin, angles, solid) in enumerate(B.static_props()):
+            if solid != 6:
+                continue
+            data = pak.get(model[:-4] + ".phy")
+            if data is None:
+                skipped += 1
+                continue
+            axes = phy.rotate(angles)
+            for pts, tris in phy.hulls(data):
+                world = {i: phy.place(q, origin, axes) for i, q in pts.items()}
+                sides = [(n, d, bevel, "PROP") for n, d, bevel in phy.planes(world, tris)]
+                if zmax(sides) < floor:
+                    continue
+                brushes.append((0, PROP_GROUP + k, sides))
+            kept += 1
+        print(f"static props: {kept} solid by their collision model, {skipped} left out (model not in the map)")
 
     # displacements: their grids, which the core turns into thin solid
     # wedges (one per triangle, its top the surface)
@@ -399,4 +430,7 @@ if __name__ == "__main__":
     player_start = "--player-start" in args
     if player_start:
         args.remove("--player-start")
-    main(args[0], args[1], floor, player_start)
+    props = "--props" in args
+    if props:
+        args.remove("--props")
+    main(args[0], args[1], floor, player_start, props)

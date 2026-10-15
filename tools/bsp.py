@@ -7,6 +7,7 @@ LUMP_ENTITIES, LUMP_PLANES, LUMP_TEXDATA, LUMP_VERTEXES = 0, 1, 2, 3
 LUMP_TEXINFO, LUMP_FACES, LUMP_EDGES, LUMP_SURFEDGES, LUMP_MODELS = 6, 7, 12, 13, 14
 LUMP_BRUSHES, LUMP_BRUSHSIDES = 18, 19
 LUMP_DISPINFO, LUMP_DISP_VERTS = 26, 33
+LUMP_GAME, LUMP_PAKFILE = 35, 40
 LUMP_TEXDATA_STRING_DATA, LUMP_TEXDATA_STRING_TABLE = 43, 44
 
 
@@ -68,6 +69,43 @@ class Bsp:
             out.append({"mins": v[0:3], "maxs": v[3:6], "origin": v[6:9], "headnode": v[9], "firstface": v[10], "numfaces": v[11]})
         return out
 
+
+    def pakfile(self):
+        """The files packed into the map (lump 40, a zip): name lower-cased
+        to its bytes."""
+        import io, zipfile
+        z = zipfile.ZipFile(io.BytesIO(self.lump(LUMP_PAKFILE)))
+        return {n.lower(): z.read(n) for n in z.namelist()}
+
+    def static_props(self):
+        """The game lump's static props ("sprp"): (model, origin, angles,
+        solid) each, solid being Source's SolidType_t (0 none, 2 its
+        bounding box, 6 its collision model)."""
+        d = self.lump(LUMP_GAME)
+        out = []
+        n, = struct.unpack_from("<i", d, 0)
+        for i in range(n):
+            gid, flags, ver, off, ln = struct.unpack_from("<4sHHii", d, 4 + 16 * i)
+            if gid != b"prps":
+                continue
+            assert not flags & 1, "compressed static props"
+            g = self.raw[off:off + ln]
+            p = 0
+            nd, = struct.unpack_from("<i", g, p)
+            p += 4
+            names = [g[p + 128 * k:p + 128 * (k + 1)].split(b"\0")[0].decode().lower() for k in range(nd)]
+            p += 128 * nd
+            nl, = struct.unpack_from("<i", g, p)
+            p += 4 + 2 * nl
+            count, = struct.unpack_from("<i", g, p)
+            p += 4
+            size = (ln - p) // count if count else 0
+            for k in range(count):
+                q = p + size * k
+                x, y, z, pitch, yaw, roll = struct.unpack_from("<6f", g, q)
+                model, = struct.unpack_from("<H", g, q + 24)
+                out.append((names[model], (x, y, z), (pitch, yaw, roll), g[q + 30]))
+        return out
 
     def displacements(self):
         """Every displacement as (texture, contents, face normal, triangles,
