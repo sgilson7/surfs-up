@@ -15,26 +15,29 @@ fi
 
 step() { printf '\n\033[1m== %s\033[0m\n' "$*"; }
 
-step "1/7 format (cargo fmt --check)"
+step "1/8 format (cargo fmt --check)"
 cargo fmt --all -- --check
 
-step "2/7 lint (cargo clippy, warnings are errors)"
+step "2/8 lint (cargo clippy, warnings are errors)"
 cargo clippy --workspace --all-targets --quiet -- -D warnings
 
-step "3/7 core and boundary tests (cargo test)"
+step "3/8 core and boundary tests (cargo test)"
 cargo test --workspace --quiet
 
-step "4/7 release WebAssembly build (scripts/build.sh)"
+step "4/8 surface sweep: every floor, ramp and trigger on every course (crates/core/tests/sweep.rs)"
+cargo test --release --quiet -p surf_core --test sweep -- --ignored every_surface_and_trigger_on_every_course
+
+step "5/8 release WebAssembly build (scripts/build.sh)"
 ./scripts/build.sh >/dev/null
 echo "dist/ assembled"
 
-step "5/7 WebAssembly import audit (scripts/wasm_imports.py)"
+step "6/8 WebAssembly import audit (scripts/wasm_imports.py)"
 "$PY" scripts/wasm_imports.py dist
 
-step "6/7 browser check (tests/browser/check.py)"
+step "7/8 browser check (tests/browser/check.py)"
 "$PY" tests/browser/check.py
 
-step "7/7 online: eight browsers in one room, by pasted codes (tests/browser/online.py)"
+step "8/8 online: eight browsers in one room, by pasted codes (tests/browser/online.py)"
 "$PY" tests/browser/online.py ${BUILDER_ENGINES:-chromium firefox webkit}
 
 printf '\n\033[1mBUILDER CHECK PASSED\033[0m\n'
