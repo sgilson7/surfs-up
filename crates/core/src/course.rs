@@ -176,7 +176,24 @@ impl Listed {
             _ => "expert",
         }
     }
+
+    /// Which tab of the title it is listed under: surf tiers 1 and 2 each
+    /// have their own (where beginners start), every harder surf course is
+    /// "advanced", and bunnyhop courses are kept apart whatever their tier.
+    pub fn group(&self) -> &'static str {
+        if self.mode == "bhop" {
+            return "bhop";
+        }
+        match self.tier {
+            1 => "tier1",
+            2 => "tier2",
+            _ => "advanced",
+        }
+    }
 }
+
+/// The title's tabs, in the order shown.
+pub const GROUPS: [&str; 4] = ["tier1", "tier2", "advanced", "bhop"];
 
 /// Every course listed in maps.json, in its order.
 pub fn listed(maps_json: &str) -> Result<Vec<Listed>, String> {
@@ -407,5 +424,19 @@ pub mod tests {
         let band = |id: &str| l.iter().find(|m| m.id == id).unwrap().band();
         assert_eq!(band("surf_utopia"), "easy", "where beginners start");
         assert_eq!(band("surf_anubis"), "expert", "KSF's tier 8");
+    }
+
+    #[test]
+    fn the_title_tabs_split_tier_one_tier_two_the_rest_and_bhop() {
+        let l = listed(MAPS).unwrap();
+        let group = |id: &str| l.iter().find(|m| m.id == id).unwrap().group();
+        assert_eq!(group("surf_utopia"), "tier1", "where beginners start");
+        assert_eq!(group("surf_sandtrap"), "tier2");
+        assert_eq!(group("surf_anubis"), "advanced", "tier 8 is not a beginner's");
+        assert_eq!(group("bhop_ambience"), "bhop", "bhop apart, though tier 1");
+        assert!(
+            l.iter().all(|m| GROUPS.contains(&m.group())),
+            "every course is under a tab"
+        );
     }
 }

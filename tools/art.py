@@ -788,10 +788,164 @@ def how_to_surf():
     return b, (w, h)
 
 
+
+# ---- course icons: one small tile each, to tell the courses apart on the title
+
+def tile(colour):
+    return f"\\fill[{colour},rounded corners=10pt] (0,0) rectangle {P(S, S)};\n"
+
+
+def ridge(x, y, half, h, lit, dark):
+    """A surf ramp end-on: a triangular ridge, its lit face left."""
+    return poly([(x - half, y), (x, y + h), (x, y)], lit) + poly([(x, y + h), (x + half, y), (x, y)], dark)
+
+
+def course_utopia():
+    b = "% surf_utopia: a ramp floating in a pale sky, a sun, a cloud\n" + tile("sky2")
+    b += circle(2.3, 2.3, 0.35, "yellow")
+    b += ellipse(0.9, 2.3, 0.45, 0.18, "white") + ellipse(1.2, 2.4, 0.3, 0.18, "white")
+    b += ridge(1.5, 0.8, 1.0, 1.1, "matlit", "matdark")
+    b += rect(0.5, 0.5, 2.5, 0.8, "white")
+    return b, (S, S)
+
+
+def course_kitsune():
+    b = "% surf_kitsune: a fox mask on a night tile, neon under it\n" + tile("night")
+    b += poly([(0.75, 2.6), (1.15, 1.9), (0.75, 1.7)], "orange") + poly([(2.25, 2.6), (1.85, 1.9), (2.25, 1.7)], "orange")
+    b += poly([(0.7, 2.0), (2.3, 2.0), (1.5, 0.8)], "orange")
+    b += poly([(1.1, 1.4), (1.9, 1.4), (1.5, 0.8)], "white")
+    b += circle(1.15, 1.75, 0.08, "ink") + circle(1.85, 1.75, 0.08, "ink")
+    b += rect(0.5, 0.45, 2.5, 0.55, "pink")
+    return b, (S, S)
+
+
+def course_egypt():
+    b = "% surf_egypt: a pyramid under a red sun\n" + tile("sandlit")
+    b += circle(2.3, 2.35, 0.3, "red")
+    b += poly([(0.4, 0.6), (1.5, 2.2), (1.5, 0.6)], "gold") + poly([(1.5, 2.2), (2.6, 0.6), (1.5, 0.6)], "golddark")
+    b += rect(0.3, 0.45, 2.7, 0.6, "sanddark")
+    return b, (S, S)
+
+
+def course_aircontrol():
+    b = "% surf_aircontrol: a paper plane over a ramp's far side\n" + tile("sky")
+    b += ridge(1.5, 0.45, 1.1, 0.9, "matlit", "matdark")
+    b += poly([(0.5, 1.7), (2.5, 2.4), (1.2, 1.6)], "white") + poly([(1.2, 1.6), (2.5, 2.4), (1.4, 1.2)], "paperdark")
+    return b, (S, S)
+
+
+def course_mesa():
+    b = "% surf_mesa: a flat-topped canyon mesa\n" + tile("orangelit")
+    b += circle(0.8, 2.3, 0.25, "yellowlit")
+    b += poly([(0.3, 0.5), (0.8, 1.8), (2.2, 1.8), (2.7, 0.5)], "red")
+    b += poly([(1.8, 1.8), (2.2, 1.8), (2.7, 0.5), (2.1, 0.5)], "reddark")
+    b += rect(0.85, 1.25, 2.0, 1.35, "redlit")
+    return b, (S, S)
+
+
+def course_beginner():
+    b = "% surf_beginner: a small, gentle ramp and a gold star\n" + tile("greenlit")
+    b += ridge(1.5, 0.5, 1.2, 0.8, "matlit", "matdark")
+    star = [(1.5 + r * math.cos(math.radians(90 + k * 36)), 2.1 + r * math.sin(math.radians(90 + k * 36))) for k, r in zip(range(10), [0.55, 0.22] * 5)]
+    b += poly(star, "gold")
+    return b, (S, S)
+
+
+def course_summit():
+    b = "% surf_summit: a snowy peak with a flag on top\n" + tile("sky2")
+    b += poly([(0.3, 0.5), (1.5, 2.3), (2.7, 0.5)], "stone") + poly([(1.5, 2.3), (2.7, 0.5), (1.5, 0.5)], "stonelit")
+    b += poly([(1.1, 1.7), (1.5, 2.3), (1.9, 1.7), (1.65, 1.85), (1.5, 1.65), (1.3, 1.85)], "white")
+    b += rect(1.48, 2.3, 1.54, 2.75, "ink") + poly([(1.54, 2.75), (1.95, 2.62), (1.54, 2.5)], "red")
+    return b, (S, S)
+
+
+def course_sandtrap():
+    b = "% surf_sandtrap: dunes and a cactus\n" + tile("sandlit")
+    b += "\\fill[sanddark] (0,0.4) .. controls (0.8,1.3) and (1.4,1.2) .. (3,0.6) -- (3,0.3) -- (0,0.3) -- cycle;\n"
+    b += "\\fill[sand] (0,0.3) .. controls (1.2,0.9) and (2.0,0.4) .. (3,0.8) -- (3,0.3) -- cycle;\n"
+    b += rect(1.85, 0.8, 2.1, 2.3, "green") + rect(1.55, 1.4, 1.85, 1.55, "green") + rect(1.55, 1.4, 1.7, 1.9, "green")
+    b += rect(2.1, 1.6, 2.35, 1.75, "green") + rect(2.2, 1.6, 2.35, 2.05, "green")
+    return b, (S, S)
+
+
+def course_summer():
+    b = "% surf_summer: a sun over the sea and a beach\n" + tile("sky2")
+    b += circle(1.5, 1.7, 0.6, "yellow")
+    b += rect(0.0, 0.3, 3.0, 1.1, "stripeblue", ",rounded corners=0pt")
+    b += "\\foreach \\i in {0,...,3} {\\fill[window] ({0.2+\\i*0.7},0.8) rectangle ({0.6+\\i*0.7},0.88);}\n"
+    b += "\\fill[sand,rounded corners=10pt] (0,0) rectangle (3,0.45);\n"
+    return b, (S, S)
+
+
+def course_deadline():
+    b = "% surf_deadline: a clock at five to midnight\n" + tile("night")
+    b += circle(1.5, 1.5, 1.0, "white") + circle(1.5, 1.5, 0.85, "paper")
+    b += "\\foreach \\a in {0,30,...,330} {\\fill[ink] ($(1.5,1.5)+(\\a:0.72)$) circle (0.04);}\n"
+    b += "\\draw[ink,line width=2.5pt,line cap=round] (1.5,1.5) -- (1.5,2.15);\n"
+    b += "\\draw[red,line width=1.6pt,line cap=round] (1.5,1.5) -- ($(1.5,1.5)+(120:0.75)$);\n"
+    b += circle(1.5, 1.5, 0.08, "ink")
+    return b, (S, S)
+
+
+def course_anubis():
+    b = "% surf_anubis: a jackal head in profile on lapis, gold collar\n" + tile("stripeblue")
+    b += poly([(1.1, 0.7), (2.0, 0.7), (2.0, 1.6), (2.6, 1.3), (2.65, 1.55), (2.0, 2.05), (1.9, 2.75), (1.65, 2.1), (1.45, 2.7), (1.3, 1.9), (1.1, 1.6)], "ink")
+    b += poly([(1.05, 0.5), (2.05, 0.5), (2.05, 0.75), (1.05, 0.75)], "gold")
+    b += circle(1.85, 1.8, 0.06, "gold")
+    return b, (S, S)
+
+
+def course_ambience():
+    b = "% bhop_ambience: a moon over leaves at night\n" + tile("nightlit")
+    b += circle(2.2, 2.25, 0.4, "glow") + circle(2.38, 2.38, 0.33, "nightlit")
+    for x, y, c in ((0.9, 1.2, "green"), (1.6, 0.9, "greendark"), (1.2, 0.6, "greenlit")):
+        b += ellipse(x, y, 0.38, 0.18, c, ",rotate around={30:(%s,%s)}" % (f(x), f(y)))
+    return b, (S, S)
+
+
+def course_eazy():
+    b = "% bhop_eazy: blocks in a row, a hop arcing over them\n" + tile("greenlit")
+    for i in range(3):
+        x = 0.35 + i * 0.85
+        b += rect(x, 0.5, x + 0.6, 0.95, "wood") + rect(x, 0.85, x + 0.6, 0.95, "woodline")
+    b += "\\draw[ink,line width=1.5pt,dash pattern=on 3pt off 3pt] (0.65,1.1) .. controls (0.9,2.2) and (1.3,2.2) .. (1.5,1.1) .. controls (1.75,2.2) and (2.15,2.2) .. (2.35,1.1);\n"
+    return b, (S, S)
+
+
+def course_lego():
+    b = "% bhop_lego: a red toy brick with studs\n" + tile("yellow")
+    b += rect(0.5, 0.7, 2.5, 1.7, "red") + rect(0.5, 0.7, 2.5, 0.95, "reddark")
+    for x in (0.95, 1.5, 2.05):
+        b += rect(x - 0.22, 1.7, x + 0.22, 1.95, "red") + ellipse(x, 1.95, 0.22, 0.07, "redlit")
+    return b, (S, S)
+
+
+def course_japan():
+    b = "% bhop_japan: a red gate before a red sun\n" + tile("paper")
+    b += circle(1.5, 1.9, 0.6, "redlit")
+    b += rect(0.85, 0.4, 1.0, 1.9, "red") + rect(2.0, 0.4, 2.15, 1.9, "red")
+    b += rect(0.6, 1.95, 2.4, 2.1, "ink") + rect(0.8, 1.6, 2.2, 1.7, "red")
+    return b, (S, S)
+
+
+def course_cartoons():
+    b = "% bhop_cartoons: a cartoon burst with a grin\n" + tile("purple")
+    burst = [(1.5 + r * math.cos(math.radians(k * 22.5)), 1.5 + r * math.sin(math.radians(k * 22.5))) for k, r in zip(range(16), [1.15, 0.75] * 8)]
+    b += poly(burst, "yellow")
+    b += circle(1.25, 1.7, 0.1, "ink") + circle(1.75, 1.7, 0.1, "ink")
+    b += "\\draw[ink,line width=2pt,line cap=round] (1.15,1.25) .. controls (1.35,1.0) and (1.65,1.0) .. (1.85,1.25);\n"
+    return b, (S, S)
+
+
+COURSES = ["utopia", "kitsune", "egypt", "aircontrol", "mesa", "beginner", "summit", "sandtrap",
+           "summer", "deadline", "anubis", "ambience", "eazy", "lego", "japan", "cartoons"]
+
+
 PICTURES = {
     "title": title,
     "icon": icon,
     "how-to-surf": how_to_surf,
+    **{f"maps/{'bhop' if c in ('ambience', 'eazy', 'lego', 'japan', 'cartoons') else 'surf'}_{c}": globals()[f"course_{c}"] for c in COURSES},
     "items/prayer": prayer,
     "items/noodle": noodle,
     "items/kickball": kickball,
@@ -835,7 +989,7 @@ PICTURES = {
     "items/bunny": bunny,
 }
 DPI = {"title": 150, "icon": 81, "how-to-surf": 110}
-CLEAR = {"items"}
+CLEAR = {"items", "maps"}
 
 
 def main():

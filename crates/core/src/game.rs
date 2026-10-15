@@ -1351,14 +1351,21 @@ impl Game {
                     .find(|r| r.map == m.id)
                     .map(|r| format_time(r.ticks));
                 json!({"id": m.id, "name": m.name, "author": m.author, "best": best,
-                    "tier": m.tier, "band": m.band(), "mode": m.mode,
+                    "tier": m.tier, "band": m.band(), "mode": m.mode, "group": m.group(),
                     "chosen": m.id == self.wanted, "loaded": m.id == self.loaded})
             })
+            .collect();
+        // the title's tabs: those with a course under them, in their order
+        let groups: Vec<&str> = course::GROUPS
+            .iter()
+            .copied()
+            .filter(|g| maps.iter().any(|m| m["group"] == *g))
             .collect();
         let s = &self.settings;
         json!({
             "mode": mode,
             "maps": maps,
+            "map_groups": groups,
             "map": self.loaded,
             "map_name": self.course.name,
             "room": self.room.as_ref().map(|r| r.code.clone()),
