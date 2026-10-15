@@ -106,6 +106,9 @@ pub struct Game {
     pitch: f32,
     buttons: u8,
     recording: Option<Recording>,
+    /// Bests kept from older movement rules, as saved: each is replayed under
+    /// today's rules when its course loads, and kept only if it still finishes.
+    recheck: Vec<Value>,
     pub held: Held,
     pub unlocked: Vec<Held>,
     squeeze: u32,
@@ -186,6 +189,7 @@ impl Game {
             me,
             buttons: 0,
             recording: None,
+            recheck: Vec::new(),
             held: Held::Prayer,
             unlocked: vec![Held::Prayer],
             squeeze: 0,
@@ -249,6 +253,7 @@ impl Game {
         self.course = course;
         self.loaded = id.to_string();
         self.wanted = id.to_string();
+        self.recheck_bests();
         self.respawn();
         self.me.snap_yaw = None;
         self.live_force = true;
@@ -261,6 +266,32 @@ impl Game {
         self.rebuild_ghosts();
         self.say_hello(None);
         Ok(())
+    }
+
+    /// Bests from older movement rules on the course just loaded: each is
+    /// replayed under today's rules and kept if it still finishes in its
+    /// time (and beats any best here); the rest are let go.
+    fn recheck_bests(&mut self) {
+        let (here, rest): (Vec<Value>, Vec<Value>) =
+            std::mem::take(&mut self.recheck).into_iter().partition(|b| {
+                RunRecord::from_json_any_rules(b)
+                    .map(|r| r.map == self.loaded)
+                    .unwrap_or(false)
+            });
+        self.recheck = rest;
+        for b in here {
+            let Ok(r) = RunRecord::from_json_any_rules(&b) else {
+                continue;
+            };
+            if backup::verify(&r, &self.map, &self.course).is_err() {
+                continue;
+            }
+            if self.best().map(|x| x.ticks <= r.ticks).unwrap_or(false) {
+                continue;
+            }
+            self.bests.retain(|x| x.map != r.map);
+            self.bests.push(r);
+        }
     }
 
     /// Your best run on the course you are on.
@@ -307,16 +338,17 @@ impl Game {
         }
         self.finishes = v["finishes"].as_u64().unwrap_or(0) as u32;
         // the first version kept one best, on surf_utopia
-        if let Ok(r) = RunRecord::from_json(&v["best"]) {
-            self.bests.push(r);
-        }
-        if let Some(list) = v["bests"].as_array() {
-            for b in list {
-                if let Ok(r) = RunRecord::from_json(b) {
-                    if !self.bests.iter().any(|x| x.map == r.map) {
-                        self.bests.push(r);
-                    }
+        let mut kept: Vec<Value> = vec![v["best"].clone()];
+        kept.extend(v["bests"].as_array().cloned().unwrap_or_default());
+        kept.extend(v["recheck"].as_array().cloned().unwrap_or_default());
+        for b in kept {
+            if let Ok(r) = RunRecord::from_json(&b) {
+                if !self.bests.iter().any(|x| x.map == r.map) {
+                    self.bests.push(r);
                 }
+            } else if RunRecord::from_json_any_rules(&b).is_ok() {
+                // surfed under older movement rules: replayed when its course loads
+                self.recheck.push(b);
             }
         }
         if let Some(m) = v["map"].as_str() {
@@ -335,6 +367,7 @@ impl Game {
             "finishes": self.finishes,
             "map": self.wanted,
             "bests": self.bests.iter().map(|b| b.to_json()).collect::<Vec<_>>(),
+            "recheck": self.recheck,
         })
         .to_string()
     }
@@ -2339,10 +2372,11 @@ mod tests {
         v["best"] = old;
         v.as_object_mut().unwrap().remove("bests");
         v.as_object_mut().unwrap().remove("map");
-        let h = Game::new(MAPS, &v.to_string()).unwrap();
+        let mut h = Game::new(MAPS, &v.to_string()).unwrap();
+        h.load_map("surf_utopia", UTOPIA).unwrap();
         assert!(
-            h.bests.is_empty(),
-            "a run under other rules would not replay to the same path"
+            h.bests.is_empty() && h.recheck.is_empty(),
+            "a run under other rules that does not replay to a finish is let go"
         );
         assert_eq!(h.settings.name, "Pat");
         assert!(h.unlocked.contains(&Held::Noodle), "what you earned is kept");

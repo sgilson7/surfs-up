@@ -279,3 +279,34 @@ fn real_starts_pass_the_start_checks_on_every_course() {
         "most courses start from a wander ({started:?})"
     );
 }
+
+/// A best kept under older movement rules is not thrown away: it waits,
+/// and when its course loads it is replayed under today's rules and kept
+/// if it still finishes in its time (most runs never crouch).
+#[test]
+fn a_best_from_older_rules_is_kept_if_it_still_replays_to_its_finish() {
+    let g = finished();
+    let mut v: Value = serde_json::from_str(&g.saved()).unwrap();
+    v["bests"][0]["phys"] = json!(crate::online::PHYSICS - 1);
+    let mut broken = v["bests"][0].clone();
+    // and one whose replay no longer ends where it says
+    broken["ending"] = json!(9);
+    let mut h = Game::new(&maps(), &v.to_string()).unwrap();
+    assert!(h.bests.is_empty(), "not believed before it is replayed");
+    assert_eq!(h.recheck.len(), 1);
+    // still waiting in what is kept until the course loads
+    let again = Game::new(&maps(), &h.saved()).unwrap();
+    assert_eq!(again.recheck.len(), 1);
+    h.load_map("surf_utopia", UTOPIA).unwrap();
+    assert_eq!(
+        h.best().map(|r| r.ticks),
+        Some(g.bests[0].ticks),
+        "it replays: kept"
+    );
+    assert!(h.recheck.is_empty());
+    let mut w = v.clone();
+    w["bests"] = json!([broken]);
+    let mut k = Game::new(&maps(), &w.to_string()).unwrap();
+    k.load_map("surf_utopia", UTOPIA).unwrap();
+    assert!(k.bests.is_empty() && k.recheck.is_empty(), "it does not: let go");
+}

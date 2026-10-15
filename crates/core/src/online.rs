@@ -84,6 +84,15 @@ impl RunRecord {
     }
 
     pub fn from_json(v: &Value) -> Result<RunRecord, String> {
+        if v["phys"].as_u64().unwrap_or(1) != PHYSICS as u64 {
+            return Err("a run from other movement rules".into());
+        }
+        RunRecord::from_json_any_rules(v)
+    }
+
+    /// A run read whatever movement rules it was surfed under (to be
+    /// replayed under today's before it is believed).
+    pub fn from_json_any_rules(v: &Value) -> Result<RunRecord, String> {
         let words: Vec<u32> = v["start"]
             .as_array()
             .ok_or("run has no start")?
@@ -101,9 +110,6 @@ impl RunRecord {
             pitch: p[2].as_i64().unwrap_or(0) as i16,
         };
         let cmds = unpack_cmds(prev, v["cmds"].as_str().ok_or("run has no inputs")?)?;
-        if v["phys"].as_u64().unwrap_or(1) != PHYSICS as u64 {
-            return Err("a run from other movement rules".into());
-        }
         let ticks = v["ticks"].as_u64().ok_or("run has no time")? as u32;
         if cmds.len() != ticks as usize {
             return Err("a run's inputs do not match its time".into());
