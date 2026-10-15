@@ -13,13 +13,19 @@ COURSES = 16
 
 
 def pick_course(page, course):
-    """Open the tab the course is under, then click its card."""
+    """Open the tab the course is under, then click its card. The tabs are
+    tried in turn until the card shows: a redraw as a tab is pressed (a slow
+    machine loading a course) can take the press away, so keep trying."""
+    card = f"#maps .map-card[data-map='{course}']"
     tabs = page.locator("#map-tabs .map-tab")
-    for i in range(tabs.count()):
-        if page.locator(f"#maps .map-card[data-map='{course}']").count():
+    for k in range(200):
+        if page.locator(card).count():
             break
-        tabs.nth(i).click()
-    page.click(f"#maps .map-card[data-map='{course}']")
+        n = tabs.count()
+        if n:
+            tabs.nth(k % n).click()
+        page.wait_for_timeout(100)
+    page.click(card)
 
 
 def run(page, check, engine):

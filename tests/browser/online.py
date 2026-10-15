@@ -216,12 +216,18 @@ def course_pair(p, engine, origin, course):
         page.goto(origin + "/index.html?ice=none")
         page.wait_for_selector("body[data-ready='true']", state="attached", timeout=30000)
         page.fill("#name", name)
+        # try the tabs in turn until the card shows (a redraw as a tab is
+        # pressed, on a slow machine, can take the press away)
+        card = f"#maps .map-card[data-map='{course}']"
         tabs = page.locator("#map-tabs .map-tab")
-        for i in range(tabs.count()):
-            if page.locator(f"#maps .map-card[data-map='{course}']").count():
+        for k in range(200):
+            if page.locator(card).count():
                 break
-            tabs.nth(i).click()
-        page.click(f"#maps .map-card[data-map='{course}']")
+            n = tabs.count()
+            if n:
+                tabs.nth(k % n).click()
+            page.wait_for_timeout(100)
+        page.click(card)
         for _ in range(300):
             if course in page.inner_text("#map-name"):
                 break

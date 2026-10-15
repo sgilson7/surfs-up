@@ -100,16 +100,10 @@ export function makeScreens(copy) {
   // between a press and its release (leaving the name box saves the name
   // and redraws) would otherwise take the card away and lose the click.
   let shownMaps = "";
+  let shownTabs = "";
   let tab = null;
-  function maps(s, onPick) {
-    el("map-name").textContent = s.map_name;
-    if (!s.map_groups.includes(tab)) {
-      const chosen = s.maps.find((m) => m.chosen);
-      tab = chosen ? chosen.group : s.map_groups[0];
-    }
-    const key = JSON.stringify([s.maps, s.map_groups, tab]);
-    if (key === shownMaps) return;
-    shownMaps = key;
+  let latest = null;
+  function drawTabs(s, onPick) {
     const tabs = el("map-tabs");
     tabs.replaceChildren();
     for (const g of s.map_groups) {
@@ -121,10 +115,28 @@ export function makeScreens(copy) {
       t.textContent = copy["tab_" + g];
       t.addEventListener("click", () => {
         tab = g;
-        maps(s, onPick);
+        maps(latest, onPick);
       });
       tabs.append(t);
     }
+  }
+  function maps(s, onPick) {
+    latest = s;
+    el("map-name").textContent = s.map_name;
+    if (!s.map_groups.includes(tab)) {
+      const chosen = s.maps.find((m) => m.chosen);
+      tab = chosen ? chosen.group : s.map_groups[0];
+    }
+    // the tabs are rebuilt only when they change (not when a course loads),
+    // so a redraw cannot take a press on a tab away either
+    const tabsKey = JSON.stringify([s.map_groups, tab]);
+    if (tabsKey !== shownTabs) {
+      shownTabs = tabsKey;
+      drawTabs(s, onPick);
+    }
+    const key = JSON.stringify([s.maps, tab]);
+    if (key === shownMaps) return;
+    shownMaps = key;
     const box = el("maps");
     box.replaceChildren();
     for (const m of s.maps.filter((m) => m.group === tab)) {
