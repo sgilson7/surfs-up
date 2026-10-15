@@ -332,6 +332,16 @@ impl Surfer {
                     let k = START_SPEED_CAP / h;
                     self.body.velocity = v3(v.x * k, v.y * k, v.z);
                 }
+            } else if self.phase == Phase::Running {
+                // walking into a level's first checkpoint begins its stage
+                let lo = self.body.origin + HULL_MINS;
+                let hi = self.body.origin + maxs;
+                for (st, z) in &course.stage_zones {
+                    if *st > self.stage && z.contains_box(lo, hi) {
+                        self.stage = *st;
+                        out.stage = Some(*st);
+                    }
+                }
             } else if self.phase == Phase::Start {
                 self.phase = Phase::Running;
                 self.stats = Stats::default();
@@ -1419,5 +1429,101 @@ mod tests {
         assert_eq!(s.stats.sync_good, 20);
         assert_eq!(s.stats.strafes, 2);
         assert!((s.stats.sync_pct() - 50.0).abs() < 0.01);
+    }
+
+    /// Walk a bhop course's levels: from the start with the clock running,
+    /// into each level in turn (its stage zone, or for eazy the door
+    /// teleport out of the level before), the stage counting up; and a fall
+    /// in each level goes back to that level's checkpoint with the stage and
+    /// the clock kept.
+    fn walks_its_levels(id: &str, levels: usize) {
+        let (m, c) = load(id);
+        let mut mv = Mover::new(&m);
+        assert_eq!(c.stages.len(), levels, "{id}: its levels");
+        // each zone holds its level's checkpoint and no other level's, and
+        // no two zones meet
+        for (k, z) in &c.stage_zones {
+            for (st, d) in c.stages.iter().enumerate() {
+                let p = m.destination(*d).unwrap().0;
+                assert_eq!(
+                    z.contains(p),
+                    st == *k as usize,
+                    "{id}: level {}'s zone and {}",
+                    k + 1,
+                    m.name(*d)
+                );
+            }
+            for (j, o) in &c.stage_zones {
+                assert!(
+                    j == k || !z.contains_box(o.mins, o.maxs),
+                    "{id}: zones {k} and {j} meet"
+                );
+            }
+        }
+        let mut s = Surfer::from_body(Body::at(m.spawn), Cmd::new(0, m.spawn_yaw, 0.0));
+        for st in 1..levels {
+            let start = c.stages[st];
+            let target = m.name(start).to_string();
+            let zone = c.stage_zones.iter().find(|(k, _)| *k as usize == st);
+            let t = match zone {
+                // walk onto the level's first platform
+                Some((_, z)) => {
+                    let mid = (z.mins + z.maxs) * 0.5;
+                    s.body = Body::at(v3(mid.x, mid.y, z.mins.z + 1.0));
+                    s.step(&mut mv, &c, Cmd::new(0, 0.0, 0.0))
+                }
+                // through the door at the end of the level before
+                None => {
+                    let door = m
+                        .triggers
+                        .iter()
+                        .find(|t| {
+                            t.kind == TriggerKind::Teleport(start)
+                                && (t.maxs.x - t.mins.x < 16.0 || t.maxs.y - t.mins.y < 16.0)
+                        })
+                        .unwrap_or_else(|| panic!("{id}: a door to {target}"));
+                    s.body = Body::at((door.mins + door.maxs) * 0.5);
+                    s.step(&mut mv, &c, Cmd::new(0, 0.0, 0.0))
+                }
+            };
+            assert_eq!(t.stage, Some(st as u8), "{id}: into level {} at {target}", st + 1);
+            assert_eq!((s.stage, s.phase), (st as u8, Phase::Running));
+            // a fall in this level: back to its checkpoint, clock running
+            let pit = teleport_to(&m, &target, false);
+            s.body = Body::at((pit.mins + pit.maxs) * 0.5);
+            let t = s.step(&mut mv, &c, Cmd::new(0, 0.0, 0.0));
+            assert!(t.fell, "{id}: a fall in level {}", st + 1);
+            assert_eq!(
+                (s.body.origin, s.stage, s.phase),
+                (m.destination(start).unwrap().0, st as u8, Phase::Running),
+                "{id}: back to level {}'s checkpoint",
+                st + 1
+            );
+        }
+    }
+
+    #[test]
+    fn ambience_counts_its_seven_checkpoint_levels() {
+        walks_its_levels("bhop_ambience", 7);
+    }
+
+    #[test]
+    fn eazy_counts_its_four_levels_by_their_doors() {
+        walks_its_levels("bhop_eazy", 4);
+    }
+
+    #[test]
+    fn lego_counts_its_seven_numbered_levels() {
+        walks_its_levels("bhop_lego", 7);
+    }
+
+    #[test]
+    fn japan_counts_its_six_areas() {
+        walks_its_levels("bhop_japan", 6);
+    }
+
+    #[test]
+    fn cartoons_counts_its_six_floors() {
+        walks_its_levels("bhop_cartoons", 6);
     }
 }
