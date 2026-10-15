@@ -31,6 +31,8 @@ What it keeps and drops (the rules for play are in the core; this only copies):
     core makes each triangle a thin solid wedge under it (its top drawn,
     4 units deep, with axial bevels), so its brush collision holds them;
   - func_wall brushes (solid and drawn);
+  - func_door brushes (solid and drawn where they rest: a bhop map's
+    blocks, which the timer servers hold still);
   - trigger_hurt (Source's damage triggers: what kills a fall on old maps).
 
 Names are lower-cased: Source matches entity names without regard to case.
@@ -193,6 +195,13 @@ def main(path, map_id, floor, player_start=False):
             continue
         if cls == "func_wall":
             # a func_wall is a solid, drawn brush (surf_aircontrol's)
+            for bi in mbr:
+                add(bi, 0, bi, origin)
+            continue
+        if cls == "func_door":
+            # a bhop map's blocks are func_doors that sink when stood on; the
+            # timer servers hold them still, and so does this: solid and
+            # drawn where they rest (bhop_eazy's, bhop_cartoons')
             for bi in mbr:
                 add(bi, 0, bi, origin)
             continue
