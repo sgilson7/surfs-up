@@ -24,7 +24,10 @@ What it keeps and drops (the rules for play are in the core; this only copies):
   - func_illusionary brushes (drawn, not solid);
   - trigger_teleport, trigger_push, and every trigger_multiple whose output
     renames its activator (AddOutput targetname), each with its filter's
-    required name; triggers that start disabled are dropped;
+    required name; triggers that start disabled are dropped, and so are
+    triggers no plain player can pass: a negated name filter (surf_deadline's
+    stage 4 route check) or a filter on a classname other than "player"
+    (surf_summer's jetski boosts, for a player its falls have renamed);
   - nothing below --floor (surf_utopia's TF2 jail sits under the course);
   - water brushes (drawn as a ball pit, not solid: Source does not block on water);
   - displacements (curved terrain, solid in Source), as their grids: the
@@ -168,6 +171,20 @@ def main(path, map_id, floor, player_start=False):
 
     filters = {e["targetname"].lower(): e for e in ents if e["classname"] == "filter_activator_name" and "targetname" in e}
 
+    classes = {e["targetname"].lower(): e for e in ents if e["classname"] == "filter_activator_class" and "targetname" in e}
+
+    def passes(f):
+        return f.get("Negated", "0") in ("0", "Allow entities that match criteria")
+
+    def unpassable(e):
+        # the core keeps neither a negated name filter nor a player's classname
+        f = e.get("filtername", "").lower()
+        if f in filters:
+            return not passes(filters[f])
+        if f in classes:
+            return passes(classes[f]) and classes[f].get("filterclass", "").lower() != "player"
+        return False
+
     def required(e):
         f = e.get("filtername", "").lower()
         if not f:
@@ -175,7 +192,7 @@ def main(path, map_id, floor, player_start=False):
         flt = filters.get(f)
         if flt is None:
             return NONE
-        assert flt.get("Negated", "0") in ("0", "Allow entities that match criteria"), "negated filters are not handled"
+        assert passes(flt), "negated filters are not handled"
         return name(flt.get("filtername", ""))
 
     triggers = []
@@ -209,7 +226,7 @@ def main(path, map_id, floor, player_start=False):
             for bi in mbr:
                 add(bi, 3, bi, origin)
             continue
-        if e.get("StartDisabled", "0") == "1":
+        if e.get("StartDisabled", "0") == "1" or unpassable(e):
             continue
         entry = None
         if cls == "trigger_teleport":
