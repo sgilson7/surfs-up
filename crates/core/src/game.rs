@@ -1833,6 +1833,8 @@ mod tests {
             "surf_aircontrol" => include_bytes!("../../../data/maps/surf_aircontrol.bin"),
             "surf_mesa" => include_bytes!("../../../data/maps/surf_mesa.bin"),
             "bhop_ambience" => include_bytes!("../../../data/maps/bhop_ambience.bin"),
+            "bhop_eazy" => include_bytes!("../../../data/maps/bhop_eazy.bin"),
+            "bhop_lego" => include_bytes!("../../../data/maps/bhop_lego.bin"),
             _ => UTOPIA,
         }
     }

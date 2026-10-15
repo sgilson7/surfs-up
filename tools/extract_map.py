@@ -33,7 +33,10 @@ What it keeps and drops (the rules for play are in the core; this only copies):
   - func_wall brushes (solid and drawn);
   - func_door brushes (solid and drawn where they rest: a bhop map's
     blocks, which the timer servers hold still);
-  - trigger_hurt (Source's damage triggers: what kills a fall on old maps).
+  - trigger_hurt (Source's damage triggers: what kills a fall on old maps);
+  - a func_button fired by shooting it whose output renames the activator
+    (bhop_lego's boost pads): touching its pad renames;
+  - no trigger filtered by a filter_multi (bhop_lego's anti-stand teleports).
 
 Names are lower-cased: Source matches entity names without regard to case.
 
@@ -167,6 +170,7 @@ def main(path, map_id, floor, player_start=False):
         return names.index(n)
 
     filters = {e["targetname"].lower(): e for e in ents if e["classname"] == "filter_activator_name" and "targetname" in e}
+    multis = {e["targetname"].lower() for e in ents if e["classname"] == "filter_multi" and "targetname" in e}
 
     def required(e):
         f = e.get("filtername", "").lower()
@@ -211,6 +215,13 @@ def main(path, map_id, floor, player_start=False):
             continue
         if e.get("StartDisabled", "0") == "1":
             continue
+        if e.get("filtername", "").lower() in multis:
+            # a filter_multi passes any of several names: bhop_lego's
+            # anti-stand teleports on every block (named as you land, fired
+            # if you stay). Its blocks are held still, like a bhop map's
+            # doors, so these are left out; the floor under them still
+            # sends a miss back to its checkpoint.
+            continue
         entry = None
         if cls == "trigger_teleport":
             # a teleport with no target does nothing in Source (surf_egypt's
@@ -224,6 +235,15 @@ def main(path, map_id, floor, player_start=False):
         elif cls == "trigger_push":
             pitch, yaw, _ = [float(x) for x in e.get("pushdir", "0 0 0").split()]
             entry = (1, NONE, required(e), (pitch, yaw, 0.0, float(e.get("speed", "40"))))
+        elif cls == "func_button" and int(e.get("spawnflags", "0")) & 512:
+            # a button shot to fire it (bhop_lego's boost pads, at the foot of
+            # each lift): with nothing to shoot, touching its pad fires it
+            outs = [v for k, v in re.findall(r'"([^"]*)"\s+"([^"]*)"', raw_block(B, e)) if k == "OnDamaged"]
+            for v in outs:
+                parts = v.split(",")
+                at_once = len(parts) < 4 or float(parts[3] or 0) == 0
+                if len(parts) >= 3 and parts[0] == "!activator" and parts[1] == "AddOutput" and parts[2].startswith("targetname") and at_once:
+                    entry = (2, name(parts[2][len("targetname"):]), NONE, (0.0, 0.0, 0.0, 0.0))
         elif cls == "trigger_multiple":
             outs = [v for k, v in re.findall(r'"([^"]*)"\s+"([^"]*)"', raw_block(B, e)) if k == "OnTrigger" or k == "OnStartTouch"]
             for v in outs:

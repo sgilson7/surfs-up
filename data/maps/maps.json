@@ -477,6 +477,121 @@
     "acorn",
     "bunny"
    ]
+  },
+  {
+   "id": "bhop_eazy",
+   "name": "bhop_eazy",
+   "author": "31K4L",
+   "tier": 1,
+   "mode": "bhop",
+   "tier_source": "SharpTimer's bhop list: its remakes bhop_eazy_hd and bhop_eazy_4xl are tier 1",
+   "spawn": "t11",
+   "start_zone": [
+    [
+     -480,
+     -480,
+     64
+    ],
+    [
+     -224,
+     -224,
+     240
+    ]
+   ],
+   "roles": [
+    {
+     "target": "t11",
+     "role": "restart"
+    },
+    {
+     "target": "t2727",
+     "box": [
+      [
+       1240,
+       -900,
+       60
+      ],
+      [
+       1264,
+       -828,
+       180
+      ]
+     ],
+     "role": "finish",
+     "ending": 1
+    }
+   ],
+   "stages": [],
+   "medals": {
+    "record": 40,
+    "gold": 50,
+    "silver": 65,
+    "bronze": 90
+   },
+   "things": [
+    "sneaker",
+    "feather",
+    "spring",
+    "stopwatch",
+    "frog"
+   ]
+  },
+  {
+   "id": "bhop_lego",
+   "name": "bhop_lego",
+   "author": "Tony Montana",
+   "tier": 1,
+   "mode": "bhop",
+   "tier_source": "SharpTimer's bhop list: tier 1",
+   "spawn": "spawn",
+   "start_zone": [
+    [
+     -480,
+     144,
+     128
+    ],
+    [
+     96,
+     1040,
+     400
+    ]
+   ],
+   "finish_zone": [
+    [
+     1648,
+     -10368,
+     -2112
+    ],
+    [
+     2048,
+     -10032,
+     -1632
+    ]
+   ],
+   "roles": [
+    {
+     "target": "1a",
+     "role": "restart"
+    },
+    {
+     "target": "spawn",
+     "role": "restart"
+    }
+   ],
+   "stages": [],
+   "medals": {
+    "record": 75,
+    "gold": 95,
+    "silver": 120,
+    "bronze": 170
+   },
+   "things": [
+    "toy_brick",
+    "block_figure",
+    "toy_car",
+    "toy_dino",
+    "toy_crown"
+   ]
   }
  ]
 }

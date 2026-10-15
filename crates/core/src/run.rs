@@ -929,6 +929,128 @@ mod tests {
     }
 
     #[test]
+    fn eazy_holds_its_blocks_still_and_runs_from_its_pad_to_its_last_wall() {
+        let (m, c) = load("bhop_eazy");
+        let mut mv = Mover::new(&m);
+        // a block (a func_door that sinks in Source) holds you where it rests
+        let mut b = Surfer::at_start(&m);
+        b.phase = Phase::Running;
+        b.body.origin = v3(-160.0, -320.0, 90.0);
+        for _ in 0..64 {
+            b.step(&mut mv, &c, Cmd::new(0, 0.0, 0.0));
+        }
+        assert!(
+            b.body.on_ground && (63.0..=66.0).contains(&b.body.origin.z),
+            "standing on the first block at {:?}",
+            b.body.origin
+        );
+        // hop off the pad: the clock starts, and the first lane's floor
+        // sends you back to the pad
+        let mut s = Surfer::at_start(&m);
+        let mut started = false;
+        let mut fell = false;
+        for _ in 0..640 {
+            let t = s.step(&mut mv, &c, Cmd::new(B_FORWARD | B_JUMP, 30.0, 0.0));
+            started |= t.started;
+            if t.fell {
+                fell = true;
+                break;
+            }
+        }
+        assert!(started && fell, "off the pad and onto the first lane's floor");
+        assert_eq!((s.body.origin, s.phase), (m.spawn, Phase::Start));
+        // a later lane's floor sends you back to that lane, the clock running
+        let t22 = m.name_index("t22").unwrap();
+        let mut l = Surfer::at_start(&m);
+        l.phase = Phase::Running;
+        l.body.origin = v3(320.0, -352.0, 60.0);
+        l.step(&mut mv, &c, Cmd::new(0, 0.0, 0.0));
+        assert_eq!(
+            (l.body.origin, l.phase),
+            (m.destination(t22).unwrap().0, Phase::Running),
+            "the second lane's floor"
+        );
+        // the wall at the end of the last lane stops the clock
+        let mut f = Surfer::at_start(&m);
+        f.phase = Phase::Running;
+        f.body.origin = v3(1200.0, -864.0, 100.0);
+        let mut finished = false;
+        for _ in 0..64 {
+            if f.step(&mut mv, &c, Cmd::new(B_FORWARD, 0.0, 0.0)).finished.is_some() {
+                finished = true;
+                break;
+            }
+        }
+        assert!(finished, "the last wall is the end");
+    }
+
+    #[test]
+    fn lego_starts_off_its_first_platform_boosts_from_its_pads_and_ends_in_its_end_room() {
+        let (m, c) = load("bhop_lego");
+        let mut mv = Mover::new(&m);
+        // from the spawn, down the hall and off the first platform: the clock
+        // starts, and the floor under the first blocks sends you back
+        let mut s = Surfer::at_start(&m);
+        let mut started = false;
+        let mut fell = false;
+        for _ in 0..1280 {
+            let t = s.step(&mut mv, &c, Cmd::new(B_FORWARD, 270.0, 0.0));
+            started |= t.started;
+            if t.fell {
+                fell = true;
+                break;
+            }
+        }
+        assert!(started && fell, "off the first platform at {:?}", s.body.origin);
+        assert_eq!((s.body.origin, s.phase), (m.spawn, Phase::Start));
+        // a block holds you: its anti-stand teleport (a filter_multi) is left out
+        let mut b = Surfer::at_start(&m);
+        b.phase = Phase::Running;
+        b.body.origin = v3(-104.0, -120.0, 150.0);
+        for _ in 0..128 {
+            assert!(!b.step(&mut mv, &c, Cmd::new(0, 0.0, 0.0)).teleported, "kicked off a block");
+        }
+        assert!(b.body.on_ground, "standing on a block at {:?}", b.body.origin);
+        // the pad at the foot of stage 3's lift (shot in Source; touched
+        // here) names you "boost", and the lift's push takes you up to 3c
+        let mut lift = |name: bool| {
+            let mut p = Surfer::at_start(&m);
+            p.phase = Phase::Running;
+            p.body.origin = v3(-848.0, -3760.0, 530.0);
+            if !name {
+                // keep it off the pad: start in the air above it, and clear the name each tick
+                p.body.origin.z = 560.0;
+            }
+            let mut top: f32 = 0.0;
+            for _ in 0..192 {
+                if !name {
+                    p.name = 0;
+                    p.body.origin.z = p.body.origin.z.max(560.0);
+                }
+                p.step(&mut mv, &c, Cmd::new(0, 0.0, 0.0));
+                top = top.max(p.body.origin.z);
+            }
+            top
+        };
+        let boosted = lift(true);
+        assert!(boosted > 800.0, "the pad boosts you up to 3c: top {boosted}");
+        let unboosted = lift(false);
+        assert!(unboosted < 700.0, "no pad, no boost: top {unboosted}");
+        // the room after the last strip, the map's "end", stops the clock
+        let mut f = Surfer::at_start(&m);
+        f.phase = Phase::Running;
+        f.body.origin = v3(1700.0, -10300.0, -2000.0);
+        let mut finished = false;
+        for _ in 0..64 {
+            if f.step(&mut mv, &c, Cmd::new(0, 0.0, 0.0)).finished.is_some() {
+                finished = true;
+                break;
+            }
+        }
+        assert!(finished, "the end room is the end");
+    }
+
+    #[test]
     fn sync_counts_turning_into_the_held_key() {
         let (m, c) = load("surf_utopia");
         let mut mv = Mover::new(&m);
