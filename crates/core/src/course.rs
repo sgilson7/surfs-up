@@ -70,6 +70,9 @@ pub struct Course {
     /// into, not reached by a door's teleport, and its falls only send you
     /// back to the checkpoint each level starts at.
     pub stage_zones: Vec<(u8, Zone)>,
+    /// A finish counts only after the last stage (a course whose start
+    /// room can teleport you past levels, as bhop_eazy's level select does).
+    pub all_stages: bool,
     pub medals: Medals,
     /// The course's things to hold, by tier (see `TIERS`).
     pub things: Vec<String>,
@@ -263,6 +266,7 @@ impl Course {
             rules: Vec::new(),
             stages: Vec::new(),
             stage_zones: Vec::new(),
+            all_stages: false,
             things: Vec::new(),
             fall_damage: false,
             finish_zone: None,
@@ -340,6 +344,7 @@ impl Course {
             rules,
             stages,
             stage_zones,
+            all_stages: m["all_stages"].as_bool().unwrap_or(false),
             medals: medals_of(m),
             things: things_of(m),
             fall_damage: m["fall_damage"].as_bool().unwrap_or(false),

@@ -790,6 +790,13 @@ impl Game {
             };
             self.show_banner(key, json!({}));
         }
+        if t.skipped {
+            self.events.push(Event {
+                sound: "pit",
+                gain: 0.6,
+            });
+            self.show_banner("banner_skipped", json!({}));
+        }
         if let Some(e) = t.exited {
             self.events.push(Event {
                 sound: "pit",
@@ -2151,6 +2158,7 @@ mod tests {
         spots.extend(g.map.triggers.iter().map(|t| (t.mins + t.maxs) * 0.5));
         let finishes = |p: &V3| {
             let mut s = Surfer::from_body(Body::at(*p), Cmd::new(0, 0.0, 0.0));
+            s.stage = g.course.stages.len().saturating_sub(1) as u8;
             s.step(&mut mv, &g.course, Cmd::new(0, 0.0, 0.0))
                 .finished
                 .is_some()
@@ -2263,6 +2271,8 @@ mod tests {
                     g.recording = Some((g.me.clone(), Vec::new()));
                 }
                 g.me.body = Body::at(spot);
+                // through every stage
+                g.me.stage = g.course.stages.len().saturating_sub(1) as u8;
                 t += 1000.0 / 64.0;
                 g.advance(t, 0, 0.0, 0.0);
                 assert!(

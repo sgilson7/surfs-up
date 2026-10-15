@@ -56,6 +56,7 @@
  "banner_new_thing": "New in your hands: {thing}!",
  "banner_peer_run": "{name} finished in {time}. Their ghost will surf with you.",
  "banner_follow_host": "Off to {course}, the host's course.",
+ "banner_skipped": "That skipped a level, so the run has no time. Go through every level to finish.",
  "banner_room_full": "That room has eight surfers already.",
  "banner_net_error": "Could not reach the others ({key}).",
  "online_no_bundle": "the online code would not load",

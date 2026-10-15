@@ -69,6 +69,8 @@ pub struct Tick {
     pub teleported: bool,
     pub fell: bool,
     pub started: bool,
+    /// Reached the finish without going through every stage: no time.
+    pub skipped: bool,
     pub finished: Option<(u8, u32)>,
     pub exited: Option<u8>,
     pub boosted: bool,
@@ -261,7 +263,12 @@ impl Surfer {
 
         match jump {
             Some((Role::Finish(e), _)) => {
-                if self.phase == Phase::Running {
+                // on a course that asks it, only a run through the last
+                // stage finishes (bhop_eazy's lobby teleports skip levels)
+                let last = course.stages.len().saturating_sub(1) as u8;
+                if self.phase == Phase::Running && course.all_stages && self.stage < last {
+                    out.skipped = true;
+                } else if self.phase == Phase::Running {
                     out.finished = Some((e, self.stats.ticks));
                 } else {
                     out.exited = Some(e);
@@ -1326,21 +1333,26 @@ mod tests {
             (m.destination(t22).unwrap().0, Phase::Running),
             "the second lane's floor"
         );
-        // the wall at the end of the last lane stops the clock
-        let mut f = Surfer::at_start(&m);
-        f.phase = Phase::Running;
-        f.body.origin = v3(1300.0, -864.0, 100.0);
-        let mut finished = false;
-        for _ in 0..64 {
-            if f.step(&mut mv, &c, Cmd::new(B_FORWARD, 180.0, 0.0))
-                .finished
-                .is_some()
-            {
-                finished = true;
-                break;
+        // the wall at the end of the last lane stops the clock, for a run
+        // that has come through every level; one the start room's level
+        // select sent past them has no time
+        let end = |stage: u8| {
+            let mut mv = Mover::new(&m);
+            let mut f = Surfer::at_start(&m);
+            f.phase = Phase::Running;
+            f.stage = stage;
+            f.body.origin = v3(1300.0, -864.0, 100.0);
+            for _ in 0..64 {
+                let t = f.step(&mut mv, &c, Cmd::new(B_FORWARD, 180.0, 0.0));
+                if t.finished.is_some() || t.skipped {
+                    return (t.finished.is_some(), t.skipped);
+                }
             }
-        }
-        assert!(finished, "the last wall is the end");
+            (false, false)
+        };
+        let last = c.stages.len() as u8 - 1;
+        assert_eq!(end(last), (true, false), "the last wall is the end");
+        assert_eq!(end(0), (false, true), "a run that skipped levels has no time");
     }
 
     #[test]
