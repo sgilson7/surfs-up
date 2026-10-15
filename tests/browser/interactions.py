@@ -8,6 +8,19 @@ CSP blocks Playwright's string-form wait_for_function. Headless browsers
 cannot capture the mouse, so the view never turns here; the keys still work.
 """
 
+# every course in data/maps/maps.json
+COURSES = 8
+
+
+def pick_course(page, course):
+    """Open the tab the course is under, then click its card."""
+    tabs = page.locator("#map-tabs .map-tab")
+    for i in range(tabs.count()):
+        if page.locator(f"#maps .map-card[data-map='{course}']").count():
+            break
+        tabs.nth(i).click()
+    page.click(f"#maps .map-card[data-map='{course}']")
+
 
 def run(page, check, engine):
     page.wait_for_selector("body[data-mode='title']", state="attached", timeout=10000)
@@ -22,7 +35,7 @@ def run(page, check, engine):
     page.wait_for_selector("#locker:not([hidden])", timeout=5000)
     items = page.locator("#items .item").count()
     locked = page.locator("#items .item.locked").count()
-    check(items == 41 and locked == 40, f"the cubby has forty-one things, forty still to earn ({items}, {locked} locked)")
+    check(items == 81 and locked == 80, f"the cubby has eighty-one things, eighty still to earn ({items}, {locked} locked)")
     check("Rubber chicken" in page.inner_text("#items"), "the rubber chicken is in the cubby")
     # taller than the window, the cubby scrolls from its title to its close button
     page.locator("#locker").evaluate("s => s.scrollTop = 0")
@@ -81,15 +94,30 @@ def run(page, check, engine):
     # developer's ?at= shortcut sets the walker down 150 units short of the door.
     page.goto(page.url.split("?")[0].split("#")[0] + "?at=0,-700,200,90")
     page.wait_for_selector("body[data-mode='title']", state="attached", timeout=10000)
-    check(page.locator("#maps .map-card").count() == 8, "eight courses on the title")
-    tiers = [page.locator("#maps .map-card .tier").nth(i).inner_text() for i in range(8)]
-    check(tiers[0] == "Tier 1" and "Tier 8" in tiers and tiers[-1].startswith("Bhop"), f"each course card shows its tier, easiest first, the bhop course last {tiers}")
-    anubis = page.locator("#maps .map-card:has-text('surf_anubis')").inner_text()
-    check("Experts only" in anubis, "anubis warns that it is for experts")
+    tabs = [page.locator("#map-tabs .map-tab").nth(i).inner_text() for i in range(page.locator("#map-tabs .map-tab").count())]
+    check(tabs == ["Tier 1", "Tier 2", "Advanced", "Bhop"], f"the courses sit under tier tabs {tabs}")
+    check(page.locator("#map-tabs .map-tab.open").inner_text() == "Tier 1", "the title opens on the chosen course's tab, tier 1")
+    seen = {}
+    for i, name in enumerate(tabs):
+        page.locator("#map-tabs .map-tab").nth(i).click()
+        cards = page.locator("#maps .map-card")
+        seen[name] = [cards.nth(k).inner_text() for k in range(cards.count())]
+        for _ in range(30):
+            icons = page.locator("#maps .map-card img.map-icon").evaluate_all("is => is.length > 0 && is.every(i => i.complete && i.naturalWidth > 0)")
+            if icons:
+                break
+            page.wait_for_timeout(100)
+        check(icons, f"every {name} card has its TikZ icon")
+    total = sum(len(v) for v in seen.values())
+    check(total == COURSES, f"{COURSES} courses across the tabs ({total})")
+    check(all("Tier 1" in c for c in seen["Tier 1"]) and all("Tier 2" in c for c in seen["Tier 2"]), "each tier tab holds its tier")
+    check(all("Bhop" in c for c in seen["Bhop"]), "the bhop tab holds the bhop courses")
+    anubis = [c for c in seen["Advanced"] if "surf_anubis" in c]
+    check(anubis and "Experts only" in anubis[0], "anubis is under Advanced and warns that it is for experts")
     # a name typed just before choosing: leaving the box redraws the menus,
     # which must not swallow the click on the course
     page.fill("#name", "Tester K")
-    page.click("#maps .map-card:has-text('surf_kitsune')")
+    pick_course(page, "surf_kitsune")
     for _ in range(100):
         if "surf_kitsune" in page.inner_text("#map-name"):
             break
@@ -111,4 +139,4 @@ def run(page, check, engine):
     page.wait_for_selector("body[data-mode='pause']", state="attached", timeout=5000)
     page.click("#p-title")
     page.wait_for_selector("body[data-mode='title']", state="attached", timeout=5000)
-    page.click("#maps .map-card:has-text('surf_utopia')")
+    pick_course(page, "surf_utopia")

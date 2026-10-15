@@ -216,7 +216,12 @@ def course_pair(p, engine, origin, course):
         page.goto(origin + "/index.html?ice=none")
         page.wait_for_selector("body[data-ready='true']", state="attached", timeout=30000)
         page.fill("#name", name)
-        page.click(f"#maps .map-card:has-text('{course}')")
+        tabs = page.locator("#map-tabs .map-tab")
+        for i in range(tabs.count()):
+            if page.locator(f"#maps .map-card[data-map='{course}']").count():
+                break
+            tabs.nth(i).click()
+        page.click(f"#maps .map-card[data-map='{course}']")
         for _ in range(300):
             if course in page.inner_text("#map-name"):
                 break

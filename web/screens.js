@@ -93,21 +93,48 @@ export function makeScreens(copy) {
     el("s-shirt").style.background = st.shirt;
   }
 
-  // the courses on the title: pick one, see your best on it
-  // The course cards are rebuilt only when they change: a redraw between a
-  // press and its release (leaving the name box saves the name and redraws)
-  // would otherwise take the card away and lose the click.
+  // the courses on the title, under tabs (tier 1, tier 2, advanced, bhop):
+  // pick one, see your best on it. Which tab a course is under comes from
+  // the core; which tab is open is the page's own (it opens on the chosen
+  // course's). The cards are rebuilt only when they change: a redraw
+  // between a press and its release (leaving the name box saves the name
+  // and redraws) would otherwise take the card away and lose the click.
   let shownMaps = "";
+  let tab = null;
   function maps(s, onPick) {
     el("map-name").textContent = s.map_name;
-    const box = el("maps");
-    const key = JSON.stringify(s.maps);
+    if (!s.map_groups.includes(tab)) {
+      const chosen = s.maps.find((m) => m.chosen);
+      tab = chosen ? chosen.group : s.map_groups[0];
+    }
+    const key = JSON.stringify([s.maps, s.map_groups, tab]);
     if (key === shownMaps) return;
     shownMaps = key;
+    const tabs = el("map-tabs");
+    tabs.replaceChildren();
+    for (const g of s.map_groups) {
+      const t = document.createElement("button");
+      t.className = "map-tab" + (g === tab ? " open" : "");
+      t.dataset.group = g;
+      t.setAttribute("role", "tab");
+      t.setAttribute("aria-selected", String(g === tab));
+      t.textContent = copy["tab_" + g];
+      t.addEventListener("click", () => {
+        tab = g;
+        maps(s, onPick);
+      });
+      tabs.append(t);
+    }
+    const box = el("maps");
     box.replaceChildren();
-    for (const m of s.maps) {
+    for (const m of s.maps.filter((m) => m.group === tab)) {
       const b = document.createElement("button");
       b.className = "map-card" + (m.chosen ? " chosen" : "");
+      b.dataset.map = m.id;
+      const icon = document.createElement("img");
+      icon.className = "map-icon";
+      icon.src = "art/maps/" + m.id + ".png";
+      icon.alt = "";
       const name = document.createElement("strong");
       name.textContent = m.name;
       const tier = document.createElement("span");
@@ -120,7 +147,13 @@ export function makeScreens(copy) {
       by.textContent = fill(copy.course_by, { author: m.author });
       const best = document.createElement("span");
       best.textContent = m.best ? fill(copy.course_best, { time: m.best }) : copy.course_none;
-      b.append(name, tier, band, by, best);
+      const rank = document.createElement("span");
+      rank.className = "rank";
+      rank.append(tier, band);
+      const text = document.createElement("span");
+      text.className = "text";
+      text.append(name, rank, by, best);
+      b.append(icon, text);
       b.addEventListener("click", () => onPick(m.id));
       box.append(b);
     }

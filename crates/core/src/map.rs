@@ -57,7 +57,8 @@ pub enum TriggerKind {
     Push(V3, f32),
     /// Give the activator this name (a map's AddOutput targetname), which
     /// filters on other triggers test: how a map's secrets remember you.
-    Rename(u16),
+    /// The second is the output's delay in ticks (0: at once).
+    Rename(u16, u16),
     /// Source's trigger_hurt: this much damage a second, dealt half a
     /// second's worth at a time while touched.
     Hurt(f32),
@@ -405,7 +406,8 @@ impl Map {
                     TriggerKind::Push(f, speed)
                 }
                 3 => TriggerKind::Hurt(speed),
-                _ => TriggerKind::Rename(a),
+                // the output's delay, in seconds, to the nearest tick
+                _ => TriggerKind::Rename(a, (speed.max(0.0) * 64.0).round().min(65535.0) as u16),
             };
             triggers.push(Trigger {
                 kind,

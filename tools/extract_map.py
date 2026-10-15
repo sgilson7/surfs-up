@@ -24,7 +24,10 @@ What it keeps and drops (the rules for play are in the core; this only copies):
   - func_illusionary brushes (drawn, not solid);
   - trigger_teleport, trigger_push, and every trigger_multiple whose output
     renames its activator (AddOutput targetname), each with its filter's
-    required name; triggers that start disabled are dropped;
+    required name and the output's delay; triggers that start disabled are dropped, and so are
+    triggers no plain player can pass: a negated name filter (surf_deadline's
+    stage 4 route check) or a filter on a classname other than "player"
+    (surf_summer's jetski boosts, for a player its falls have renamed);
   - nothing below --floor (surf_utopia's TF2 jail sits under the course);
   - water brushes (drawn as a ball pit, not solid: Source does not block on water);
   - displacements (curved terrain, solid in Source), as their grids: the
@@ -35,7 +38,8 @@ What it keeps and drops (the rules for play are in the core; this only copies):
     blocks, which the timer servers hold still);
   - trigger_hurt (Source's damage triggers: what kills a fall on old maps);
   - a func_button fired by shooting it whose output renames the activator
-    (bhop_lego's boost pads): touching its pad renames;
+    (bhop_lego's boost pads, shot as you drop into a lift): dropping
+    within BUTTON_REACH of its pad renames;
   - no trigger filtered by a filter_multi (bhop_lego's anti-stand teleports).
 
 Names are lower-cased: Source matches entity names without regard to case.
@@ -49,7 +53,7 @@ Format v3 (little endian), all counts u32:
   u32 names; per name: u8 len, bytes
   u32 triggers; per trigger: u8 kind, u16 a, u16 filter, f32 pitch yaw roll speed, u16 sides; per side f32 nx ny nz d
      kind 0 teleport (a: destination name), 1 push (a unused), 2 rename (a: the new name),
-       3 hurt (a unused, speed: damage a second)
+       3 hurt (a unused, speed: damage a second); a rename's speed is its output's delay in seconds
      filter: the name the activator must have, or 65535 for none
   u32 destinations; per destination: u16 name, f32 x y z yaw
   u32 displacements; per displacement: u8 power, f32 face normal xyz, then
@@ -64,6 +68,8 @@ import bsp  # noqa: E402
 
 MAPS = Path(__file__).resolve().parents[1] / "data" / "maps"
 NONE = 65535
+# how far over a shot button's pad touching stands in for the shot (units)
+BUTTON_REACH = 128.0
 CONTENTS_SOLID, CONTENTS_WINDOW, CONTENTS_GRATE = 0x1, 0x2, 0x8
 CONTENTS_WATER, CONTENTS_PLAYERCLIP, CONTENTS_MONSTERCLIP = 0x20, 0x10000, 0x20000
 
@@ -172,6 +178,20 @@ def main(path, map_id, floor, player_start=False):
     filters = {e["targetname"].lower(): e for e in ents if e["classname"] == "filter_activator_name" and "targetname" in e}
     multis = {e["targetname"].lower() for e in ents if e["classname"] == "filter_multi" and "targetname" in e}
 
+    classes = {e["targetname"].lower(): e for e in ents if e["classname"] == "filter_activator_class" and "targetname" in e}
+
+    def passes(f):
+        return f.get("Negated", "0") in ("0", "Allow entities that match criteria")
+
+    def unpassable(e):
+        # the core keeps neither a negated name filter nor a player's classname
+        f = e.get("filtername", "").lower()
+        if f in filters:
+            return not passes(filters[f])
+        if f in classes:
+            return passes(classes[f]) and classes[f].get("filterclass", "").lower() != "player"
+        return False
+
     def required(e):
         f = e.get("filtername", "").lower()
         if not f:
@@ -179,7 +199,7 @@ def main(path, map_id, floor, player_start=False):
         flt = filters.get(f)
         if flt is None:
             return NONE
-        assert flt.get("Negated", "0") in ("0", "Allow entities that match criteria"), "negated filters are not handled"
+        assert passes(flt), "negated filters are not handled"
         return name(flt.get("filtername", ""))
 
     triggers = []
@@ -213,7 +233,7 @@ def main(path, map_id, floor, player_start=False):
             for bi in mbr:
                 add(bi, 3, bi, origin)
             continue
-        if e.get("StartDisabled", "0") == "1":
+        if e.get("StartDisabled", "0") == "1" or unpassable(e):
             continue
         if e.get("filtername", "").lower() in multis:
             # a filter_multi passes any of several names: bhop_lego's
@@ -249,13 +269,21 @@ def main(path, map_id, floor, player_start=False):
             for v in outs:
                 parts = v.split(",")
                 if len(parts) >= 3 and parts[0] == "!activator" and parts[1] == "AddOutput" and parts[2].startswith("targetname"):
-                    entry = (2, name(parts[2][len("targetname"):]), required(e), (0.0, 0.0, 0.0, 0.0))
+                    # the output's delay, in seconds: surf_summit's falls
+                    # rename you only after a quarter second inside them
+                    delay = float(parts[3]) if len(parts) > 3 and parts[3].strip() else 0.0
+                    entry = (2, name(parts[2][len("targetname"):]), required(e), (0.0, 0.0, 0.0, delay))
         if entry is None:
             continue
         for bi in mbr:
             sides, _ = sides_of(bi, origin)
             if zmax(sides) < floor:
                 continue
+            if cls == "func_button":
+                # shot from above as you drop into the lift (standing on the
+                # pad would be a fall: the floor's teleport covers it), so the
+                # rename reaches BUTTON_REACH units over the pad
+                sides = [(n, d + BUTTON_REACH, b, t) if n[2] > 0.99 else (n, d, b, t) for n, d, b, t in sides]
             triggers.append((*entry, sides))
 
     dests = []

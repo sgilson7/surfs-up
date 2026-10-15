@@ -94,6 +94,8 @@ pub struct Surfer {
     pub health: f32,
     /// Ticks until a hurt trigger touched now hurts again (0: at once).
     pub hurt_wait: u16,
+    /// A delayed rename on its way: the name, and the ticks until it lands.
+    pub renaming: Option<(u16, u16)>,
 }
 
 impl Surfer {
@@ -108,6 +110,7 @@ impl Surfer {
             stage: 0,
             health: FULL_HEALTH,
             hurt_wait: 0,
+            renaming: None,
         }
     }
 
@@ -122,6 +125,7 @@ impl Surfer {
             stage: 0,
             health: FULL_HEALTH,
             hurt_wait: 0,
+            renaming: None,
         }
     }
 
@@ -134,6 +138,7 @@ impl Surfer {
         self.stage = 0;
         self.health = FULL_HEALTH;
         self.hurt_wait = 0;
+        self.renaming = None;
     }
 
     /// One tick. `mv` carries the map; `course` says what its teleports mean.
@@ -159,7 +164,9 @@ impl Surfer {
         // pass through a thin trigger (RNGFix's telehop and trigger-jump fixes).
         // A filtered trigger fires only for a surfer with the name its filter
         // wants; a rename takes effect after this tick's teleports, as an
-        // output fires after the touch that caused it.
+        // output fires after the touch that caused it. A delayed rename
+        // lands that many ticks later, touched or not, as Source's delayed
+        // output does (surf_summit's falls take a quarter second to name you).
         let maxs = self.body.maxs();
         let a = self.body.origin;
         let lo = v3(before.x.min(a.x), before.y.min(a.y), before.z.min(a.z)) + HULL_MINS - v3(0.0, 0.0, 2.0);
@@ -191,7 +198,12 @@ impl Surfer {
                     push += dir * speed;
                     pushed = true;
                 }
-                TriggerKind::Rename(n) => rename = Some(n),
+                TriggerKind::Rename(n, 0) => rename = Some(n),
+                TriggerKind::Rename(n, wait) => {
+                    if self.renaming.is_none() {
+                        self.renaming = Some((n, wait));
+                    }
+                }
                 TriggerKind::Hurt(per_second) => {
                     hurting = true;
                     hurt += per_second * HURT_EVERY as f32 / 64.0;
@@ -290,6 +302,14 @@ impl Surfer {
             }
             None => {}
         }
+        if let Some((n, wait)) = self.renaming {
+            if wait <= 1 {
+                self.name = n;
+                self.renaming = None;
+            } else {
+                self.renaming = Some((n, wait - 1));
+            }
+        }
         if let Some(n) = rename {
             self.name = n;
         }
@@ -373,7 +393,7 @@ impl Surfer {
 mod tests {
     use super::*;
     use crate::course::tests::load;
-    use crate::map::HINT_TERRAIN;
+    use crate::map::{Trigger, HINT_TERRAIN};
     use crate::movement::{B_FORWARD, B_JUMP};
 
     #[test]
@@ -729,7 +749,7 @@ mod tests {
         let namer = m
             .triggers
             .iter()
-            .find(|t| t.kind == TriggerKind::Rename(x))
+            .find(|t| t.kind == TriggerKind::Rename(x, 0))
             .expect("the naming trigger");
         let mut n = Surfer::at_start(&m);
         n.body.origin = (namer.mins + namer.maxs) * 0.5 - v3(0.0, 0.0, 36.0);
@@ -928,6 +948,232 @@ mod tests {
         assert!(finished, "the red pad is the end");
     }
 
+    /// A teleport to `target` that is a thin, tall door (a stage's end), or
+    /// failing that the largest one (a stage's fall).
+    fn teleport_to(m: &Map, target: &str, door: bool) -> Trigger {
+        let d = m.name_index(target).unwrap();
+        let mut to = m.triggers.iter().filter(|t| t.kind == TriggerKind::Teleport(d));
+        let size = |t: &&Trigger| {
+            let e = t.maxs - t.mins;
+            e.x * e.y * e.z
+        };
+        if door {
+            to.find(|t| {
+                (t.maxs.y - t.mins.y < 100.0 || t.maxs.x - t.mins.x < 100.0) && t.maxs.z - t.mins.z > 300.0
+            })
+            .unwrap_or_else(|| panic!("a door to {target}"))
+            .clone()
+        } else {
+            to.max_by(|a, b| size(a).total_cmp(&size(b)))
+                .unwrap_or_else(|| panic!("a fall to {target}"))
+                .clone()
+        }
+    }
+
+    #[test]
+    fn summer_runs_its_eleven_stages_and_its_last_door_finishes() {
+        let (m, c) = load("surf_summer");
+        let mut mv = Mover::new(&m);
+        let mut s = Surfer::at_start(&m);
+        assert_eq!(c.stages.len(), 11);
+        // its only pushes are jetski boosts for a player its stage 4 falls
+        // have given another classname, which no plain player passes
+        assert!(
+            !m.triggers.iter().any(|t| matches!(t.kind, TriggerKind::Push(..))),
+            "no boost for a plain player"
+        );
+        let (s1, yaw) = m.destination_named("s1").unwrap();
+        assert_eq!(s.body.origin, s1, "you start on stage 1's pad");
+        assert!(c.zone.contains(s1), "in the map's own timer start zone");
+        let mut started = false;
+        for _ in 0..300 {
+            if s.step(&mut mv, &c, Cmd::new(B_FORWARD, yaw, 0.0)).started {
+                started = true;
+                break;
+            }
+        }
+        assert!(started, "walking off stage 1's pad starts the clock");
+        // each stage's end door moves you on with the clock running
+        for (target, stage) in [("s2", 1u8), ("s3", 2u8)] {
+            let d = teleport_to(&m, target, true);
+            s.body.origin = (d.mins + d.maxs) * 0.5;
+            s.body.velocity = ZERO;
+            let t = s.step(&mut mv, &c, Cmd::new(0, 0.0, 0.0));
+            assert_eq!(t.stage, Some(stage), "through the door to {target}");
+            assert_eq!(s.phase, Phase::Running);
+        }
+        // a fall in stage 3 sends you back to stage 3's start, clock running
+        let pit = teleport_to(&m, "s3", false);
+        s.body.origin = (pit.mins + pit.maxs) * 0.5;
+        s.body.velocity = ZERO;
+        let t = s.step(&mut mv, &c, Cmd::new(0, 0.0, 0.0));
+        assert!(t.fell, "a fall in stage 3");
+        assert_eq!(
+            (s.body.origin, s.stage, s.phase),
+            (m.destination_named("s3").unwrap().0, 2, Phase::Running)
+        );
+        // the end of stage 11 takes you into the end room: the clock stops
+        let end = teleport_to(&m, "timer_end", false);
+        s.body.origin = (end.mins + end.maxs) * 0.5;
+        s.body.velocity = ZERO;
+        let t = s.step(&mut mv, &c, Cmd::new(0, 0.0, 0.0));
+        assert!(t.finished.is_some(), "the end of stage 11 finishes the run");
+    }
+
+    #[test]
+    fn deadline_falls_land_in_their_stage_and_its_end_zone_finishes() {
+        let (m, c) = load("surf_deadline");
+        let mut mv = Mover::new(&m);
+        let mut s = Surfer::at_start(&m);
+        assert_eq!(c.stages.len(), 4);
+        let (s1, yaw) = m.destination_named("stage1").unwrap();
+        assert_eq!(s.body.origin, s1, "you start on stage 1's pad");
+        assert!(c.zone.contains(s1), "in the map's own start zone");
+        let mut started = false;
+        for _ in 0..300 {
+            if s.step(&mut mv, &c, Cmd::new(B_FORWARD, yaw, 0.0)).started {
+                started = true;
+                break;
+            }
+        }
+        assert!(started, "walking off stage 1's pad starts the clock");
+        // stages run on into each other; a fall goes by a drop room whose
+        // pad sends you to that stage's start: the first marks stage 2
+        // reached, the next is a fall, and the clock runs throughout
+        let (s2, _) = m.destination_named("stage2").unwrap();
+        let drop = teleport_to(&m, "s2_fixdrop", false);
+        let mut seen = Vec::new();
+        for _ in 0..2 {
+            s.body.origin = (drop.mins + drop.maxs) * 0.5;
+            s.body.velocity = ZERO;
+            let (mut stage, mut fell) = (None, false);
+            for _ in 0..4 {
+                let t = s.step(&mut mv, &c, Cmd::new(0, 0.0, 0.0));
+                stage = stage.or(t.stage);
+                fell |= t.fell;
+                if s.body.origin == s2 {
+                    break;
+                }
+            }
+            assert_eq!(s.body.origin, s2, "the drop room's pad sends you to stage 2");
+            seen.push((stage, fell));
+        }
+        assert_eq!(seen, [(Some(1), false), (None, true)]);
+        assert_eq!((s.stage, s.phase), (1, Phase::Running));
+        // into the end zone: the clock stops
+        let z = c.finish_zone.unwrap();
+        s.body.origin = (z.mins + z.maxs) * 0.5;
+        s.body.velocity = ZERO;
+        let t = s.step(&mut mv, &c, Cmd::new(0, 0.0, 0.0));
+        assert!(t.finished.is_some(), "the end zone finishes the run");
+    }
+
+    #[test]
+    fn beginner_runs_seven_stages_from_its_first_platform_to_its_end_room() {
+        let (m, c) = load("surf_beginner");
+        let mut mv = Mover::new(&m);
+        let mut s = Surfer::at_start(&m);
+        for _ in 0..200 {
+            s.step(&mut mv, &c, Cmd::new(0, 90.0, 0.0));
+        }
+        assert!(
+            s.body.on_ground && s.phase == Phase::Start,
+            "on stage 1's platform at {:?}",
+            s.body.origin
+        );
+        // walk off the platform: the clock starts, and the floor under the
+        // first ramp sends you back to the platform, where it waits again
+        let mut started = false;
+        let mut fell = false;
+        for _ in 0..1200 {
+            let t = s.step(&mut mv, &c, Cmd::new(B_FORWARD, 90.0, 0.0));
+            started |= t.started;
+            if t.fell {
+                fell = true;
+                break;
+            }
+        }
+        assert!(started && fell, "off the platform and onto the floor");
+        assert_eq!((s.phase, s.stage), (Phase::Start, 0), "back in the start zone");
+        // the door at the end of the first ramp is stage 2
+        s.phase = Phase::Running;
+        s.body.origin = v3(-128.0, 2004.0, -300.0);
+        s.body.velocity = v3(0.0, 300.0, 0.0);
+        let t = s.step(&mut mv, &c, Cmd::new(0, 90.0, 0.0));
+        assert_eq!((t.stage, s.stage), (Some(1), 1), "stage 2 of 7");
+        assert_eq!(c.stages.len(), 7);
+        // and the last door, down the end room's toilet, finishes
+        s.body.origin = v3(-5312.0, 5236.0, -160.0);
+        let mut finished = false;
+        for _ in 0..64 {
+            if s.step(&mut mv, &c, Cmd::new(0, 90.0, 0.0)).finished.is_some() {
+                finished = true;
+                break;
+            }
+        }
+        assert!(finished, "the end room");
+        // the spawn room is not part of a run: its teleports restart
+        let spawn_room = m.name_index("spawnman").unwrap();
+        let t = m
+            .triggers
+            .iter()
+            .find(|t| t.kind == TriggerKind::Teleport(spawn_room))
+            .unwrap();
+        assert_eq!(c.role(t, spawn_room), Role::Restart);
+    }
+
+    #[test]
+    fn summits_falls_name_you_a_quarter_second_late_and_its_end_zone_finishes() {
+        let (m, c) = load("surf_summit");
+        let mut mv = Mover::new(&m);
+        let mut s = Surfer::at_start(&m);
+        for _ in 0..120 {
+            s.step(&mut mv, &c, Cmd::new(0, 0.0, 0.0));
+        }
+        assert!(s.body.on_ground && s.phase == Phase::Start, "on the castle floor");
+        // walk east off the castle and down its causeway: the clock starts,
+        // and the drop at its end sends you back to the castle
+        let mut started = false;
+        let mut fell = false;
+        for _ in 0..1200 {
+            let t = s.step(&mut mv, &c, Cmd::new(B_FORWARD, 0.0, 0.0));
+            started |= t.started;
+            if t.fell {
+                fell = true;
+                break;
+            }
+        }
+        assert!(started && fell, "off the castle and down the causeway's end");
+        assert_eq!((s.body.origin, s.phase), (m.spawn, Phase::Start));
+        // under the last section, a fall names you "filter_fail" after a
+        // quarter second (the output's 0.24 s delay), and only then does its
+        // teleport, which wants that name, send you back
+        let fail = m.name_index("filter_fail").unwrap();
+        let mut d = Surfer::at_start(&m);
+        d.phase = Phase::Running;
+        d.body.origin = v3(-1824.0, 864.0, -7128.0);
+        let mut back_at = None;
+        for i in 0..40 {
+            if d.step(&mut mv, &c, Cmd::new(0, 0.0, 0.0)).fell {
+                back_at = Some(i);
+                break;
+            }
+            assert!(i < 14 || d.name == fail || d.renaming.is_some());
+        }
+        let back_at = back_at.expect("the fall sends you back");
+        assert!(
+            (14..=17).contains(&back_at),
+            "not before a quarter second inside the fall: back at tick {back_at}"
+        );
+        // the timer's end zone (tm_mapend) stops the clock
+        d.phase = Phase::Running;
+        d.body.origin = v3(-14344.0, 0.0, -5120.0);
+        assert!(
+            d.step(&mut mv, &c, Cmd::new(0, 0.0, 0.0)).finished.is_some(),
+            "the end zone"
+        );
+    }
+
     #[test]
     fn eazy_holds_its_blocks_still_and_runs_from_its_pad_to_its_last_wall() {
         let (m, c) = load("bhop_eazy");
@@ -963,7 +1209,7 @@ mod tests {
         let t22 = m.name_index("t22").unwrap();
         let mut l = Surfer::at_start(&m);
         l.phase = Phase::Running;
-        l.body.origin = v3(320.0, -352.0, 60.0);
+        l.body.origin = v3(320.0, -352.0, 17.0);
         l.step(&mut mv, &c, Cmd::new(0, 0.0, 0.0));
         assert_eq!(
             (l.body.origin, l.phase),
@@ -973,10 +1219,13 @@ mod tests {
         // the wall at the end of the last lane stops the clock
         let mut f = Surfer::at_start(&m);
         f.phase = Phase::Running;
-        f.body.origin = v3(1200.0, -864.0, 100.0);
+        f.body.origin = v3(1300.0, -864.0, 100.0);
         let mut finished = false;
         for _ in 0..64 {
-            if f.step(&mut mv, &c, Cmd::new(B_FORWARD, 0.0, 0.0)).finished.is_some() {
+            if f.step(&mut mv, &c, Cmd::new(B_FORWARD, 180.0, 0.0))
+                .finished
+                .is_some()
+            {
                 finished = true;
                 break;
             }
@@ -1008,34 +1257,37 @@ mod tests {
         b.phase = Phase::Running;
         b.body.origin = v3(-104.0, -120.0, 150.0);
         for _ in 0..128 {
-            assert!(!b.step(&mut mv, &c, Cmd::new(0, 0.0, 0.0)).teleported, "kicked off a block");
+            assert!(
+                !b.step(&mut mv, &c, Cmd::new(0, 0.0, 0.0)).teleported,
+                "kicked off a block"
+            );
         }
         assert!(b.body.on_ground, "standing on a block at {:?}", b.body.origin);
-        // the pad at the foot of stage 3's lift (shot in Source; touched
-        // here) names you "boost", and the lift's push takes you up to 3c
+        // dropping into stage 3's lift over its pad (shot in Source; reached
+        // here) names you "boost", and the lift's push takes you up to 3c;
+        // without the name you fall to the floor and back to 3b
+        let b3 = m.destination(m.name_index("3b").unwrap()).unwrap().0;
         let mut lift = |name: bool| {
             let mut p = Surfer::at_start(&m);
             p.phase = Phase::Running;
-            p.body.origin = v3(-848.0, -3760.0, 530.0);
-            if !name {
-                // keep it off the pad: start in the air above it, and clear the name each tick
-                p.body.origin.z = 560.0;
-            }
+            p.body.origin = v3(-848.0, -3760.0, 700.0);
             let mut top: f32 = 0.0;
             for _ in 0..192 {
                 if !name {
                     p.name = 0;
-                    p.body.origin.z = p.body.origin.z.max(560.0);
                 }
                 p.step(&mut mv, &c, Cmd::new(0, 0.0, 0.0));
+                if p.body.origin == b3 {
+                    return (top, true);
+                }
                 top = top.max(p.body.origin.z);
             }
-            top
+            (top, false)
         };
-        let boosted = lift(true);
-        assert!(boosted > 800.0, "the pad boosts you up to 3c: top {boosted}");
-        let unboosted = lift(false);
-        assert!(unboosted < 700.0, "no pad, no boost: top {unboosted}");
+        let (top, fell) = lift(true);
+        assert!(top > 800.0 && !fell, "the pad boosts you up to 3c: top {top}");
+        let (top, fell) = lift(false);
+        assert!(fell, "no name, no boost: back to 3b (top {top})");
         // the room after the last strip, the map's "end", stops the clock
         let mut f = Surfer::at_start(&m);
         f.phase = Phase::Running;

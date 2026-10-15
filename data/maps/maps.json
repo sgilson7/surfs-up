@@ -305,6 +305,115 @@
    ]
   },
   {
+   "id": "surf_beginner",
+   "name": "surf_beginner",
+   "author": "Kiiru",
+   "tier": 1,
+   "tier_source": "SurfHeaven and SharpTimer: tier 1 (SurfHeaven's most played map)",
+   "spawn": "failman1",
+   "start_zone": [
+    [
+     -448,
+     -64,
+     320
+    ],
+    [
+     192,
+     256,
+     560
+    ]
+   ],
+   "roles": [
+    {
+     "target": "endman_poop",
+     "role": "finish",
+     "ending": 1
+    },
+    {
+     "target": "spawnman",
+     "role": "restart"
+    }
+   ],
+   "stages": [
+    "failman1",
+    "failman2",
+    "failman3",
+    "failman4",
+    "failman5",
+    "failman6",
+    "failman7"
+   ],
+   "medals": {
+    "record": 70,
+    "gold": 90,
+    "silver": 120,
+    "bronze": 170
+   },
+   "things": [
+    "floaties",
+    "whistle",
+    "gold_star",
+    "swim_ring",
+    "grad_cap"
+   ]
+  },
+  {
+   "id": "surf_summit",
+   "name": "surf_summit",
+   "author": "Juxtapo & Phurix",
+   "tier": 1,
+   "tier_source": "SurfHeaven and SharpTimer: tier 1",
+   "spawn": "td_mapstart",
+   "start_zone": [
+    [
+     296,
+     -1316,
+     11424
+    ],
+    [
+     1888,
+     1316,
+     11700
+    ]
+   ],
+   "finish_zone": [
+    [
+     -15360,
+     -2560,
+     -6144
+    ],
+    [
+     -13328,
+     2560,
+     -4096
+    ]
+   ],
+   "roles": [
+    {
+     "target": "td_mapstart",
+     "role": "restart"
+    },
+    {
+     "target": "td_spawn",
+     "role": "restart"
+    }
+   ],
+   "stages": [],
+   "medals": {
+    "record": 55,
+    "gold": 70,
+    "silver": 90,
+    "bronze": 125
+   },
+   "things": [
+    "ice_axe",
+    "snowflake",
+    "compass",
+    "summit_flag",
+    "yeti"
+   ]
+  },
+  {
    "id": "surf_sandtrap",
    "name": "surf_sandtrap",
    "author": "ArcticPanda",
@@ -363,6 +472,124 @@
     "sandcastle",
     "hourglass",
     "cactus"
+   ]
+  },
+  {
+   "id": "surf_summer",
+   "name": "surf_summer",
+   "author": "Hardex and friends",
+   "tier": 2,
+   "tier_source": "SurfHeaven and SharpTimer: tier 2 (staged)",
+   "spawn": "s1",
+   "start_zone": [
+    [
+     -13800,
+     -5344,
+     12064
+    ],
+    [
+     -12672,
+     -5000,
+     12256
+    ]
+   ],
+   "roles": [
+    {
+     "target": "timer_end",
+     "role": "finish",
+     "ending": 1
+    },
+    {
+     "target": "endzone",
+     "role": "restart"
+    },
+    {
+     "target": "spawnarea",
+     "role": "restart"
+    }
+   ],
+   "stages": [
+    "s1",
+    "s2",
+    "s3",
+    "s4",
+    "s5",
+    "s6",
+    "s7",
+    "s8",
+    "s9",
+    "s10",
+    "s11"
+   ],
+   "medals": {
+    "record": 210,
+    "gold": 270,
+    "silver": 360,
+    "bronze": 480
+   },
+   "things": [
+    "ice_cream",
+    "beach_ball",
+    "flip_flop",
+    "watermelon",
+    "crab"
+   ]
+  },
+  {
+   "id": "surf_deadline",
+   "name": "surf_deadline",
+   "author": "housegamer",
+   "tier": 2,
+   "tier_source": "SurfHeaven and SharpTimer: tier 2 (staged)",
+   "spawn": "stage1",
+   "start_zone": [
+    [
+     -8768,
+     -256,
+     1920
+    ],
+    [
+     -8384,
+     256,
+     2176
+    ]
+   ],
+   "finish_zone": [
+    [
+     10434,
+     -144,
+     8696
+    ],
+    [
+     11336,
+     1864,
+     9696
+    ]
+   ],
+   "roles": [
+    {
+     "target": "hub",
+     "role": "restart"
+    }
+   ],
+   "stages": [
+    "stage1",
+    "stage2",
+    "stage3",
+    "stage4"
+   ],
+   "medals": {
+    "record": 110,
+    "gold": 140,
+    "silver": 190,
+    "bronze": 260
+   },
+   "things": [
+    "alarm_clock",
+    "coffee_mug",
+    "paperclip",
+    "pencil",
+    "owl"
    ]
   },
   {
