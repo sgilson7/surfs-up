@@ -69,6 +69,9 @@ COLOURS = {
     "ink": "1E2B45", "netline": "9AA9BF", "glow": "FFF4C2",
     "stone": "8C8C93", "stonelit": "A9A9B0", "crystal": "8CF2D9", "crystaldark": "4CBFB2",
     "brown": "73492E", "brownlit": "93623F", "paper": "F4F4F0", "paperdark": "CDD1D8",
+    "steel": "C4C9D2", "steellit": "E6E9EE", "steeldark": "8C94A3", "black": "24242B", "blacklit": "3C3C46",
+    "ice": "E4F2FF", "icedark": "8EC2EE", "cone": "DCA45E", "conedark": "B07D3A", "choc": "7A4D2E",
+    "melon": "F04D57", "rind": "3A8F45", "rindlit": "D8F2C0", "bluegrey": "8FA8CC",
 }
 
 PREAMBLE = (
@@ -752,6 +755,225 @@ def bunny():
     return b, (S, S)
 
 
+def floaties():
+    b = "% arm floaties: two orange inflatable rings, white valves\n"
+    for x in (1.0, 2.0):
+        b += f"\\draw[orange,line width=9pt] {P(x, 1.5)} ellipse (0.42 and 0.62);\n"
+        b += f"\\draw[orangelit,line width=2pt] {P(x - 0.12, 1.5)} ellipse (0.36 and 0.56);\n"
+        b += rect(x - 0.06, 2.12, x + 0.06, 2.3, "white")
+    return b, (S, S)
+
+
+def whistle():
+    b = "% a coach's whistle: a silver barrel and mouthpiece on a red lanyard\n"
+    b += "\\draw[red,line width=3pt] (1.0,1.3) .. controls (0.4,2.9) and (2.4,3.0) .. (1.2,1.5);\n"
+    b += circle(1.25, 1.1, 0.55, "steel") + circle(1.1, 1.25, 0.2, "steellit")
+    b += rect(1.25, 1.2, 2.5, 1.62, "steel") + rect(1.25, 1.2, 2.5, 1.3, "steeldark")
+    b += rect(1.55, 1.62, 1.85, 1.7, "ink")
+    return b, (S, S)
+
+
+STAR_POINTS = 5
+
+
+def gold_star():
+    b = "% a gold star sticker: five points and a smile\n"
+    pts = []
+    for k in range(2 * STAR_POINTS):
+        r = 1.25 if k % 2 == 0 else 0.55
+        a = math.radians(90 + k * 36)
+        pts.append((1.5 + r * math.cos(a), 1.45 + r * math.sin(a)))
+    b += poly(pts, "gold")
+    b += poly([(1.5, 1.45)] + pts[0:3], "goldlit")
+    b += circle(1.32, 1.55, 0.07, "ink") + circle(1.68, 1.55, 0.07, "ink")
+    b += "\\draw[ink,line width=1.5pt] (1.3,1.3) arc (200:340:0.21);\n"
+    assert len(pts) == 2 * STAR_POINTS
+    return b, (S, S)
+
+
+RING_STRIPES = 8
+
+
+def swim_ring():
+    b = "% a swim ring: red and white stripes round a hole\n"
+    for k in range(RING_STRIPES):
+        a0, a1 = 360 / RING_STRIPES * k, 360 / RING_STRIPES * (k + 1)
+        fill = "red" if k % 2 == 0 else "white"
+        b += f"\\fill[{fill}] (1.5,1.5) ++({a0}:1.15) arc ({a0}:{a1}:1.15) -- ++({a1}:-0.6) arc ({a1}:{a0}:0.55) -- cycle;\n"
+    b += "\\draw[paperdark,line width=1pt] (1.5,1.5) circle (1.15);\n"
+    assert RING_STRIPES % 2 == 0
+    return b, (S, S)
+
+
+def grad_cap():
+    b = "% a mortarboard: a square board seen at an angle, the cap, a gold tassel\n"
+    b += poly([(0.95, 1.0), (2.05, 1.0), (2.05, 1.6), (0.95, 1.6)], "blacklit")
+    b += poly([(0.2, 1.9), (1.5, 1.4), (2.8, 1.9), (1.5, 2.4)], "black")
+    b += circle(1.5, 1.9, 0.08, "gold")
+    b += "\\draw[gold,line width=2pt] (1.5,1.9) -- (2.4,1.75) -- (2.4,1.05);\n"
+    b += poly([(2.3, 1.1), (2.5, 1.1), (2.55, 0.75), (2.25, 0.75)], "gold")
+    return b, (S, S)
+
+
+def ice_axe():
+    b = "% an ice axe: a blue shaft, a steel head with a pick and an adze\n"
+    b += poly([(1.42, 0.45), (1.62, 0.45), (1.62, 2.4), (1.42, 2.4)], "stripeblue")
+    b += poly([(1.45, 0.2), (1.59, 0.2), (1.52, 0.0)], "steeldark") + rect(1.45, 0.2, 1.59, 0.45, "steel")
+    b += poly([(0.5, 2.25), (1.5, 2.55), (2.3, 2.55), (2.3, 2.35), (1.5, 2.35)], "steel")
+    b += poly([(2.3, 2.3), (2.65, 2.25), (2.65, 2.65), (2.3, 2.6)], "steeldark")
+    b += "\\draw[red,line width=1.5pt] (1.62,1.6) .. controls (2.2,1.3) and (2.1,0.9) .. (1.62,1.0);\n"
+    return b, (S, S)
+
+
+SNOW_ARMS = 6
+
+
+def snowflake():
+    b = "% a snowflake: six arms with branching twigs\n"
+    for k in range(SNOW_ARMS):
+        a = 90 + k * 60
+        b += f"\\draw[icedark,line width=4pt,line cap=round] (1.5,1.5) -- ++({a}:1.2);\n"
+        for t in (-40, 40):
+            b += f"\\draw[icedark,line width=2.5pt,line cap=round] ($(1.5,1.5)+({a}:0.7)$) -- ++({a + t}:0.4);\n"
+    b += circle(1.5, 1.5, 0.18, "ice")
+    assert SNOW_ARMS == 6
+    return b, (S, S)
+
+
+def compass():
+    b = "% a brass compass: a white face, a red needle pointing north, a ring on top\n"
+    b += "\\draw[gold,line width=3pt] (1.5,2.6) circle (0.18);\n"
+    b += circle(1.5, 1.4, 1.05, "golddark") + circle(1.5, 1.4, 0.88, "white")
+    for k in range(4):
+        b += f"\\fill[netline] ($(1.5,1.4)+({k * 90}:0.75)$) circle (0.05);\n"
+    b += poly([(1.38, 1.4), (1.62, 1.4), (1.5, 2.1)], "red")
+    b += poly([(1.38, 1.4), (1.62, 1.4), (1.5, 0.7)], "ink")
+    b += circle(1.5, 1.4, 0.06, "gold")
+    return b, (S, S)
+
+
+def summit_flag():
+    b = "% a summit flag: a red flag on a pole in a little cairn of stones\n"
+    b += rect(1.0, 0.5, 1.1, 2.7, "netline")
+    b += poly([(1.1, 2.7), (2.5, 2.4), (1.1, 2.0)], "red") + poly([(1.1, 2.45), (1.7, 2.35), (1.1, 2.25)], "white")
+    b += ellipse(1.05, 0.45, 0.7, 0.28, "stone") + ellipse(1.25, 0.7, 0.4, 0.2, "stonelit")
+    return b, (S, S)
+
+
+def yeti():
+    b = "% a yeti plush: shaggy white, a blue-grey face, long arms\n"
+    for x in (0.7, 2.3):
+        b += ellipse(x, 1.05, 0.2, 0.6, "paperdark")
+    b += ellipse(1.5, 1.15, 0.85, 0.8, "white", ",draw=paperdark,line width=1.2pt")
+    b += ellipse(1.5, 2.1, 0.6, 0.55, "white", ",draw=paperdark,line width=1.2pt")
+    b += ellipse(1.5, 2.1, 0.38, 0.32, "bluegrey")
+    b += circle(1.38, 2.18, 0.06, "ink") + circle(1.62, 2.18, 0.06, "ink")
+    b += ellipse(1.15, 0.3, 0.3, 0.13, "bluegrey") + ellipse(1.85, 0.3, 0.3, 0.13, "bluegrey")
+    return b, (S, S)
+
+
+def ice_cream():
+    b = "% an ice-cream cone: a waffle cone, a pink scoop, a chocolate scoop, a cherry\n"
+    b += poly([(1.0, 1.4), (2.0, 1.4), (1.5, 0.2)], "cone")
+    b += "\\foreach \\y in {0.6,0.9,1.2} {\\draw[conedark,line width=1pt] (1.15,\\y) -- (1.85,\\y);}\n"
+    b += circle(1.5, 1.65, 0.55, "pinklit")
+    b += circle(1.5, 2.25, 0.45, "choc")
+    b += circle(1.62, 2.75, 0.13, "red")
+    return b, (S, S)
+
+
+def beach_ball():
+    b = "% a beach ball: six panels in red, white, blue and yellow\n"
+    colours = ["red", "white", "stripeblue", "white", "yellow", "white"]
+    for k, c in enumerate(colours):
+        b += f"\\fill[{c}] (1.5,1.5) -- ++({k * 60}:1.2) arc ({k * 60}:{(k + 1) * 60}:1.2) -- cycle;\n"
+    b += circle(1.5, 1.5, 0.15, "white")
+    return b, (S, S)
+
+
+def flip_flop():
+    b = "% a flip-flop seen from above: a blue sole, a pink strap\n"
+    b += ellipse(1.5, 1.5, 0.6, 1.25, "stripeblue")
+    b += ellipse(1.5, 1.5, 0.48, 1.12, "sky2")
+    b += "\\draw[pink,line width=4pt,line cap=round] (1.0,1.3) -- (1.5,2.2) -- (2.0,1.3);\n"
+    b += circle(1.5, 2.2, 0.08, "pink")
+    return b, (S, S)
+
+
+def watermelon():
+    b = "% a watermelon slice: red flesh, black seeds, a pale and a green rind\n"
+    b += "\\fill[rind] (0.25,1.95) arc (180:360:1.25) -- cycle;\n"
+    b += "\\fill[rindlit] (0.4,1.95) arc (180:360:1.1) -- cycle;\n"
+    b += "\\fill[melon] (0.52,1.95) arc (180:360:0.98) -- cycle;\n"
+    for x, y in ((1.1, 1.6), (1.5, 1.35), (1.9, 1.6), (1.3, 1.15), (1.7, 1.15)):
+        b += ellipse(x, y, 0.05, 0.09, "ink")
+    return b, (S, S)
+
+
+def crab():
+    b = "% a crab plush: a red body, eyes on stalks, two claws, legs\n"
+    for s in (-1, 1):
+        for k in range(3):
+            b += f"\\draw[reddark,line width=2.5pt] {P(1.5 + s * 0.5, 1.2 - k * 0.12)} -- {P(1.5 + s * 1.05, 0.9 - k * 0.22)};\n"
+        b += f"\\draw[reddark,line width=3pt] {P(1.5 + s * 0.55, 1.45)} -- {P(1.5 + s * 0.95, 2.0)};\n"
+        b += ellipse(1.5 + s * 1.0, 2.25, 0.3, 0.25, "red")
+        b += poly([(1.5 + s * 0.95, 2.3), (1.5 + s * 1.15, 2.6), (1.5 + s * 1.05, 2.25)], "sky")
+        b += rect(1.5 + s * 0.2 - 0.03, 1.5, 1.5 + s * 0.2 + 0.03, 1.85, "reddark") + circle(1.5 + s * 0.2, 1.9, 0.1, "ink")
+    b += ellipse(1.5, 1.3, 0.75, 0.45, "red") + ellipse(1.4, 1.4, 0.4, 0.18, "redlit")
+    return b, (S, S)
+
+
+def alarm_clock():
+    b = "% a twin-bell alarm clock: a red case, a white face, two bells, legs\n"
+    for s in (-1, 1):
+        b += "\\fill[steel] " + P(1.5 + s * 0.62, 2.35) + " circle (0.3);\n"
+        b += f"\\draw[steeldark,line width=3pt] {P(1.5 + s * 0.5, 0.65)} -- {P(1.5 + s * 0.75, 0.3)};\n"
+    b += circle(1.5, 1.45, 0.9, "red") + circle(1.5, 1.45, 0.72, "white")
+    b += "\\foreach \\a in {0,30,...,330} {\\fill[netline] ($(1.5,1.45)+(\\a:0.6)$) circle (0.035);}\n"
+    b += "\\draw[ink,line width=2pt] (1.5,1.45) -- (1.5,1.95) (1.5,1.45) -- (1.85,1.45);\n"
+    return b, (S, S)
+
+
+def coffee_mug():
+    b = "% a coffee mug: white with a blue band, a handle, rising steam\n"
+    b += "\\draw[white,line width=6pt] (2.05,1.55) arc (90:-90:0.35);\n"
+    b += "\\draw[paperdark,line width=1pt] (2.05,1.62) arc (90:-90:0.42);\n"
+    b += rect(0.85, 0.5, 2.1, 2.0, "white") + rect(0.85, 1.2, 2.1, 1.45, "stripeblue")
+    b += ellipse(1.475, 2.0, 0.625, 0.12, "choc")
+    for x in (1.25, 1.7):
+        b += f"\\draw[paperdark,line width=2pt] {P(x, 2.2)} .. controls {P(x + 0.2, 2.45)} and {P(x - 0.2, 2.55)} .. {P(x, 2.8)};\n"
+    return b, (S, S)
+
+
+def paperclip():
+    b = "% a giant paperclip: one steel wire in two nested loops\n"
+    b += "\\draw[steeldark,line width=5pt,line cap=round,rounded corners=10pt] (1.3,2.0) -- (1.3,0.75) -- (1.7,0.75) -- (1.7,2.55) -- (1.05,2.55) -- (1.05,0.35) -- (1.95,0.35) -- (1.95,1.9);\n"
+    b += "\\draw[steellit,line width=1.5pt,line cap=round,rounded corners=10pt] (1.3,2.0) -- (1.3,0.75) -- (1.7,0.75) -- (1.7,2.55) -- (1.05,2.55) -- (1.05,0.35) -- (1.95,0.35) -- (1.95,1.9);\n"
+    return b, (S, S)
+
+
+def pencil():
+    b = "% a big pencil, lying on a slant: yellow body, wood tip, steel band, pink eraser\n"
+    b += "\\begin{scope}[rotate around={45:(1.5,1.5)}]\n"
+    b += rect(0.85, 1.32, 2.35, 1.68, "yellow") + rect(0.85, 1.5, 2.35, 1.68, "yellowlit")
+    b += poly([(0.85, 1.32), (0.85, 1.68), (0.35, 1.5)], "wood") + poly([(0.5, 1.45), (0.5, 1.55), (0.35, 1.5)], "ink")
+    b += rect(2.35, 1.3, 2.55, 1.7, "steel") + rect(2.55, 1.32, 2.8, 1.68, "pink")
+    b += "\\end{scope}\n"
+    return b, (S, S)
+
+
+def owl():
+    b = "% an owl plush: a brown body, a pale belly, big round eyes, ear tufts\n"
+    b += poly([(0.85, 2.2), (1.0, 2.75), (1.25, 2.3)], "brown") + poly([(2.15, 2.2), (2.0, 2.75), (1.75, 2.3)], "brown")
+    b += ellipse(1.5, 1.45, 0.85, 1.05, "brown")
+    b += ellipse(1.5, 1.05, 0.5, 0.6, "sandlit")
+    for x in (1.15, 1.85):
+        b += circle(x, 1.95, 0.3, "white") + circle(x, 1.95, 0.14, "ink")
+    b += poly([(1.4, 1.75), (1.6, 1.75), (1.5, 1.5)], "orange")
+    b += ellipse(1.25, 0.4, 0.15, 0.08, "orange") + ellipse(1.75, 0.4, 0.15, 0.08, "orange")
+    return b, (S, S)
+
+
 def how_to_surf():
     """A ramp seen end-on: the surfer on its right face, the ramp's top to the
     surfer's left, so the key to hold is A."""
@@ -987,6 +1209,26 @@ PICTURES = {
     "items/pogo": pogo,
     "items/acorn": acorn,
     "items/bunny": bunny,
+    "items/floaties": floaties,
+    "items/whistle": whistle,
+    "items/gold_star": gold_star,
+    "items/swim_ring": swim_ring,
+    "items/grad_cap": grad_cap,
+    "items/ice_axe": ice_axe,
+    "items/snowflake": snowflake,
+    "items/compass": compass,
+    "items/summit_flag": summit_flag,
+    "items/yeti": yeti,
+    "items/ice_cream": ice_cream,
+    "items/beach_ball": beach_ball,
+    "items/flip_flop": flip_flop,
+    "items/watermelon": watermelon,
+    "items/crab": crab,
+    "items/alarm_clock": alarm_clock,
+    "items/coffee_mug": coffee_mug,
+    "items/paperclip": paperclip,
+    "items/pencil": pencil,
+    "items/owl": owl,
 }
 DPI = {"title": 150, "icon": 81, "how-to-surf": 110}
 CLEAR = {"items", "maps"}
