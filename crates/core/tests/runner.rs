@@ -1123,7 +1123,16 @@ fn look_around() {
             TriggerKind::Teleport(d) => format!("teleport {:?} to {}", c.role(t, d), m.name(d)),
             k => format!("{k:?}"),
         };
-        eprintln!("trigger {:?}..{:?} {what}", t.mins, t.maxs);
+        eprintln!(
+            "trigger {:?}..{:?} {what} filter {}",
+            t.mins,
+            t.maxs,
+            if t.filter == u16::MAX {
+                "-".to_string()
+            } else {
+                m.name(t.filter).to_string()
+            }
+        );
         if std::env::var("LOOK_PLANES").is_ok() {
             for pl in &t.planes {
                 eprintln!(
@@ -1171,36 +1180,6 @@ fn describe_run() {
                 g.body.ducked,
                 cmd.buttons,
                 if t.teleported { "TELEPORT" } else { "" }
-            );
-        }
-    }
-}
-
-/// The human utopia run kept for the browser check, with the field along it.
-#[test]
-#[ignore]
-fn trace_the_human_utopia_run() {
-    let v: Value = serde_json::from_str(
-        &fs::read_to_string(root().join("tests/browser/fixtures/saved_best.json")).unwrap(),
-    )
-    .unwrap();
-    let run = RunRecord::from_json(&v["best"]).expect("run");
-    let (m, c) = load("surf_utopia");
-    let gr = grid(&m);
-    let fs = fields(&m, &c, &gr);
-    let mut mv = Mover::new(&m);
-    let mut g = start_of(&run);
-    for (i, cmd) in run.cmds.iter().enumerate() {
-        let t = g.step(&mut mv, &c, *cmd);
-        if i % 64 == 0 || t.finished.is_some() {
-            eprintln!(
-                "{i:5} {:?} v {:?} ground {} keys {} yaw {:.0} field {}",
-                g.body.origin,
-                g.body.velocity,
-                g.body.on_ground,
-                cmd.buttons,
-                cmd.yaw_deg(),
-                fs[0].at(g.body.origin)
             );
         }
     }
