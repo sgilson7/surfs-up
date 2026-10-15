@@ -4,3 +4,4 @@
 __pycache__/
 /mutants.out*/
 /.venv
+.claude/worktrees/
