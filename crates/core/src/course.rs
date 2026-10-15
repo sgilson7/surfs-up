@@ -355,6 +355,8 @@ pub mod tests {
             "surf_summer" => include_bytes!("../../../data/maps/surf_summer.bin"),
             "surf_deadline" => include_bytes!("../../../data/maps/surf_deadline.bin"),
             "bhop_ambience" => include_bytes!("../../../data/maps/bhop_ambience.bin"),
+            "bhop_eazy" => include_bytes!("../../../data/maps/bhop_eazy.bin"),
+            "bhop_lego" => include_bytes!("../../../data/maps/bhop_lego.bin"),
             "surf_beginner" => include_bytes!("../../../data/maps/surf_beginner.bin"),
             "surf_summit" => include_bytes!("../../../data/maps/surf_summit.bin"),
             "bhop_japan" => include_bytes!("../../../data/maps/bhop_japan.bin"),

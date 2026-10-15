@@ -9,7 +9,7 @@ cannot capture the mouse, so the view never turns here; the keys still work.
 """
 
 # every course in data/maps/maps.json
-COURSES = 8
+COURSES = 16
 
 
 def pick_course(page, course):
