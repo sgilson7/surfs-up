@@ -1832,6 +1832,8 @@ mod tests {
             "surf_sandtrap" => include_bytes!("../../../data/maps/surf_sandtrap.bin"),
             "surf_aircontrol" => include_bytes!("../../../data/maps/surf_aircontrol.bin"),
             "surf_mesa" => include_bytes!("../../../data/maps/surf_mesa.bin"),
+            "surf_summer" => include_bytes!("../../../data/maps/surf_summer.bin"),
+            "surf_deadline" => include_bytes!("../../../data/maps/surf_deadline.bin"),
             "bhop_ambience" => include_bytes!("../../../data/maps/bhop_ambience.bin"),
             _ => UTOPIA,
         }
