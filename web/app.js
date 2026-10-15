@@ -275,6 +275,37 @@ async function start() {
   check("s-own-ghost", "own_ghost");
   el("name").addEventListener("change", act(() => game.set_name(el("name").value)));
 
+  // Your times in a file. The core writes it; loading hands it to the core,
+  // which names the courses its runs need, replays each run on its course's
+  // map as that map arrives, and only then counts what finished.
+  on("s-backup-save", () => {
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(new Blob([game.backup_save()], { type: "application/json" }));
+    link.download = copy.backup_file;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(link.href));
+  });
+  on("s-backup-load", () => el("s-backup-file").click());
+  const mapBytes = (id) =>
+    mapFiles.has(id)
+      ? Promise.resolve(mapFiles.get(id))
+      : fetched(`data/maps/${id}.bin`)
+          .then((r) => r.arrayBuffer())
+          .then((b) => new Uint8Array(b));
+  el("s-backup-file").addEventListener("change", async () => {
+    const file = el("s-backup-file").files[0];
+    el("s-backup-file").value = "";
+    if (!file) return;
+    for (const id of JSON.parse(game.backup_open(await file.text()))) {
+      // a map that does not arrive leaves its run unreplayed, which does not count
+      const bytes = await mapBytes(id).catch(() => null);
+      if (bytes) game.backup_check(id, bytes);
+    }
+    game.backup_finish();
+    save();
+    redraw();
+  });
+
   // clicking the view while playing takes the mouse back
   canvas.addEventListener("click", () => {
     wake();

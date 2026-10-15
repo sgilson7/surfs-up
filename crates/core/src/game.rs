@@ -3,6 +3,7 @@
 //! `advance` once a display frame with the clock, the held keys and the
 //! mouse movement, and draws what comes back.
 
+use crate::backup;
 use crate::camera::Camera;
 use crate::course::{self, Course};
 use crate::map::Map;
@@ -139,6 +140,19 @@ pub struct Game {
     /// held last frame (A and D switch on a press, as in Ape Race).
     watching: Option<String>,
     watch_keys: u8,
+    /// A times file being loaded: its runs waiting for their courses.
+    backup: Option<Backup>,
+    /// What the last times file did (a copy key and its values).
+    backup_note: Option<(String, Value)>,
+}
+
+/// A times file being loaded: the runs still to replay, those that count,
+/// and how many do not.
+struct Backup {
+    payload: Value,
+    waiting: Vec<RunRecord>,
+    counted: Vec<RunRecord>,
+    refused: u32,
 }
 
 impl Game {
@@ -197,6 +211,8 @@ impl Game {
             frame_hands: Vec::new(),
             watching: None,
             watch_keys: 0,
+            backup: None,
+            backup_note: None,
             map,
         };
         g.load(saved);
@@ -321,6 +337,119 @@ impl Game {
             "bests": self.bests.iter().map(|b| b.to_json()).collect::<Vec<_>>(),
         })
         .to_string()
+    }
+
+    // ---- your times in a file (see backup.rs) ------------------------------
+
+    /// The times file: your settings and each best as the run itself.
+    pub fn backup_save(&self) -> String {
+        let s = &self.settings;
+        backup::write(&json!({
+            "name": s.name, "sens": s.sens, "fov": s.fov, "volume": s.volume,
+            "live": s.live, "ghosts": s.ghosts, "own_ghost": s.own_ghost, "seed": s.seed,
+            "bests": self.bests.iter().map(|b| b.to_json()).collect::<Vec<_>>(),
+        }))
+    }
+
+    /// Open a times file. The courses whose maps its runs need replaying
+    /// on, as a JSON list (empty if the file is not a whole times file).
+    pub fn backup_open(&mut self, text: &str) -> String {
+        self.backup = None;
+        let payload = match backup::read(text) {
+            Ok(p) => p,
+            Err(key) => {
+                self.backup_note = Some((key.to_string(), json!({})));
+                return "[]".into();
+            }
+        };
+        let listed = course::listed(&self.maps_json).unwrap_or_default();
+        let mut waiting: Vec<RunRecord> = Vec::new();
+        let mut refused = 0;
+        for b in payload["bests"].as_array().map(|l| l.as_slice()).unwrap_or(&[]) {
+            match RunRecord::from_json(b) {
+                // one run a course, the fastest it claims
+                Ok(r) if listed.iter().any(|m| m.id == r.map) && !waiting.iter().any(|w| w.map == r.map) => {
+                    waiting.push(r)
+                }
+                _ => refused += 1,
+            }
+        }
+        let need: Vec<&str> = listed
+            .iter()
+            .filter(|m| waiting.iter().any(|r| r.map == m.id))
+            .map(|m| m.id.as_str())
+            .collect();
+        let out = json!(need).to_string();
+        self.backup = Some(Backup {
+            payload,
+            waiting,
+            counted: Vec::new(),
+            refused,
+        });
+        out
+    }
+
+    /// A course's map has come: replay the file's run on it.
+    pub fn backup_check(&mut self, id: &str, bytes: &[u8]) {
+        let Some(b) = &mut self.backup else { return };
+        let Some(at) = b.waiting.iter().position(|r| r.map == id) else {
+            return;
+        };
+        let run = b.waiting.remove(at);
+        let checked = Map::parse(bytes).and_then(|mut map| {
+            let course = Course::parse(&self.maps_json, id, &mut map)?;
+            Ok(backup::verify(&run, &map, &course).is_ok())
+        });
+        if checked == Ok(true) {
+            b.counted.push(run);
+        } else {
+            b.refused += 1;
+        }
+    }
+
+    /// Done replaying: keep the runs that count where they beat your best,
+    /// earn their things again from their times, and take the settings.
+    pub fn backup_finish(&mut self) {
+        let Some(b) = self.backup.take() else { return };
+        let p = &b.payload;
+        let settings = json!({
+            "name": p["name"], "sens": p["sens"], "fov": p["fov"], "volume": p["volume"],
+            "live": p["live"], "ghosts": p["ghosts"], "own_ghost": p["own_ghost"], "seed": p["seed"],
+            "finishes": self.finishes,
+        });
+        self.load(&settings.to_string());
+        let sets = course::sets(&self.maps_json);
+        let counted = b.counted.len();
+        for run in b.counted {
+            if let Some(set) = sets.iter().find(|s| s.id == run.map) {
+                for h in backup::earned(set, run.ticks) {
+                    if !self.unlocked.contains(&h) {
+                        self.unlocked.push(h);
+                    }
+                }
+            }
+            let better = self
+                .bests
+                .iter()
+                .find(|x| x.map == run.map)
+                .map(|x| run.ticks < x.ticks)
+                .unwrap_or(true);
+            if better {
+                self.bests.retain(|x| x.map != run.map);
+                self.bests.push(run);
+            }
+        }
+        self.rebuild_ghosts();
+        let refused = b.refused + b.waiting.len() as u32;
+        self.backup_note = Some((
+            if refused == 0 {
+                "backup_loaded"
+            } else {
+                "backup_loaded_some"
+            }
+            .to_string(),
+            json!({"ok": counted, "bad": refused}),
+        ));
     }
 
     // ---- menus ------------------------------------------------------------
@@ -1397,6 +1526,7 @@ impl Game {
                 "live": s.live, "ghosts": s.ghosts, "own_ghost": s.own_ghost, "volume": s.volume,
                 "volume_pct": (s.volume * 100.0).round() as u32, "seed": s.seed,
                 "shirt": hex(Look::from_seed(s.seed).shirt)},
+            "backup": self.backup_note.as_ref().map(|(k, a)| json!({"key": k, "args": a})),
         })
         .to_string()
     }
@@ -1889,7 +2019,7 @@ mod tests {
         assert_eq!((b.me.body.origin.x, b.me.body.origin.y), (start.x, start.y));
     }
 
-    fn map_bytes(id: &str) -> &'static [u8] {
+    pub(super) fn map_bytes(id: &str) -> &'static [u8] {
         match id {
             "surf_kitsune" => KITSUNE,
             "surf_egypt" => include_bytes!("../../../data/maps/surf_egypt.bin"),
@@ -2208,3 +2338,7 @@ mod tests {
         assert!(h.unlocked.contains(&Held::Noodle), "what you earned is kept");
     }
 }
+
+#[cfg(test)]
+#[path = "game_backup_tests.rs"]
+mod backup_tests;

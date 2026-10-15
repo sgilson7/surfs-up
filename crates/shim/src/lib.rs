@@ -102,6 +102,24 @@ impl Game {
         self.inner.saved()
     }
 
+    /// The times file to download.
+    pub fn backup_save(&self) -> String {
+        self.inner.backup_save()
+    }
+
+    /// Open a times file; the courses whose maps it needs, as JSON.
+    pub fn backup_open(&mut self, text: &str) -> String {
+        self.inner.backup_open(text)
+    }
+
+    pub fn backup_check(&mut self, id: &str, bytes: &[u8]) {
+        self.inner.backup_check(id, bytes)
+    }
+
+    pub fn backup_finish(&mut self) {
+        self.inner.backup_finish()
+    }
+
     pub fn play(&mut self) {
         self.inner.play()
     }

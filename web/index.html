@@ -130,6 +130,14 @@
       <p class="hint-text" data-copy="live_hint"></p>
       <label class="check"><input type="checkbox" id="s-ghosts"><span data-copy="ghosts"></span></label>
       <label class="check"><input type="checkbox" id="s-own-ghost"><span data-copy="own_ghost"></span></label>
+      <h3 data-copy="backup_title"></h3>
+      <p class="hint-text" data-copy="backup_hint"></p>
+      <div class="backup-row">
+        <button id="s-backup-save" data-copy="backup_save"></button>
+        <button id="s-backup-load" data-copy="backup_load"></button>
+        <input type="file" id="s-backup-file" accept=".json,application/json" hidden>
+      </div>
+      <p id="s-backup-note" class="hint-text" aria-live="polite"></p>
       <button class="close" data-copy="close"></button>
     </div>
   </section>

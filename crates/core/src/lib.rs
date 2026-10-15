@@ -1,6 +1,7 @@
 //! surf_core: every rule of Surfs Up!. No input or output: the page passes
 //! values in through the shim and draws what comes back.
 
+pub mod backup;
 pub mod camera;
 pub mod course;
 pub mod game;
