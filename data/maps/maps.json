@@ -477,6 +477,100 @@
     "acorn",
     "bunny"
    ]
+  },
+  {
+   "id": "bhop_japan",
+   "name": "bhop_japan",
+   "author": "Tony Montana",
+   "tier": 2,
+   "mode": "bhop",
+   "tier_source": "SharpTimer's bhop list: tier 2",
+   "spawn": "spawn",
+   "start_zone": [
+    [
+     1984,
+     -7296,
+     480
+    ],
+    [
+     2240,
+     -7168,
+     600
+    ]
+   ],
+   "finish_zone": [
+    [
+     5712,
+     -8168,
+     480
+    ],
+    [
+     6736,
+     -7500,
+     640
+    ]
+   ],
+   "roles": [],
+   "stages": [],
+   "medals": {
+    "record": 75,
+    "gold": 90,
+    "silver": 115,
+    "bronze": 160
+   },
+   "things": [
+    "folding_fan",
+    "koi",
+    "daruma",
+    "bonsai",
+    "paper_crane"
+   ]
+  },
+  {
+   "id": "bhop_cartoons",
+   "name": "bhop_cartoons",
+   "author": "TopHATTwaffle",
+   "tier": 2,
+   "mode": "bhop",
+   "tier_source": "SharpTimer's bhop list: tier 2",
+   "spawn": "spawn",
+   "start_zone": [
+    [
+     3028,
+     11818,
+     54
+    ],
+    [
+     3364,
+     12018,
+     200
+    ]
+   ],
+   "roles": [
+    {
+     "target": "win",
+     "role": "finish",
+     "ending": 1
+    },
+    {
+     "target": "spawn",
+     "role": "restart"
+    }
+   ],
+   "stages": [],
+   "medals": {
+    "record": 60,
+    "gold": 75,
+    "silver": 95,
+    "bronze": 140
+   },
+   "things": [
+    "banana_peel",
+    "lollipop",
+    "whoopee",
+    "top_hat",
+    "anvil"
+   ]
   }
  ]
 }

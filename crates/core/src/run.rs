@@ -929,6 +929,106 @@ mod tests {
     }
 
     #[test]
+    fn cartoons_blocks_hold_you_over_its_pits_and_the_win_room_finishes() {
+        let (m, c) = load("bhop_cartoons");
+        let mut mv = Mover::new(&m);
+        let mut s = Surfer::at_start(&m);
+        for _ in 0..64 {
+            s.step(&mut mv, &c, Cmd::new(0, 90.0, 0.0));
+        }
+        assert!(s.body.on_ground && s.phase == Phase::Start, "in the spawn room");
+        let mut started = false;
+        for _ in 0..64 {
+            started |= s.step(&mut mv, &c, Cmd::new(B_FORWARD, 90.0, 0.0)).started;
+        }
+        assert!(started, "walking out of the spawn room starts the clock");
+        // a bhop block (a func_door that sinks when stood on, held still as
+        // the timer servers hold it) is solid over the first pit
+        let mut s = Surfer::at_start(&m);
+        s.phase = Phase::Running;
+        s.body.origin = v3(3174.0, 12148.0, 80.0);
+        for _ in 0..64 {
+            assert!(!s.step(&mut mv, &c, Cmd::new(0, 90.0, 0.0)).fell, "on the block");
+        }
+        assert!(
+            s.body.on_ground && s.body.origin.z > 48.0,
+            "standing on the block at {:?}",
+            s.body.origin
+        );
+        // beside the blocks, the first pit sends you back to the spawn
+        s.body.origin = v3(3090.0, 12250.0, 80.0);
+        let mut fell = false;
+        for _ in 0..64 {
+            if s.step(&mut mv, &c, Cmd::new(0, 90.0, 0.0)).fell {
+                fell = true;
+                break;
+            }
+        }
+        assert!(fell, "into the first pit");
+        assert_eq!((s.body.origin, s.phase), (m.spawn, Phase::Start));
+        // the last teleport, to the win room beside the spawn, stops the clock
+        s.phase = Phase::Running;
+        s.body.origin = v3(3280.0, -8403.0, -3600.0);
+        let t = s.step(&mut mv, &c, Cmd::new(0, 0.0, 0.0));
+        assert!(matches!(t.finished, Some((1, _))), "the win room is the end");
+    }
+
+    #[test]
+    fn japan_starts_on_its_platform_its_blue_blocks_send_you_back_and_its_shrine_finishes() {
+        let (m, c) = load("bhop_japan");
+        let mut mv = Mover::new(&m);
+        let mut s = Surfer::at_start(&m);
+        for _ in 0..64 {
+            s.step(&mut mv, &c, Cmd::new(0, 0.0, 0.0));
+        }
+        assert!(s.body.on_ground && s.phase == Phase::Start, "on the platform");
+        // walking east along the platform starts the clock; nothing sends
+        // you to the spawn room (its teleport is for players who skipped it)
+        let mut started = false;
+        for i in 0..70 {
+            let t = s.step(&mut mv, &c, Cmd::new(B_FORWARD, 0.0, 0.0));
+            started |= t.started;
+            assert!(!t.teleported, "tick {i}: sent to {:?}", s.body.origin);
+        }
+        assert!(started, "off the start of the platform at {:?}", s.body.origin);
+        // every block renames you; a blue block sends a renamed player back
+        // to the section's start, with the clock running
+        let blue = v3(2592.0, -7392.0, 500.0);
+        let mut fresh = Surfer::at_start(&m);
+        fresh.phase = Phase::Running;
+        fresh.body.origin = blue;
+        for _ in 0..4 {
+            assert!(!fresh.step(&mut mv, &c, Cmd::new(0, 0.0, 0.0)).teleported);
+        }
+        let mut renamed = Surfer::at_start(&m);
+        renamed.phase = Phase::Running;
+        renamed.name = m.name_index("activator").unwrap();
+        renamed.body.origin = blue;
+        let mut sent = false;
+        for _ in 0..64 {
+            if renamed.step(&mut mv, &c, Cmd::new(0, 0.0, 0.0)).teleported {
+                sent = true;
+                break;
+            }
+        }
+        let back = m.destination_named("tele_dest_1").unwrap().0;
+        assert!(sent && renamed.body.origin == back, "back to {back:?}");
+        assert_eq!(renamed.phase, Phase::Running);
+        // the shrine room at the end stops the clock
+        let mut e = Surfer::at_start(&m);
+        e.phase = Phase::Running;
+        e.body.origin = v3(5900.0, -7700.0, 540.0);
+        let mut finished = false;
+        for _ in 0..64 {
+            if e.step(&mut mv, &c, Cmd::new(0, 0.0, 0.0)).finished.is_some() {
+                finished = true;
+                break;
+            }
+        }
+        assert!(finished, "the shrine is the end");
+    }
+
+    #[test]
     fn sync_counts_turning_into_the_held_key() {
         let (m, c) = load("surf_utopia");
         let mut mv = Mover::new(&m);

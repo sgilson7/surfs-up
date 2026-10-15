@@ -336,6 +336,8 @@ pub mod tests {
             "surf_aircontrol" => include_bytes!("../../../data/maps/surf_aircontrol.bin"),
             "surf_mesa" => include_bytes!("../../../data/maps/surf_mesa.bin"),
             "bhop_ambience" => include_bytes!("../../../data/maps/bhop_ambience.bin"),
+            "bhop_japan" => include_bytes!("../../../data/maps/bhop_japan.bin"),
+            "bhop_cartoons" => include_bytes!("../../../data/maps/bhop_cartoons.bin"),
             _ => include_bytes!("../../../data/maps/surf_utopia.bin"),
         };
         let mut map = Map::parse(bytes).expect("parse");
