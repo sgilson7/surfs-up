@@ -85,3 +85,8 @@ From Sam's friend, a long-time surfer: add bhop_ambience and surf_aircontrol, sh
 
 "fix the cubby cause you cant scroll it fully anymore": with 41 things its top was out of reach (row 65); every screen now starts at its top when it is taller than the window, and the browser check scrolls the cubby from title to close button.
 `./scripts/check.sh`: BUILDER CHECK PASSED.
+
+## Thirteenth request (15 October 2026): eight more maps, tier tabs
+
+"find two more of the best, highly rated, fondly remembered surf maps that are tier 1, then find two more that are tier 2, then do the same for bhop maps ... then, change the menu to be tabs of tiers ... with a lil tikz icon ... then deploy". Chosen by SurfHeaven play counts and SharpTimer tiers (row 67): surf_beginner and surf_summit (tier 1), surf_summer and surf_deadline (tier 2), bhop_eazy and bhop_lego (bhop tier 1), bhop_japan and bhop_cartoons (bhop tier 2), each with a set of five things (81 things in all). The title now has tabs (Tier 1, Tier 2, Advanced, Bhop; row 66) of compact course chips, each with a TikZ icon. Bhop blocks are held still (row 68); a rename's output delay is honoured (row 70); triggers no plain player can pass are dropped (row 73); lego's stand-still teleports are left out (row 75, for Sam to try). Medal times are provisional; nobody has played the eight through.
+`./scripts/check.sh`: BUILDER CHECK PASSED (sixteen courses under four tabs and 81 things in chromium, firefox and webkit; online pairs on every course).
