@@ -118,3 +118,7 @@ Checks: `tests/browser/online.py` in chromium PASSED locally (the eight-browser 
 ## Seventeenth request (15 October 2026): mesa's props
 
 "test mesa next". surf_mesa is extracted with `--props` (212 props, row 117): its rock clusters, cliffs, stalactites and cacti are solid, as in Source. The runner's kept mesa run had gone through a rock and was found again (194 s); the sweep's 23 new stops on mesa are all on props. A room of four on mesa passes the online check.
+
+## Eighteenth request (15 October 2026): summer's stage doors carry your speed
+
+"summer needs you to be able to transfer your momentum through door" (the stage doors). Summer's doors into the next stage now turn your speed to face the new stage, as Momentum Mod's "redirect" teleport mode does (`redirect_doors` in maps.json, row 118); plain Source and Momentum's default keep the velocity as it was, which sent you on backwards out of stage 1's door. Falls are unchanged.

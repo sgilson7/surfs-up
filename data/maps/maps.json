@@ -480,6 +480,7 @@
    "author": "Hardex and friends",
    "tier": 2,
    "tier_source": "SurfHeaven and SharpTimer: tier 2 (staged)",
+   "redirect_doors": true,
    "spawn": "s1",
    "start_zone": [
     [

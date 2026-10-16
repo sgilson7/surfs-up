@@ -73,6 +73,11 @@ pub struct Course {
     /// A finish counts only after the last stage (a course whose start
     /// room can teleport you past levels, as bhop_eazy's level select does).
     pub all_stages: bool,
+    /// A door into the next stage turns your speed to face the stage, as
+    /// Momentum Mod's "redirect" teleport mode does (TELEPORT_SNAP_TO_
+    /// DESTINATION, mom_triggers.cpp): the whole speed, along the
+    /// destination's facing. Plain Source keeps the velocity as it was.
+    pub redirect_doors: bool,
     pub medals: Medals,
     /// The course's things to hold, by tier (see `TIERS`).
     pub things: Vec<String>,
@@ -267,6 +272,7 @@ impl Course {
             stages: Vec::new(),
             stage_zones: Vec::new(),
             all_stages: false,
+            redirect_doors: false,
             things: Vec::new(),
             fall_damage: false,
             finish_zone: None,
@@ -345,6 +351,7 @@ impl Course {
             stages,
             stage_zones,
             all_stages: m["all_stages"].as_bool().unwrap_or(false),
+            redirect_doors: m["redirect_doors"].as_bool().unwrap_or(false),
             medals: medals_of(m),
             things: things_of(m),
             fall_damage: m["fall_damage"].as_bool().unwrap_or(false),

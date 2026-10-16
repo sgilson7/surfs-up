@@ -332,6 +332,14 @@ impl Surfer {
                     self.snap_yaw = Some(yaw);
                     match course.stage_of(d) {
                         Some(st) if st > self.stage || (st == 0 && self.phase == Phase::Start) => {
+                            if course.redirect_doors && st > self.stage {
+                                // Momentum's redirect: the velocity turned from
+                                // its own direction to the destination's facing
+                                // (pitch 0 here), so all of it carries on ahead
+                                let speed = self.body.velocity.length();
+                                let (s, c) = crate::vec3::sin_cos_deg(yaw as f64);
+                                self.body.velocity = v3(c as f32 * speed, s as f32 * speed, 0.0);
+                            }
                             self.stage = st;
                             out.stage = Some(st);
                         }
@@ -1019,6 +1027,39 @@ mod tests {
                 .unwrap_or_else(|| panic!("a fall to {target}"))
                 .clone()
         }
+    }
+
+    #[test]
+    fn summers_stage_doors_turn_your_speed_to_face_the_next_stage() {
+        // stage 1 runs south and stage 2 faces north: a door that kept the
+        // velocity (Source's, and Momentum's default) would send you on
+        // backwards; summer's doors redirect it, as Sam asked
+        let (m, c) = load("surf_summer");
+        assert!(c.redirect_doors);
+        let mut mv = Mover::new(&m);
+        let mut s = Surfer::at_start(&m);
+        s.phase = Phase::Running;
+        let d = teleport_to(&m, "s2", true);
+        s.body.origin = (d.mins + d.maxs) * 0.5;
+        s.body.velocity = v3(0.0, -1200.0, -500.0);
+        let t = s.step(&mut mv, &c, Cmd::new(0, 270.0, 0.0));
+        assert_eq!(t.stage, Some(1), "through the door to s2");
+        let v = s.body.velocity;
+        assert!(
+            v.y > 1250.0 && v.x.abs() < 5.0,
+            "all 1300 u/s carried on north, along s2's facing ({v:?})"
+        );
+        // a fall back to a stage's start is not a door: no speed handed out
+        let pit = teleport_to(&m, "s2", false);
+        s.body.origin = (pit.mins + pit.maxs) * 0.5;
+        s.body.velocity = v3(300.0, 0.0, -500.0);
+        let t = s.step(&mut mv, &c, Cmd::new(0, 0.0, 0.0));
+        assert!(t.fell, "a fall in stage 2");
+        assert!(
+            s.body.velocity.y.abs() < 5.0,
+            "a fall keeps its velocity as it was ({:?})",
+            s.body.velocity
+        );
     }
 
     #[test]
