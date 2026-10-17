@@ -133,6 +133,19 @@ def bevels(pts, faces):
     return out
 
 
+def corners(planes):
+    """The corners of a convex set of planes (normal, distance)."""
+    pts = []
+    for (n1, d1), (n2, d2), (n3, d3) in itertools.combinations(planes, 3):
+        det = dot(n1, cross(n2, n3))
+        if abs(det) < 1e-9:
+            continue
+        x = mul(add(add(mul(cross(n2, n3), d1), mul(cross(n3, n1), d2)), mul(cross(n1, n2), d3)), 1.0 / det)
+        if all(dot(n, x) <= d + 0.01 for n, d in planes):
+            pts.append(x)
+    return pts
+
+
 class Course:
     def __init__(self, roles):
         """`roles`: the palette role names, in the order maps.json's theme
@@ -348,7 +361,55 @@ class Course:
 
     # ---- the file ---------------------------------------------------------
 
+    def seal_catches(self, gap=48.0):
+        """No fall reaches into a solid: each catch's top is lowered to `gap`
+        under the lowest point of any solid face inside its footprint that
+        stands above its floor (a catch spread past its own ramp's end could
+        otherwise reach up into the next ramp and take you off it)."""
+        faces = []
+        for kind, _, sides in self.brushes:
+            planes = [(n, d) for n, d, _, _ in sides]
+            pts = corners(planes)
+            for n, d, bevel, _ in sides:
+                if bevel or n[2] < 0.05:
+                    continue
+                on = [q for q in pts if abs(dot(n, q) - d) < 0.05]
+                if len(on) >= 3:
+                    faces.append(on)
+        out = []
+        for kind, a, flt, p, planes in self.triggers:
+            if kind == 0:
+                lo = [-planes[2 * k + 1][1] for k in range(3)]
+                hi = [planes[2 * k][1] for k in range(3)]
+                for on in faces:
+                    # sample the face: its corners and points across it
+                    c = tuple(sum(q[k] for q in on) / len(on) for k in range(3))
+                    samples = []
+                    for q in on:
+                        for t in (0.0, 0.25, 0.5, 0.75, 0.95):
+                            samples.append(tuple(q[k] + (c[k] - q[k]) * t for k in range(3)))
+                    for q1, q2 in zip(on, on[1:] + on[:1]):
+                        for t in (0.25, 0.5, 0.75):
+                            samples.append(tuple(q1[k] + (q2[k] - q1[k]) * t for k in range(3)))
+                    inside = [q for q in samples if lo[0] - 16 <= q[0] <= hi[0] + 16 and lo[1] - 16 <= q[1] <= hi[1] + 16
+                              and q[2] > lo[2] + 1.0]
+                    if inside:
+                        floor = min(q[2] for q in inside)
+                        if floor - gap < hi[2]:
+                            hi[2] = max(lo[2] + 8.0, floor - gap)
+                planes = []
+                for k in range(3):
+                    n = [0.0, 0.0, 0.0]
+                    n[k] = 1.0
+                    planes.append((tuple(n), hi[k]))
+                    n = [0.0, 0.0, 0.0]
+                    n[k] = -1.0
+                    planes.append((tuple(n), -lo[k]))
+            out.append((kind, a, flt, p, planes))
+        self.triggers = out
+
     def write(self, map_id):
+        self.seal_catches()
         out = bytearray(b"SURF") + struct.pack("<I", 4)
         out += struct.pack("<I", len(self.brushes))
         for kind, group, sides in self.brushes:

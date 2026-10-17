@@ -1074,9 +1074,64 @@ mod tests {
     }
 
     #[test]
+    fn no_fall_on_100_leagues_reaches_into_a_ramp_or_deck() {
+        // a catch spread past its own ramp once reached up into the next
+        // ramp's faces and took you off it (Sami: "leaky kill boxes on the
+        // first pink ramp and the yellow one next to it")
+        let (m, c) = load("surf_100_leagues");
+        let mut leaks = Vec::new();
+        for t in m
+            .triggers
+            .iter()
+            .filter(|t| matches!(t.kind, TriggerKind::Teleport(_)))
+        {
+            for b in m.brushes.iter().filter(|b| b.kind.blocks()) {
+                let planes: Vec<crate::map::Plane> = b.sides.iter().map(|s| s.plane).collect();
+                for (i, s) in b.sides.iter().enumerate() {
+                    if !s.drawn || s.plane.n.z < 0.05 {
+                        continue;
+                    }
+                    let poly = crate::map::face_polygon(&planes, i);
+                    let pts: Vec<V3> = poly
+                        .iter()
+                        .map(|p| v3(p[0] as f32, p[1] as f32, p[2] as f32))
+                        .collect();
+                    let n = pts.len();
+                    if n == 0 {
+                        continue;
+                    }
+                    let mid = pts.iter().fold(ZERO, |a, p| a + *p) * (1.0 / n as f32);
+                    // the corners, the middle, and points between
+                    let mut probe = vec![mid];
+                    for k in 0..n {
+                        for f in [0.02f32, 0.5] {
+                            probe.push(pts[k] + (mid - pts[k]) * f);
+                            probe.push(pts[k] + (pts[(k + 1) % n] - pts[k]) * f);
+                        }
+                    }
+                    let e = v3(1.0, 1.0, 1.0);
+                    if let Some(p) = probe
+                        .iter()
+                        .find(|p| crate::map::box_touches(&t.planes, **p - e, **p + e))
+                    {
+                        leaks.push(format!("{:?} reaches a surface at {p:?}", t.kind));
+                    }
+                }
+            }
+        }
+        let _ = c;
+        assert!(
+            leaks.is_empty(),
+            "{} leaks: {:?}",
+            leaks.len(),
+            &leaks[..leaks.len().min(4)]
+        );
+    }
+
+    #[test]
     fn the_100_leagues_vent_blasts_you_out_of_the_sea() {
-        // step into the chimney at the bottom of the sea: the vent's push
-        // carries you up past the surface, the same way every time
+        // walk from the vent's drop-in point onto its launch ramp: the push
+        // carries you up the ramp and out past the surface
         let (m, c) = load("surf_100_leagues");
         let mut mv = Mover::new(&m);
         let mut s = Surfer::at_start(&m);
@@ -1088,7 +1143,7 @@ mod tests {
         let mut top = floor.z;
         let mut left_at = None;
         for i in 0..64 * 8 {
-            let t = s.step(&mut mv, &c, Cmd::new(0, yaw, 0.0));
+            let t = s.step(&mut mv, &c, Cmd::new(B_FORWARD, yaw, 0.0));
             assert!(!t.fell, "no fall on the way up (tick {i}, {:?})", s.body.origin);
             top = top.max(s.body.origin.z);
             if left_at.is_none() && s.body.origin.z > water {
@@ -1097,6 +1152,9 @@ mod tests {
         }
         assert!(left_at.is_some(), "out of the water: up to {top}");
         assert!(top > water + 1500.0, "blasted well clear of the sea ({top})");
+        if let Some(i) = left_at {
+            assert!(i < 64 * 4, "within four seconds ({i} ticks)");
+        }
     }
 
     #[test]

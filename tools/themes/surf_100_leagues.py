@@ -77,6 +77,18 @@ WATER = 0.0
 
 RIDGE_H = 512.0
 
+# the vent's launch ramp: its slope (degrees), how high it rises, its push
+# (units a second, up the ramp); and the giant shark you land on above the
+# water: how far past the ramp's top it starts, its crest's height, length
+# and fall
+VENT_ANGLE = 60.0
+VENT_RISE = 3000.0
+VENT_PUSH = 3500.0
+GIANT_AT = 6500.0
+GIANT_Z = 1000.0
+GIANT_LEN = 11000.0
+GIANT_DROP = 800.0
+
 
 class Chain:
     """Ridges one after another: each starts `gap` past the last one's end,
@@ -183,42 +195,51 @@ def build(k):
         p = forward(p, yaw, length + gap)
     floor_z = deck_z - 700
 
-    # ---- the geothermal vent: a rock chimney you run into, which blasts you
-    # straight up and out of the sea (its back wall takes your speed, so every
-    # blast flies the same way) ----------------------------------------------
-    inner = 450.0
-    vc = forward(p, yaw, inner + 40)
-    v_lo_z, v_hi_z = deck_z - 64, deck_z + 3400
-    f = math.radians(yaw)
-    fx, fy = math.cos(f), math.sin(f)
-    # walls: back (far side), left, right, and the front above the doorway
-    wall = 160.0
+    # ---- the geothermal vent: a steep launch ramp of rock rising out of the
+    # rift; its push runs up the ramp, so the speed you bring is kept and
+    # thrown up out of the sea, and every launch leaves the top near the same
+    # speed (the push carries you to sv_maxvelocity on the way up) ----------
+    # the ramp's foot meets the last deck's end
+    vc = forward(p, yaw, -20)
+    v_lo_z = deck_z - 64
+    run = VENT_RISE / math.tan(math.radians(VENT_ANGLE))
+    half = 460.0
+    top = forward(vc, yaw, run, dz=VENT_RISE)
+    pts = []
+    for d, z_top in ((0.0, v_lo_z), (run, v_lo_z + VENT_RISE)):
+        for side in (-half, half):
+            q = forward(vc, yaw, d, side=side)
+            pts.append((q[0], q[1], z_top))
+            pts.append((q[0], q[1], v_lo_z - 128))
+    k.hull(pts, "vent_rock")
+    # low rock walls either side, so a launch goes up the ramp, not off it
+    for side in (-1, 1):
+        wpts = []
+        for d in (-300.0, run):
+            for s2 in (half, half + 180):
+                q = forward(vc, yaw, d, side=side * s2)
+                wpts.append((q[0], q[1], v_lo_z - 128))
+                wpts.append((q[0], q[1], v_lo_z + min(VENT_RISE, (d + 300) * math.tan(math.radians(VENT_ANGLE))) + 260))
+        k.hull(wpts, "vent_rock")
+    # the push starts a little before the ramp's foot, over the deck's end
+    foot = forward(vc, yaw, -200)
+    lo_x = min(foot[0], top[0]) - half
+    hi_x = max(foot[0], top[0]) + half
+    lo_y = min(foot[1], top[1]) - half
+    hi_y = max(foot[1], top[1]) + half
+    k.vent((lo_x, lo_y, v_lo_z), (hi_x, hi_y, v_lo_z + VENT_RISE + 160), -VENT_ANGLE, yaw, VENT_PUSH)
+    sea.rift(k, (vc[0], vc[1], v_lo_z), 900, yaw, 7)
+    for i in range(4):
+        sea.bubbles(k, forward(vc, yaw, run * i / 3, dz=VENT_RISE * i / 3 + 60), 2400, 10, 9 + i)
+    for i in range(12):
+        q = forward(vc, yaw, run * i / 11, dz=VENT_RISE * i / 11 + 10, side=((-1) ** i) * 260)
+        k.blob("ember", q, (90, 50, 18), yaw, glow=True)
 
-    def slab_along(d0, d1, s0, s1, z0, z1, role):
-        pts = []
-        for d in (d0, d1):
-            for s in (s0, s1):
-                q = forward(vc, yaw, d, side=s)
-                pts.append((q[0], q[1], z0))
-                pts.append((q[0], q[1], z1))
-        k.hull(pts, role)
-
-    slab_along(inner, inner + wall, -inner - wall, inner + wall, v_lo_z, v_hi_z, "vent_rock")
-    slab_along(-inner - wall, inner + wall, inner, inner + wall, v_lo_z, v_hi_z, "vent_rock")
-    slab_along(-inner - wall, inner + wall, -inner - wall, -inner, v_lo_z, v_hi_z, "vent_rock")
-    slab_along(-inner - wall, -inner, -inner, inner, deck_z + 700, v_hi_z, "vent_rock")
-    k.oval(vc, inner + 40, inner + 40, v_lo_z - 64, v_lo_z, "vent_rock", yaw=yaw)
-    # the push: up, and a little on along the course
-    up, on = 3000.0, 700.0
-    k.vent((vc[0] - inner, vc[1] - inner, v_lo_z), (vc[0] + inner, vc[1] + inner, v_hi_z),
-           -math.degrees(math.atan2(up, on)), yaw, math.hypot(up, on))
-    sea.rift(k, (vc[0], vc[1], v_lo_z), inner * 1.6, yaw, 7)
-    sea.bubbles(k, (vc[0], vc[1], v_lo_z), v_hi_z - v_lo_z + 2200, 26, 9)
-
-    # ---- leg C, above the water: shark, container ship, whale, fishing boat --
-    c_start = forward(vc, yaw, 3200)
-    c = Chain(k, (c_start[0], c_start[1], 1800), yaw)
-    shk = c.ridge(4800, 450, "shark", height=560, under="shark_belly", gap=500, gap_drop=150)
+    # ---- leg C, above the water: a giant shark to land on and get your speed
+    # back, then the container ship, the whale and the fishing boat --------
+    c_start = forward(top, yaw, GIANT_AT)
+    c = Chain(k, (c_start[0], c_start[1], GIANT_Z), yaw)
+    shk = c.ridge(GIANT_LEN, GIANT_DROP, "shark", height=1000, angle=52, under="shark_belly", gap=600, gap_drop=200)
     hull = c.ridge(3400, 300, "hull_red", sides="left", height=700, angle=56, under="hull_navy", gap=380, gap_drop=0)
     # the ship's funnel steam lifts you onto the containers
     steam_at = forward((c.x, c.y, c.z), c.yaw, -190)
@@ -247,7 +268,9 @@ def build(k):
     drop_in(k, "cp_reef2", reef2[0])
     drop_in(k, "cp_deep", anglers[1])
     drop_in(k, "cp_speedy", speedy)
-    k.dest("cp_vent", (vc[0], vc[1], v_lo_z + 1), yaw)
+    # the vent's drop-in point: on the last deck, just before the ramp
+    cp = forward(vc, yaw, -260)
+    k.dest("cp_vent", (cp[0], cp[1], deck_z + 1), yaw)
     drop_in(k, "cp_shark", shk)
     drop_in(k, "cp_ship", hull)
     drop_in(k, "cp_whale", whl)
@@ -271,19 +294,20 @@ def build(k):
     lo = (min(span_lo[0], span_hi[0]) - 900, min(span_lo[1], span_hi[1]) - 900)
     hi = (max(span_lo[0], span_hi[0]) + 900, max(span_lo[1], span_hi[1]) + 900)
     # the catch covers the whole sea floor, so nobody stands on it
-    k.catch((lo[0] - 2000, lo[1] - 2000, floor_z), (hi[0] + 2000, hi[1] + 2000, deck_z - 300), "cp_speedy")
+    k.catch((lo[0] - 2000, lo[1] - 2000, floor_z + 2), (hi[0] + 2000, hi[1] + 2000, deck_z - 300), "cp_speedy")
     k.box((lo[0] - 2000, lo[1] - 2000, floor_z - 200), (hi[0] + 2000, hi[1] + 2000, floor_z), "deep_floor")
     # leg C: the water itself catches you
 
     def leg_c_catch(piece, to):
+        # wide: a surfer sliding off a big ridge's side lands far out
         xs2 = [s[0] for s in piece["stations"]]
         ys2 = [s[1] for s in piece["stations"]]
-        k.catch((min(xs2) - 900, min(ys2) - 1500, WATER - 1500), (max(xs2) + 900, max(ys2) + 1500, WATER - 150), to)
+        base = min(s[2] for s in piece["stations"]) - piece["height"]
+        top_z = min(WATER - 150, base - 48)
+        k.catch((min(xs2) - 900, min(ys2) - 3500, top_z - 1800), (max(xs2) + 900, max(ys2) + 3500, top_z), to)
 
     for p2, to in [(shk, "cp_shark"), (hull, "cp_ship"), *[(b, "cp_ship") for b in boxes], (whl, "cp_whale"), (line, "cp_line")]:
         leg_c_catch(p2, to)
-    # a missed vent falls back into the chimney
-    k.catch((vc[0] - 3500, vc[1] - 3500, deck_z - 1400), (vc[0] + 3500, vc[1] + 3500, deck_z - 1000), "cp_vent")
 
     # ---- scenery -------------------------------------------------------------------
     for i, d in enumerate(dunes):
@@ -323,7 +347,7 @@ def build(k):
         sea.angler(k, d["end"], d["end"][2], d["height"], d["yaw"], "angler", "lure")
     for c2, length in decks:
         sea.oil_platform(k, c2, min(length / 2, 420), deck_z - 64, floor_z, "oil_steel", "rust")
-    sea.shark(k, shk["start"], shk["end"], shk["start"][2], 560, "shark", "shark_belly")
+    sea.shark(k, shk["start"], shk["end"], shk["start"][2], 1000, "shark", "shark_belly")
     # the ship: hull below its red side, a funnel by the steam
     hs, he = hull["start"], hull["end"]
     mid = ((hs[0] + he[0]) / 2, (hs[1] + he[1]) / 2, hs[2] - 900)

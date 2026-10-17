@@ -136,3 +136,9 @@ Checks: `tests/browser/online.py` in chromium PASSED locally (the eight-browser 
 Not checked by a person: how it surfs with a mouse, and whether the medal times are fair (row 126).
 
 `BUILDER_ONLINE=0 ./scripts/check.sh` (17 October 2026): BUILDER CHECK PASSED: format, clippy, every Rust test (the kept runs, surf_100_leagues' included), the surface sweep on all seventeen courses, the WebAssembly build and audit, and the browser check in chromium, firefox and webkit (five tabs, seventeen courses, eighty-six things).
+
+## Twentieth request (17 October 2026): leaky falls, and the vent keeps your speed
+
+"theres a couple of leaky kill boxes on the first pink ramp and the yellow one next to it that kill you on the ramp, and the vent stopped all my forward momentum so i couldnt reach the ramp up above, there should be a giant ramp at the top you can use to get your speed back". Falls no longer reach into any ramp (row 127; 86 leaks were found and closed). The vent is a launch ramp that keeps your speed, and a giant shark waits above the water (row 128). The bot finishes in 79.25 s.
+
+`BUILDER_ONLINE=0 ./scripts/check.sh` (17 October 2026): BUILDER CHECK PASSED in chromium, firefox and webkit. `SURF_COURSES=surf_100_leagues tests/browser/online.py chromium`: ONLINE CHECK PASSED (the eight-browser room and four on surf_100_leagues). The full online check on the previous push passed on every course (225 checks).

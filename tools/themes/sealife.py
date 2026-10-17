@@ -200,8 +200,10 @@ def oil_platform(k, deck_c, deck_r, deck_z, floor_z, steel, rust):
             n = max(int(h // 260), 1)
             for i in range(n):
                 k.blob(steel if i % 2 == 0 else rust, (x, y, floor_z + (i + 0.5) * h / n), (40, 40, h / n * 0.55))
-    k.blob(rust, (deck_c[0], deck_c[1], deck_z + 160), (60, 60, 160))
-    k.blob("lure", (deck_c[0], deck_c[1], deck_z + 340), 36, glow=True)
+    # the derrick stands at the deck's side, out of the way of a b-hop
+    side = (deck_c[0], deck_c[1] + deck_r * 0.85, deck_z)
+    k.blob(rust, (side[0], side[1], deck_z + 160), (60, 60, 160))
+    k.blob("lure", (side[0], side[1], deck_z + 340), 36, glow=True)
 
 
 def rift(k, at, length, yaw, seed):
