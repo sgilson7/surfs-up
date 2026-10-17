@@ -117,6 +117,7 @@ async function start() {
 
   const input = makeInput(canvas, JSON.parse(controlsText), N.actions, (command, down) => {
     if (command === "board") boardHeld = down;
+    if (command === "inspect") game.inspect(down);
     if (command === "next_held" && down) {
       game.next_held();
       save();
@@ -273,6 +274,7 @@ async function start() {
   check("s-live", "live");
   check("s-ghosts", "ghosts");
   check("s-own-ghost", "own_ghost");
+  check("s-scuba", "scuba");
   el("name").addEventListener("change", act(() => game.set_name(el("name").value)));
 
   // Your times in a file. The core writes it; loading hands it to the core,

@@ -214,6 +214,12 @@ fn sweep_floor(
         // meet a steeper neighbour and slide, or rest in the crease between
         // two; only falling through it is wrong
         let off = !b.on_ground || slid > 16.0;
+        // a floor inside an upward push is a lift: being carried up off it
+        // is what the push is for (Source lifts a stander off the ground)
+        let lifted = off && !through && b.origin.z > p.z && in_lift(map, p);
+        if lifted {
+            continue;
+        }
         if terrain && off && !through {
             tally.notes.push(format!(
                 "terrain floor at {} ({}): dropped from {}, ended at {} {}",
@@ -669,6 +675,17 @@ fn every_surface_and_trigger_on_every_course() {
         return;
     }
     assert_eq!(new, 0, "surface sweep: {new} new failure(s):\n{text}");
+}
+
+/// Whether a point is inside a push upward (a lift, a vent).
+fn in_lift(map: &Map, p: V3) -> bool {
+    let b = v3(1.0, 1.0, 1.0);
+    map.triggers.iter().any(|t| match t.kind {
+        TriggerKind::Push(dir, _) => {
+            dir.z > 0.5 && box_touches(&t.planes, p - b + v3(0.0, 0.0, 2.0), p + b + v3(0.0, 0.0, 2.0))
+        }
+        _ => false,
+    })
 }
 
 /// A developer's look at one place: SWEEP_PROBE=course,x,y,z,r lists the

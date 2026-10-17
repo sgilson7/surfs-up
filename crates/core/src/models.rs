@@ -169,6 +169,65 @@ pub fn ball(out: &mut Vec<f32>, f: &Xf, c: V3, r: V3, col: Rgb, m: f32) {
     }
 }
 
+/// A smooth ellipsoid with centre `c` and radii `r`, in the frame: the
+/// soft, round look of the themed courses' things (Protection of the
+/// Spheres' rule: nothing alive has a corner).
+pub fn orb(out: &mut Vec<f32>, f: &Xf, c: V3, r: V3, col: Rgb, m: f32) {
+    for tri in crate::mesh::sphere(1) {
+        for q in tri {
+            let p = f.p(c + v3(q.x * r.x, q.y * r.y, q.z * r.z));
+            let n = f.dir(v3(q.x / r.x, q.y / r.y, q.z / r.z));
+            crate::mesh::push_vertex(out, p, n, col, m);
+        }
+    }
+}
+
+/// An ellipsoid turned by `yaw` then `pitch` (degrees) about its centre.
+#[allow(clippy::too_many_arguments)]
+fn orb_turned(out: &mut Vec<f32>, f: &Xf, c: V3, r: V3, yaw: f32, pitch: f32, col: Rgb, m: f32) {
+    let g = f.at(c).yaw(yaw).pitch(pitch);
+    orb(out, &g, v3(0.0, 0.0, 0.0), r, col, m);
+}
+
+/// An ellipsoid stretched along `dir` (a spike, a tentacle).
+#[allow(clippy::too_many_arguments)]
+fn orb_along(out: &mut Vec<f32>, f: &Xf, c: V3, dir: V3, len: f32, width: f32, col: Rgb, m: f32) {
+    let z = dir.normalized();
+    let helper = if z.z.abs() < 0.9 {
+        v3(0.0, 0.0, 1.0)
+    } else {
+        v3(1.0, 0.0, 0.0)
+    };
+    let x = z.cross(helper).normalized();
+    let y = z.cross(x);
+    let world = |a: V3| f.x * a.x + f.y * a.y + f.z * a.z;
+    let g = Xf::new(f.p(c), world(x), world(y), world(z));
+    orb(out, &g, v3(0.0, 0.0, 0.0), v3(width, width, len), col, m);
+}
+
+/// Dot eyes with a white catch-light, on the sides of a head facing +x.
+fn fish_eyes(out: &mut Vec<f32>, f: &Xf, x: f32, y: f32, z: f32, r: f32, m: f32) {
+    for side in [-1.0f32, 1.0] {
+        orb(out, f, v3(x, side * y, z), v3(r, r, r), [0.98, 0.98, 1.0], m);
+        orb(
+            out,
+            f,
+            v3(x + r * 0.45, side * (y + r * 0.35), z),
+            v3(r * 0.6, r * 0.6, r * 0.62),
+            [0.10, 0.08, 0.16],
+            m,
+        );
+        orb(
+            out,
+            f,
+            v3(x + r * 0.8, side * (y + r * 0.55), z + r * 0.35),
+            v3(r * 0.2, r * 0.2, r * 0.2),
+            [1.0, 1.0, 1.0],
+            m,
+        );
+    }
+}
+
 /// How another surfer looks: their colours and what they hold.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Look {
@@ -176,6 +235,9 @@ pub struct Look {
     pub shorts: Rgb,
     pub skin: Rgb,
     pub band: Rgb,
+    /// Old-time scuba gear: a canvas suit and a big brass helmet with a
+    /// glass window (surf_100_leagues' costume).
+    pub scuba: bool,
 }
 
 pub const SHIRTS: [Rgb; 8] = [
@@ -205,6 +267,7 @@ impl Look {
             shorts: SHORTS[(s / 8) % SHORTS.len()],
             skin: SKINS[(s / 3) % SKINS.len()],
             band: SHIRTS[(s + 3) % SHIRTS.len()],
+            scuba: false,
         }
     }
 }
@@ -226,6 +289,10 @@ pub fn kid(out: &mut Vec<f32>, origin: V3, yaw: f32, lean: f32, ducked: bool, lo
         }
     };
     let crouch = if ducked { 14.0 } else { 0.0 };
+    if look.scuba {
+        scuba(out, &base, &body, crouch, &tint, m);
+        return;
+    }
     let white = tint([0.96, 0.96, 0.96]);
     let skin = tint(look.skin);
     // sneakers and legs, feet apart in a surf stance
@@ -302,6 +369,86 @@ pub fn kid(out: &mut Vec<f32>, origin: V3, yaw: f32, lean: f32, ducked: bool, lo
             m,
         );
     }
+}
+
+/// The diving suit: heavy boots, a canvas suit, a weight belt, a brass
+/// collar and a big round brass helmet with a glass window and portholes.
+fn scuba(out: &mut Vec<f32>, base: &Xf, body: &Xf, crouch: f32, tint: &dyn Fn(Rgb) -> Rgb, m: f32) {
+    let canvas = tint([0.80, 0.70, 0.52]);
+    let boot = tint([0.30, 0.22, 0.16]);
+    let brass = tint([0.86, 0.66, 0.26]);
+    let glass = tint([0.20, 0.42, 0.62]);
+    let shine = tint([0.85, 0.95, 1.0]);
+    let up = -crouch;
+    for side in [-1.0f32, 1.0] {
+        cuboid(
+            out,
+            base,
+            v3(1.5 + side * 2.0, side * 7.0, 3.5),
+            v3(7.0, 4.0, 3.5),
+            boot,
+            m,
+        );
+        bar(
+            out,
+            body,
+            v3(side * 2.0, side * 7.0, 6.0),
+            v3(-1.0, side * 6.5, 22.0 - crouch * 0.5),
+            3.6,
+            canvas,
+            m,
+        );
+    }
+    cuboid(
+        out,
+        body,
+        v3(0.0, 0.0, 27.0 + up * 0.5),
+        v3(7.0, 10.5, 6.0),
+        canvas,
+        m,
+    );
+    cuboid(
+        out,
+        body,
+        v3(0.0, 0.0, 31.0 + up * 0.5),
+        v3(7.6, 11.0, 1.8),
+        boot,
+        m,
+    );
+    cuboid(out, body, v3(0.0, 0.0, 43.0 + up), v3(7.5, 11.0, 10.5), canvas, m);
+    for side in [-1.0f32, 1.0] {
+        let shoulder = v3(0.0, side * 11.5, 50.0 + up);
+        let elbow = v3(2.0, side * 20.0, 46.0 + up);
+        let hand = v3(4.0, side * 29.0, 44.0 + up);
+        bar(out, body, shoulder, elbow, 3.4, canvas, m);
+        bar(out, body, elbow, hand, 3.0, canvas, m);
+        cuboid(out, body, hand, v3(2.6, 2.6, 2.6), boot, m);
+    }
+    // the collar (corselet) and the helmet on it
+    let neck = body.at(v3(0.0, 0.0, 54.0 + up));
+    let ball_at = |out: &mut Vec<f32>, f: &Xf, c: V3, r: V3, col: Rgb| {
+        let b = crate::map::Blob {
+            role: 0,
+            glow: false,
+            clear: false,
+            centre: f.p(c),
+            radii: r * ((f.x.length() + f.y.length() + f.z.length()) / 3.0),
+            angles: v3(0.0, 0.0, 0.0),
+        };
+        crate::mesh::blob(out, &b, col, m);
+    };
+    ball_at(out, &neck, v3(0.0, 0.0, 0.0), v3(11.0, 13.0, 4.0), brass);
+    ball_at(out, &neck, v3(0.0, 0.0, 10.0), v3(11.5, 11.5, 11.5), brass);
+    // the front window: glass in a brass ring, with a glint
+    ball_at(out, &neck, v3(9.0, 0.0, 10.5), v3(3.6, 6.4, 6.4), brass);
+    ball_at(out, &neck, v3(10.6, 0.0, 10.5), v3(2.4, 5.2, 5.2), glass);
+    ball_at(out, &neck, v3(12.6, -1.8, 12.6), v3(0.6, 1.2, 1.2), shine);
+    // a porthole each side, and the air valve on top
+    for side in [-1.0f32, 1.0] {
+        ball_at(out, &neck, v3(0.0, side * 10.4, 11.0), v3(3.2, 2.2, 3.2), brass);
+        ball_at(out, &neck, v3(0.0, side * 11.6, 11.0), v3(2.2, 1.6, 2.2), glass);
+    }
+    ball_at(out, &neck, v3(-2.0, 0.0, 21.5), v3(2.4, 2.4, 2.0), brass);
 }
 
 /// What can be in your hands. Index 0 is the clasped hands you start with.
@@ -388,10 +535,15 @@ pub enum Held {
     Whoopee,
     TopHat,
     Anvil,
+    Goldfish,
+    Eel,
+    Pufferfish,
+    Squishmallow,
+    Balisong,
 }
 
 impl Held {
-    pub const ALL: [Held; 81] = [
+    pub const ALL: [Held; 86] = [
         Held::Prayer,
         Held::Noodle,
         Held::Kickball,
@@ -473,6 +625,11 @@ impl Held {
         Held::Whoopee,
         Held::TopHat,
         Held::Anvil,
+        Held::Goldfish,
+        Held::Eel,
+        Held::Pufferfish,
+        Held::Squishmallow,
+        Held::Balisong,
     ];
     pub fn id(self) -> &'static str {
         match self {
@@ -557,10 +714,104 @@ impl Held {
             Held::Whoopee => "whoopee",
             Held::TopHat => "top_hat",
             Held::Anvil => "anvil",
+            Held::Goldfish => "goldfish",
+            Held::Eel => "eel",
+            Held::Pufferfish => "pufferfish",
+            Held::Squishmallow => "squishmallow",
+            Held::Balisong => "balisong",
         }
     }
     pub fn from_id(id: &str) -> Option<Held> {
         Held::ALL.iter().copied().find(|h| h.id() == id)
+    }
+}
+
+/// What the hands are doing with the thing: holding it, inspecting it (F,
+/// `t` running 0 to 1, `rare` the occasional second trick), or juggling it
+/// (F held, `ticks` since the first toss).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Pose {
+    Hold,
+    Inspect { t: f32, rare: bool },
+    Juggle { ticks: u32 },
+}
+
+/// Ticks one toss of a juggle takes, hand to hand.
+pub const TOSS_TICKS: u32 = 40;
+
+impl Held {
+    /// Whether its inspect dangles it from a fishing line (surf_100_leagues'
+    /// set, as Sami's brief asks), rather than turning it over in the hands.
+    pub fn dangles(self) -> bool {
+        matches!(
+            self,
+            Held::Goldfish | Held::Eel | Held::Pufferfish | Held::Squishmallow | Held::Balisong
+        )
+    }
+}
+
+/// A smooth rise and fall over an inspect: 0 at its ends, 1 in the middle.
+fn bump(t: f32) -> f32 {
+    let a = (t / 0.15).clamp(0.0, 1.0).min(((1.0 - t) / 0.15).clamp(0.0, 1.0));
+    a * a * (3.0 - 2.0 * a)
+}
+
+fn sin_deg(d: f32) -> f32 {
+    sin_cos_deg(d as f64).0 as f32
+}
+
+/// Where the thing is during a pose, from the cupped-hands frame `hold`, and
+/// how far the hands drop out of the way (a dangle).
+fn posed(hold: &Xf, held: Held, pose: Pose) -> (Xf, f32) {
+    let rest = hold.at(v3(0.0, 0.0, 1.0));
+    match pose {
+        Pose::Hold => (rest, 0.0),
+        Pose::Inspect { t, rare } if held.dangles() => {
+            // up out of the hands on a fishing line from above, swinging and
+            // turning; a rare one wriggles and flips
+            let b = bump(t);
+            let attach = hold.at(v3(-1.0, 3.0 * b, 1.0 + 19.0 * b));
+            let swing = 22.0 * b * sin_deg(t * 900.0);
+            let mut f = attach.roll(swing).at(v3(0.0, 0.0, -10.0 * b)).yaw(540.0 * t * b);
+            if rare {
+                f = f
+                    .pitch(25.0 * b * sin_deg(t * 2700.0))
+                    .roll(360.0 * ((t - 0.3) / 0.4).clamp(0.0, 1.0));
+            }
+            (f, 7.0 * b)
+        }
+        Pose::Inspect { t, rare } => {
+            // raised to the eye, turned all the way round, tilted to show
+            // its best side; a rare one flips end over end as well
+            let b = bump(t);
+            let mut f = hold
+                .at(v3(-2.0 * b, 3.0 * b, 1.0 + 5.0 * b))
+                .yaw(360.0 * t * t * (3.0 - 2.0 * t))
+                .pitch(14.0 * b * sin_deg(t * 720.0));
+            if rare {
+                f = f
+                    .at(v3(0.0, 0.0, 4.0))
+                    .pitch(360.0 * ((t - 0.35) / 0.3).clamp(0.0, 1.0))
+                    .at(v3(0.0, 0.0, -4.0));
+            }
+            (f, 0.0)
+        }
+        Pose::Juggle { ticks } => {
+            // tossed hand to hand in an arc, turning over once each toss
+            let n = ticks / TOSS_TICKS;
+            let u = (ticks % TOSS_TICKS) as f32 / TOSS_TICKS as f32;
+            let from = if n.is_multiple_of(2) { -3.5 } else { 3.5 };
+            let y = from + (-2.0 * from) * u;
+            let z = 1.0 + 56.0 * u * (1.0 - u);
+            let spin = if held == Held::Balisong { 720.0 } else { 360.0 };
+            // turned about its middle, not its base
+            (
+                hold.at(v3(0.0, y, z + 4.0))
+                    .pitch(spin * u)
+                    .at(v3(0.0, 0.0, -4.0)),
+                0.0,
+            )
+        }
     }
 }
 
@@ -577,6 +828,7 @@ pub fn hands(
     bob: f32,
     skin: Rgb,
     sleeve: Rgb,
+    pose: Pose,
 ) {
     let m = M_HAND;
     let f = cam.yaw(sway.0).pitch(sway.1).at(v3(0.0, 0.0, bob));
@@ -634,6 +886,8 @@ pub fn hands(
         _ => {
             // both hands cupped under the thing, a little to the right
             let hold = f.at(v3(19.0, -5.0, -11.0)).pitch(-8.0).scaled(0.7);
+            let (item, drop) = posed(&hold, held, pose);
+            let hold = hold.at(v3(0.0, 0.0, -drop));
             for side in [-1.0f32, 1.0] {
                 let hand = hold.at(v3(0.0, side * 2.2, -1.0)).roll(-side * 25.0);
                 cuboid(out, &hand, v3(0.0, 0.0, 0.0), v3(2.4, 1.8, 0.8), skin, m);
@@ -657,8 +911,30 @@ pub fn hands(
                 );
             }
             let k = 1.0 - squeeze * 0.25;
-            let item = hold.at(v3(0.0, 0.0, 1.0));
             thing(out, &item, held, k, m);
+            if let Pose::Inspect { t, .. } = pose {
+                if held.dangles() && bump(t) > 0.0 {
+                    // the fishing line, up out of sight
+                    let top = item.at(v3(0.0, 0.0, 10.0 * bump(t)));
+                    bar(
+                        out,
+                        &top,
+                        v3(0.0, 0.0, 0.0),
+                        v3(0.0, 0.0, 80.0),
+                        0.08,
+                        [0.95, 0.95, 0.92],
+                        m,
+                    );
+                    orb(
+                        out,
+                        &top,
+                        v3(0.0, 0.0, 0.3),
+                        v3(0.35, 0.35, 0.6),
+                        [0.75, 0.78, 0.82],
+                        m,
+                    );
+                }
+            }
         }
     }
 }
@@ -2663,6 +2939,209 @@ pub fn thing(out: &mut Vec<f32>, f: &Xf, held: Held, k: f32, m: f32) {
                 m,
             );
         }
+        Held::Goldfish => {
+            // a goldfish: round and orange, a fanned tail, big eyes
+            let g = sq.yaw(70.0);
+            let gold = [1.0, 0.58, 0.14];
+            let light = [1.0, 0.80, 0.45];
+            let fin = [1.0, 0.42, 0.12];
+            orb(out, &g, v3(0.0, 0.0, 4.0), v3(4.2, 2.6, 3.2), gold, m);
+            orb(out, &g, v3(0.8, 0.0, 3.0), v3(3.0, 2.3, 1.9), light, m);
+            for s in [-1.0f32, 1.0] {
+                orb_turned(
+                    out,
+                    &g,
+                    v3(-5.4, 0.0, 4.0 + s * 1.1),
+                    v3(2.2, 0.4, 1.3),
+                    0.0,
+                    s * 35.0,
+                    fin,
+                    m,
+                );
+                orb_turned(
+                    out,
+                    &g,
+                    v3(0.6, s * 2.4, 3.0),
+                    v3(1.2, 0.3, 0.7),
+                    s * 30.0,
+                    0.0,
+                    fin,
+                    m,
+                );
+            }
+            orb_turned(out, &g, v3(-0.4, 0.0, 6.9), v3(1.9, 0.3, 1.3), 0.0, -20.0, fin, m);
+            fish_eyes(out, &g, 2.5, 1.6, 4.9, 0.9, m);
+            orb(
+                out,
+                &g,
+                v3(4.2, 0.0, 3.6),
+                v3(0.35, 0.7, 0.4),
+                [0.95, 0.45, 0.45],
+                m,
+            );
+        }
+        Held::Eel => {
+            // a moray eel: a long wavy green body with dark spots, a big head
+            let g = sq.yaw(70.0);
+            let green = [0.46, 0.64, 0.24];
+            let spot = [0.25, 0.38, 0.14];
+            for i in 0..10 {
+                let t = i as f32;
+                let (s, _) = sin_cos_deg((t * 52.0) as f64);
+                let w = 0.6 + t * 0.09;
+                let c = v3(-6.5 + t * 1.25, s as f32 * 1.3, 2.4 + t * 0.12);
+                orb(out, &g, c, v3(1.1, w, w * 1.1), green, m);
+                if i % 3 == 1 {
+                    orb(out, &g, c + v3(0.0, 0.0, w * 0.9), v3(0.4, 0.4, 0.2), spot, m);
+                }
+            }
+            orb(out, &g, v3(6.3, 0.0, 3.9), v3(2.3, 1.6, 1.8), green, m);
+            orb(
+                out,
+                &g,
+                v3(7.4, 0.0, 3.0),
+                v3(1.4, 1.1, 0.5),
+                [0.20, 0.10, 0.14],
+                m,
+            );
+            for k in 0..4 {
+                orb(
+                    out,
+                    &g,
+                    v3(6.6 + k as f32 * 0.5, 0.0, 3.4),
+                    v3(0.18, 0.9, 0.3),
+                    [1.0, 1.0, 1.0],
+                    m,
+                );
+            }
+            fish_eyes(out, &g, 7.0, 0.9, 4.9, 0.55, m);
+        }
+        Held::Pufferfish => {
+            // a pufferfish, puffed up: a yellow ball of spikes, a pursed mouth
+            let g = sq.yaw(70.0);
+            let yellow = [1.0, 0.85, 0.34];
+            let belly = [1.0, 0.97, 0.86];
+            let c = v3(0.0, 0.0, 5.0);
+            orb(out, &g, c, v3(4.6, 4.4, 4.4), yellow, m);
+            orb(out, &g, c + v3(0.6, 0.0, -1.4), v3(3.6, 3.6, 3.0), belly, m);
+            for i in 0..28 {
+                // spread over the ball by the golden angle
+                let z = 1.0 - 2.0 * (i as f32 + 0.5) / 28.0;
+                let r = (1.0 - z * z).max(0.0).sqrt();
+                let (s, co) = sin_cos_deg(i as f64 * 137.508);
+                let d = v3(co as f32 * r, s as f32 * r, z);
+                orb_along(out, &g, c + d * 4.5, d, 1.0, 0.32, [0.92, 0.70, 0.22], m);
+            }
+            fish_eyes(out, &g, 3.0, 2.0, 6.4, 1.0, m);
+            orb(
+                out,
+                &g,
+                c + v3(4.5, 0.0, -0.4),
+                v3(0.5, 0.7, 0.6),
+                [0.95, 0.5, 0.45],
+                m,
+            );
+            orb_turned(
+                out,
+                &g,
+                v3(-4.8, 0.0, 5.0),
+                v3(1.4, 0.3, 1.2),
+                0.0,
+                0.0,
+                [0.92, 0.70, 0.22],
+                m,
+            );
+        }
+        Held::Squishmallow => {
+            // a squishy fish plush: a soft pastel oval, a cream tummy, a kawaii face
+            let g = sq.yaw(70.0);
+            let pink = [1.0, 0.72, 0.82];
+            let cream = [1.0, 0.95, 0.86];
+            let blue = [0.62, 0.82, 1.0];
+            orb(out, &g, v3(0.0, 0.0, 4.4), v3(4.6, 3.8, 4.2), pink, m);
+            orb(out, &g, v3(1.6, 0.0, 3.6), v3(3.2, 3.2, 2.8), cream, m);
+            orb_turned(out, &g, v3(-4.9, 0.0, 4.6), v3(1.6, 0.5, 1.8), 0.0, 0.0, blue, m);
+            orb_turned(
+                out,
+                &g,
+                v3(-0.6, 0.0, 8.4),
+                v3(1.6, 0.4, 1.0),
+                0.0,
+                -15.0,
+                blue,
+                m,
+            );
+            for s in [-1.0f32, 1.0] {
+                orb_turned(
+                    out,
+                    &g,
+                    v3(0.4, s * 3.8, 3.4),
+                    v3(1.2, 0.4, 0.8),
+                    s * 25.0,
+                    0.0,
+                    blue,
+                    m,
+                );
+                orb(
+                    out,
+                    &g,
+                    v3(3.9, s * 1.5, 5.4),
+                    v3(0.5, 0.5, 0.55),
+                    [0.12, 0.10, 0.16],
+                    m,
+                );
+                orb(
+                    out,
+                    &g,
+                    v3(4.2, s * 1.6, 5.7),
+                    v3(0.16, 0.16, 0.16),
+                    [1.0, 1.0, 1.0],
+                    m,
+                );
+                orb(
+                    out,
+                    &g,
+                    v3(3.8, s * 2.6, 4.4),
+                    v3(0.3, 0.8, 0.45),
+                    [1.0, 0.50, 0.62],
+                    m,
+                );
+            }
+            orb(
+                out,
+                &g,
+                v3(4.3, 0.0, 4.6),
+                v3(0.25, 0.6, 0.18),
+                [0.12, 0.10, 0.16],
+                m,
+            );
+        }
+        Held::Balisong => {
+            // a knife fish: a butterfly knife whose two handles are a blue
+            // fish (tail at the end, an eye by the pivot), its blade between
+            let g = sq.yaw(70.0);
+            let blue = [0.25, 0.55, 0.95];
+            let scale = [0.18, 0.40, 0.78];
+            let steel = [0.82, 0.86, 0.92];
+            let gold = [0.98, 0.78, 0.25];
+            for s in [-1.0f32, 1.0] {
+                orb(out, &g, v3(-1.0, s * 0.6, 3.0), v3(4.6, 0.5, 0.9), blue, m);
+                for k in 0..4 {
+                    orb(
+                        out,
+                        &g,
+                        v3(-3.4 + k as f32 * 1.6, s * 1.05, 3.1),
+                        v3(0.5, 0.12, 0.4),
+                        scale,
+                        m,
+                    );
+                }
+            }
+            orb_turned(out, &g, v3(-6.2, 0.0, 3.0), v3(1.4, 0.3, 1.1), 0.0, 0.0, blue, m);
+            orb(out, &g, v3(4.3, 0.0, 3.9), v3(4.4, 0.16, 0.85), steel, m);
+            orb(out, &g, v3(3.4, 0.0, 2.6), v3(0.35, 1.3, 0.35), gold, m);
+            fish_eyes(out, &g, 2.6, 0.8, 3.4, 0.4, m);
+        }
         Held::Anvil => {
             // a cartoon anvil: a dark iron foot, a narrow waist, a wide top with a pointed horn
             let iron = [0.30, 0.31, 0.35];
@@ -2724,29 +3203,153 @@ mod tests {
 
     #[test]
     fn every_held_thing_draws_and_stays_in_front_of_the_eye() {
+        let poses = [
+            Pose::Hold,
+            Pose::Inspect { t: 0.3, rare: false },
+            Pose::Inspect { t: 0.5, rare: true },
+            Pose::Juggle { ticks: 13 },
+            Pose::Juggle { ticks: 61 },
+        ];
         for held in Held::ALL {
-            let mut out = Vec::new();
-            hands(
-                &mut out,
-                &cam(),
-                held,
-                0.0,
-                (0.0, 0.0),
-                0.0,
-                [0.9, 0.7, 0.6],
-                [0.2, 0.4, 0.8],
-            );
-            assert!(!out.is_empty(), "{held:?}");
-            assert_eq!(out.len() % (3 * FLOATS_PER_VERTEX), 0);
-            for v in out.chunks(FLOATS_PER_VERTEX) {
-                assert!(
-                    v[0] > 4.0,
-                    "{held:?}: a vertex behind the near plane at x {}",
-                    v[0]
+            for pose in poses {
+                let mut out = Vec::new();
+                hands(
+                    &mut out,
+                    &cam(),
+                    held,
+                    0.0,
+                    (0.0, 0.0),
+                    0.0,
+                    [0.9, 0.7, 0.6],
+                    [0.2, 0.4, 0.8],
+                    pose,
                 );
+                assert!(!out.is_empty(), "{held:?}");
+                assert_eq!(out.len() % (3 * FLOATS_PER_VERTEX), 0);
+                for v in out.chunks(FLOATS_PER_VERTEX) {
+                    assert!(
+                        v[0] > 4.0,
+                        "{held:?} {pose:?}: a vertex behind the near plane at x {}",
+                        v[0]
+                    );
+                }
             }
             assert_eq!(Held::from_id(held.id()), Some(held));
         }
+    }
+
+    /// The middle of the thing's vertices (its colour picked out of the
+    /// hands' by being drawn after them).
+    fn thing_centre(held: Held, pose: Pose) -> V3 {
+        let mut hands_only = Vec::new();
+        hands(
+            &mut hands_only,
+            &cam(),
+            Held::Kickball,
+            0.0,
+            (0.0, 0.0),
+            0.0,
+            [0.9, 0.7, 0.6],
+            [0.2, 0.4, 0.8],
+            Pose::Hold,
+        );
+        let mut out = Vec::new();
+        hands(
+            &mut out,
+            &cam(),
+            held,
+            0.0,
+            (0.0, 0.0),
+            0.0,
+            [0.9, 0.7, 0.6],
+            [0.2, 0.4, 0.8],
+            pose,
+        );
+        // the hands come first, the thing after them
+        let skip = hands_only.len() - thing_len(Held::Kickball);
+        let mut sum = v3(0.0, 0.0, 0.0);
+        let mut n = 0.0;
+        for v in out[skip..].chunks(FLOATS_PER_VERTEX) {
+            sum += v3(v[0], v[1], v[2]);
+            n += 1.0;
+        }
+        sum * (1.0 / n)
+    }
+
+    fn thing_len(held: Held) -> usize {
+        let mut out = Vec::new();
+        let f = Xf::new(
+            v3(0.0, 0.0, 0.0),
+            v3(1.0, 0.0, 0.0),
+            v3(0.0, 1.0, 0.0),
+            v3(0.0, 0.0, 1.0),
+        );
+        thing(&mut out, &f, held, 1.0, 0.0);
+        out.len()
+    }
+
+    #[test]
+    fn an_inspect_dangles_the_fish_up_on_a_line_and_a_juggle_tosses_it_hand_to_hand() {
+        let rest = thing_centre(Held::Goldfish, Pose::Hold);
+        let up = thing_centre(Held::Goldfish, Pose::Inspect { t: 0.5, rare: false });
+        assert!(
+            up.z > rest.z + 6.0,
+            "the goldfish hangs up on its line, above the hands ({rest:?} to {up:?})"
+        );
+        let mut line = Vec::new();
+        hands(
+            &mut line,
+            &cam(),
+            Held::Goldfish,
+            0.0,
+            (0.0, 0.0),
+            0.0,
+            [0.9, 0.7, 0.6],
+            [0.2, 0.4, 0.8],
+            Pose::Inspect { t: 0.5, rare: false },
+        );
+        let top = line
+            .chunks(FLOATS_PER_VERTEX)
+            .map(|v| v[2])
+            .fold(f32::MIN, f32::max);
+        assert!(top > 64.0 + 20.0, "its line runs up out of sight ({top})");
+        // a kickball's inspect turns it over in the hands instead: no line
+        let mut ball = Vec::new();
+        hands(
+            &mut ball,
+            &cam(),
+            Held::Kickball,
+            0.0,
+            (0.0, 0.0),
+            0.0,
+            [0.9, 0.7, 0.6],
+            [0.2, 0.4, 0.8],
+            Pose::Inspect { t: 0.5, rare: false },
+        );
+        let top = ball
+            .chunks(FLOATS_PER_VERTEX)
+            .map(|v| v[2])
+            .fold(f32::MIN, f32::max);
+        assert!(top < 64.0, "no line for a kickball ({top})");
+        // a juggle: from one hand, high in the middle, to the other
+        let a = thing_centre(Held::Pufferfish, Pose::Juggle { ticks: 0 });
+        let mid = thing_centre(
+            Held::Pufferfish,
+            Pose::Juggle {
+                ticks: TOSS_TICKS / 2,
+            },
+        );
+        let b = thing_centre(
+            Held::Pufferfish,
+            Pose::Juggle {
+                ticks: TOSS_TICKS - 1,
+            },
+        );
+        assert!(
+            mid.z > a.z + 6.0 && mid.z > b.z + 6.0,
+            "tossed up ({a:?}, {mid:?}, {b:?})"
+        );
+        assert!((a.y - b.y).abs() > 3.0, "from one hand to the other");
     }
 
     #[test]
@@ -2761,6 +3364,7 @@ mod tests {
             0.0,
             [0.9, 0.7, 0.6],
             [0.2, 0.4, 0.8],
+            Pose::Hold,
         );
         let n = (out.len() / FLOATS_PER_VERTEX) as f32;
         let mean_y: f32 = out.chunks(FLOATS_PER_VERTEX).map(|v| v[1]).sum::<f32>() / n;

@@ -23,6 +23,7 @@
   "KeyM": "mute",
   "KeyV": "watch",
   "Escape": "pause",
-  "KeyP": "pause"
+  "KeyP": "pause",
+  "KeyF": "inspect"
  }
 }

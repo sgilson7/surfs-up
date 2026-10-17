@@ -10,7 +10,7 @@ cannot capture the mouse, so the view never turns here; the keys still work.
 import pathlib
 
 # every course in data/maps/maps.json
-COURSES = 16
+COURSES = 17
 
 
 def pick_course(page, course):
@@ -42,7 +42,7 @@ def run(page, check, engine):
     page.wait_for_selector("#locker:not([hidden])", timeout=5000)
     items = page.locator("#items .item").count()
     locked = page.locator("#items .item.locked").count()
-    check(items == 81 and locked == 80, f"the cubby has eighty-one things, eighty still to earn ({items}, {locked} locked)")
+    check(items == 86 and locked == 85, f"the cubby has eighty-six things, eighty-five still to earn ({items}, {locked} locked)")
     check("Rubber chicken" in page.inner_text("#items"), "the rubber chicken is in the cubby")
     # taller than the window, the cubby scrolls from its title to its close button
     page.locator("#locker").evaluate("s => s.scrollTop = 0")
@@ -129,7 +129,7 @@ def run(page, check, engine):
     page.goto(page.url.split("?")[0].split("#")[0] + "?at=0,-700,200,90")
     page.wait_for_selector("body[data-mode='title']", state="attached", timeout=10000)
     tabs = [page.locator("#map-tabs .map-tab").nth(i).inner_text() for i in range(page.locator("#map-tabs .map-tab").count())]
-    check(tabs == ["Tier 1", "Tier 2", "Advanced", "Bhop"], f"the courses sit under tier tabs {tabs}")
+    check(tabs == ["Themed", "Tier 1", "Tier 2", "Advanced", "Bhop"], f"the courses sit under the themed and tier tabs {tabs}")
     check(page.locator("#map-tabs .map-tab.open").inner_text() == "Tier 1", "the title opens on the chosen course's tab, tier 1")
     seen = {}
     for i, name in enumerate(tabs):

@@ -291,6 +291,15 @@ impl Surfer {
         if pushed {
             self.body.base_velocity = push;
             out.boosted = !self.body.pushed;
+            // CTriggerPush::Touch (triggers.cpp, Source SDK 2013): a push
+            // upward lifts a player standing in it off the ground, a unit
+            // up, so it can carry them ("if ( vecPush.z > 0 && (pOther->
+            // GetFlags() & FL_ONGROUND) ) { pOther->SetGroundEntity( NULL );
+            // ... origin.z += 1.0f; }")
+            if push.z > 0.0 && self.body.on_ground {
+                self.body.on_ground = false;
+                self.body.origin.z += 1.0;
+            }
         }
         self.body.pushed = pushed;
 
@@ -344,6 +353,10 @@ impl Surfer {
                             out.stage = Some(st);
                         }
                         Some(st) if st == self.stage => out.fell = true,
+                        None if course.fall_reset => {
+                            self.body.velocity = ZERO;
+                            out.fell = true;
+                        }
                         _ => {}
                     }
                 }
@@ -1027,6 +1040,63 @@ mod tests {
                 .unwrap_or_else(|| panic!("a fall to {target}"))
                 .clone()
         }
+    }
+
+    #[test]
+    fn a_fall_on_100_leagues_stops_you_on_the_last_buoy_and_the_clock_runs_on() {
+        // a linear course: no stages, a drop-in buoy before each part; the
+        // speed you fell with is dropped there (Momentum's "reset" mode)
+        let (m, c) = load("surf_100_leagues");
+        assert!(c.fall_reset && c.stages.is_empty());
+        let mut mv = Mover::new(&m);
+        let mut s = Surfer::at_start(&m);
+        s.phase = Phase::Running;
+        s.stats.ticks = 640;
+        let pit = teleport_to(&m, "cp_reef", false);
+        s.body.origin = (pit.mins + pit.maxs) * 0.5;
+        s.body.velocity = v3(900.0, -300.0, -1400.0);
+        let t = s.step(&mut mv, &c, Cmd::new(0, 0.0, 0.0));
+        let (buoy, _) = m.destination_named("cp_reef").unwrap();
+        assert!(t.fell, "a fall");
+        assert_eq!(s.body.origin, buoy, "on the reef's buoy");
+        assert_eq!(s.body.velocity, ZERO, "stopped, not thrown off again");
+        assert_eq!(s.phase, Phase::Running, "the clock runs on");
+        assert!(s.stats.ticks > 640);
+        // and you stand on the buoy
+        for _ in 0..64 {
+            s.step(&mut mv, &c, Cmd::new(0, 0.0, 0.0));
+        }
+        assert!(
+            s.body.on_ground && (s.body.origin - buoy).length() < 2.0,
+            "{:?}",
+            s.body.origin
+        );
+    }
+
+    #[test]
+    fn the_100_leagues_vent_blasts_you_out_of_the_sea() {
+        // step into the chimney at the bottom of the sea: the vent's push
+        // carries you up past the surface, the same way every time
+        let (m, c) = load("surf_100_leagues");
+        let mut mv = Mover::new(&m);
+        let mut s = Surfer::at_start(&m);
+        s.phase = Phase::Running;
+        let (floor, yaw) = m.destination_named("cp_vent").unwrap();
+        s.body = crate::movement::Body::at(floor);
+        let water = c.theme.as_ref().unwrap().water.unwrap();
+        assert!(floor.z < water - 8000.0, "deep in the hadal zone ({floor:?})");
+        let mut top = floor.z;
+        let mut left_at = None;
+        for i in 0..64 * 8 {
+            let t = s.step(&mut mv, &c, Cmd::new(0, yaw, 0.0));
+            assert!(!t.fell, "no fall on the way up (tick {i}, {:?})", s.body.origin);
+            top = top.max(s.body.origin.z);
+            if left_at.is_none() && s.body.origin.z > water {
+                left_at = Some(i);
+            }
+        }
+        assert!(left_at.is_some(), "out of the water: up to {top}");
+        assert!(top > water + 1500.0, "blasted well clear of the sea ({top})");
     }
 
     #[test]

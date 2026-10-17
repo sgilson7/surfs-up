@@ -73,6 +73,9 @@ COLOURS = {
     "ice": "E4F2FF", "icedark": "8EC2EE", "cone": "DCA45E", "conedark": "B07D3A", "choc": "7A4D2E",
     "melon": "F04D57", "rind": "3A8F45", "rindlit": "D8F2C0", "bluegrey": "8FA8CC",
     "iron": "4D4F59", "ironlit": "757782",
+    "sea": "4FB8D8", "sealit": "8FD9EC", "seadeep": "2A7FA8", "brass": "DBA842", "brasslit": "F2CC6B",
+    "brassdark": "A87A22", "eel": "76A33D", "eeldark": "4A6A22", "puff": "FFD957", "puffdark": "E0AE33",
+    "pastel": "FFB8D1", "pastelblue": "9ED1FF", "cream": "FFF2DC", "blush": "FF8AA0",
 }
 
 PREAMBLE = (
@@ -1378,6 +1381,65 @@ def course_cartoons():
     return b, (S, S)
 
 
+def goldfish():
+    b = "% a goldfish: a round orange body, a fanned tail, a big eye\n"
+    b += poly([(0.85, 1.5), (0.3, 2.05), (0.45, 1.5), (0.3, 0.95)], "orangedark")
+    b += ellipse(1.6, 1.5, 0.85, 0.62, "orange") + ellipse(1.75, 1.35, 0.55, 0.35, "orangelit")
+    b += poly([(1.3, 2.0), (1.8, 2.05), (1.5, 2.4)], "orangedark")
+    b += circle(2.05, 1.65, 0.17, "white") + circle(2.1, 1.65, 0.1, "ink") + circle(2.13, 1.7, 0.03, "white")
+    return b, (S, S)
+
+
+def eel():
+    b = "% a moray eel: a long wavy green body with spots and a big head\n"
+    b += "\\draw[eel,line width=14pt,line cap=round] (0.35,0.9) .. controls (0.9,1.5) and (1.3,0.6) .. (1.8,1.2) .. controls (2.0,1.45) and (2.15,1.6) .. (2.3,1.75);\n"
+    b += ellipse(2.35, 1.85, 0.45, 0.32, "eel")
+    b += circle(1.0, 1.15, 0.06, "eeldark") + circle(1.55, 0.95, 0.06, "eeldark") + circle(1.95, 1.4, 0.06, "eeldark")
+    b += ellipse(2.62, 1.72, 0.18, 0.07, "reddark")
+    b += circle(2.45, 1.98, 0.09, "white") + circle(2.48, 1.98, 0.05, "ink")
+    return b, (S, S)
+
+
+def pufferfish():
+    b = "% a pufferfish: a yellow ball of spikes, big eyes, a pursed mouth\n"
+    b += "\\foreach \\a in {0,24,...,336} {\\fill[puffdark] ($(1.5,1.5)+(\\a:0.78)$) -- ($(1.5,1.5)+(\\a+6:1.08)$) -- ($(1.5,1.5)+(\\a+12:0.78)$) -- cycle;}\n"
+    b += circle(1.5, 1.5, 0.82, "puff") + ellipse(1.55, 1.25, 0.55, 0.38, "cream")
+    b += circle(1.75, 1.75, 0.18, "white") + circle(1.8, 1.75, 0.1, "ink")
+    b += ellipse(2.25, 1.45, 0.08, 0.1, "blush")
+    return b, (S, S)
+
+
+def squishmallow():
+    b = "% a squishy fish plush: a pastel oval, a cream tummy, a kawaii face\n"
+    b += poly([(0.75, 1.45), (0.35, 1.85), (0.35, 1.05)], "pastelblue")
+    b += ellipse(1.6, 1.45, 0.95, 0.85, "pastel") + ellipse(1.8, 1.2, 0.6, 0.45, "cream")
+    b += circle(1.85, 1.65, 0.08, "ink") + circle(2.25, 1.65, 0.08, "ink")
+    b += ellipse(1.7, 1.48, 0.1, 0.06, "blush") + ellipse(2.4, 1.48, 0.1, 0.06, "blush")
+    b += "\\draw[ink,line width=1pt] (1.98,1.5) .. controls (2.02,1.44) and (2.08,1.44) .. (2.12,1.5);\n"
+    b += poly([(1.4, 2.25), (1.75, 2.3), (1.6, 2.55)], "pastelblue")
+    return b, (S, S)
+
+
+def balisong():
+    b = "% a knife fish: a butterfly knife, its handles a blue fish, its blade steel\n"
+    b += poly([(1.55, 1.62), (2.75, 2.05), (2.8, 1.95), (1.6, 1.5)], "steel")
+    b += poly([(0.5, 1.2), (1.7, 1.6), (1.7, 1.45), (0.55, 1.05)], "shirtb")
+    b += poly([(0.45, 1.35), (1.65, 1.75), (1.68, 1.62), (0.48, 1.22)], "shirtbdark")
+    b += poly([(0.5, 1.15), (0.2, 1.45), (0.25, 0.95)], "shirtb")
+    b += circle(1.62, 1.6, 0.06, "gold") + circle(1.45, 1.6, 0.05, "white")
+    return b, (S, S)
+
+
+def course_100_leagues():
+    b = "% surf_100_leagues: a brass diving helmet under the sea, bubbles rising\n" + tile("sea")
+    b += rect(0.0, 0.0, 3.0, 0.5, "seadeep")
+    b += circle(1.5, 1.35, 0.85, "brass") + circle(1.62, 1.45, 0.62, "brasslit")
+    b += circle(1.5, 1.35, 0.48, "brassdark") + circle(1.5, 1.35, 0.38, "seadeep") + circle(1.38, 1.48, 0.09, "sealit")
+    b += rect(0.8, 0.45, 2.2, 0.62, "brassdark")
+    b += circle(2.35, 2.2, 0.12, "sealit") + circle(2.5, 2.55, 0.08, "sealit") + circle(2.3, 2.8, 0.06, "sealit")
+    return b, (S, S)
+
+
 COURSES = ["utopia", "kitsune", "egypt", "aircontrol", "mesa", "beginner", "summit", "sandtrap",
            "summer", "deadline", "anubis", "ambience", "eazy", "lego", "japan", "cartoons"]
 
@@ -1468,6 +1530,12 @@ PICTURES = {
     "items/whoopee": whoopee,
     "items/top_hat": top_hat,
     "items/anvil": anvil,
+    "items/goldfish": goldfish,
+    "items/eel": eel,
+    "items/pufferfish": pufferfish,
+    "items/squishmallow": squishmallow,
+    "items/balisong": balisong,
+    "maps/surf_100_leagues": course_100_leagues,
 }
 DPI = {"title": 150, "icon": 81, "how-to-surf": 110}
 CLEAR = {"items", "maps"}

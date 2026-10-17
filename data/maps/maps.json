@@ -414,6 +414,273 @@
    ]
   },
   {
+   "id": "surf_100_leagues",
+   "name": "surf_100_leagues",
+   "author": "Sami",
+   "tier": 1,
+   "tier_source": "Sami's brief: tier 1, good for beginners (a Surfs Up! course, not on any server list)",
+   "spawn": "start",
+   "fall_reset": true,
+   "start_zone": [
+    [
+     -1500,
+     -800,
+     256.0
+    ],
+    [
+     400,
+     800,
+     456.0
+    ]
+   ],
+   "finish_zone": [
+    [
+     -32582.7082988371,
+     5849.428567665109,
+     720
+    ],
+    [
+     -31182.7082988371,
+     7249.428567665109,
+     1020
+    ]
+   ],
+   "roles": [
+    {
+     "target": "start",
+     "role": "restart"
+    }
+   ],
+   "stages": [],
+   "medals": {
+    "record": 55,
+    "gold": 70,
+    "silver": 90,
+    "bronze": 125
+   },
+   "things": [
+    "goldfish",
+    "eel",
+    "pufferfish",
+    "squishmallow",
+    "balisong"
+   ],
+   "theme": {
+    "palette": [
+     [
+      "water",
+      "#3fb3d6"
+     ],
+     [
+      "sand",
+      "#f2d39a"
+     ],
+     [
+      "sand_dark",
+      "#d9b77a"
+     ],
+     [
+      "coral_pink",
+      "#ff7f9e"
+     ],
+     [
+      "coral_orange",
+      "#ff9b54"
+     ],
+     [
+      "coral_purple",
+      "#b07cf0"
+     ],
+     [
+      "coral_yellow",
+      "#ffd45c"
+     ],
+     [
+      "anemone",
+      "#ff6fb5"
+     ],
+     [
+      "sea_green",
+      "#59c9a5"
+     ],
+     [
+      "turtle_shell",
+      "#5aa35a"
+     ],
+     [
+      "turtle_skin",
+      "#a8d98f"
+     ],
+     [
+      "fish_gold",
+      "#ffb238"
+     ],
+     [
+      "fish_blue",
+      "#4aa8ff"
+     ],
+     [
+      "white",
+      "#ffffff"
+     ],
+     [
+      "ink",
+      "#2b2140"
+     ],
+     [
+      "hadal_rock",
+      "#3a3550"
+     ],
+     [
+      "angler",
+      "#6a4f8f"
+     ],
+     [
+      "lure",
+      "#fff07a"
+     ],
+     [
+      "oil_yellow",
+      "#ffc93c"
+     ],
+     [
+      "oil_steel",
+      "#8a8fa3"
+     ],
+     [
+      "vent_rock",
+      "#4a3b3b"
+     ],
+     [
+      "ember",
+      "#ff6a3d"
+     ],
+     [
+      "shark",
+      "#8fa3b8"
+     ],
+     [
+      "shark_belly",
+      "#eef3f8"
+     ],
+     [
+      "hull_red",
+      "#d6453d"
+     ],
+     [
+      "hull_navy",
+      "#2f4a7a"
+     ],
+     [
+      "container_a",
+      "#e94f37"
+     ],
+     [
+      "container_b",
+      "#3f88c5"
+     ],
+     [
+      "container_c",
+      "#44bba4"
+     ],
+     [
+      "container_d",
+      "#f6ae2d"
+     ],
+     [
+      "whale",
+      "#5b7fa6"
+     ],
+     [
+      "whale_belly",
+      "#d4e3f0"
+     ],
+     [
+      "boat_white",
+      "#f7f3e8"
+     ],
+     [
+      "boat_wood",
+      "#b07a4a"
+     ],
+     [
+      "line",
+      "#f0e6d0"
+     ],
+     [
+      "bubble",
+      "#dff6ff"
+     ],
+     [
+      "palm",
+      "#4caf50"
+     ],
+     [
+      "trunk",
+      "#9c6b3f"
+     ],
+     [
+      "grill",
+      "#3a3a3a"
+     ],
+     [
+      "kelp",
+      "#3f9a5a"
+     ],
+     [
+      "buoy",
+      "#ff8a3d"
+     ],
+     [
+      "rust",
+      "#b5653a"
+     ],
+     [
+      "deep_floor",
+      "#1f2a44"
+     ]
+    ],
+    "water": 0.0,
+    "fog": [
+     [
+      64,
+      "#bfe9ff",
+      60000
+     ],
+     [
+      1,
+      "#bfe9ff",
+      60000
+     ],
+     [
+      0,
+      "#55c6dd",
+      20000
+     ],
+     [
+      -1500,
+      "#2f97c4",
+      17000
+     ],
+     [
+      -3200,
+      "#165f8f",
+      13000
+     ],
+     [
+      -5200,
+      "#0c2a52",
+      10000
+     ],
+     [
+      -7500,
+      "#07122a",
+      8000
+     ]
+    ]
+   }
+  },
+  {
    "id": "surf_sandtrap",
    "name": "surf_sandtrap",
    "author": "ArcticPanda",

@@ -9,9 +9,13 @@ flat in int vMat;
 uniform vec3 uEye;
 uniform float uTime;
 uniform float uPass; // 0 solid, 1 see-through, 2 hands
+// what the eye sees through (the core chooses it by where the eye is)
+uniform vec3 uFog;
+uniform float uFogFar;
+uniform float uFogMax;
+uniform float uWater;
 out vec4 outColor;
 
-const vec3 HAZE = vec3(0.86, 0.88, 0.90);
 const vec3 SUN = normalize(vec3(0.35, 0.22, 0.91));
 
 float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
@@ -145,6 +149,30 @@ vec3 paint(int m, vec3 base, vec3 p, vec3 n, out float alpha, out float glow) {
     glow = 0.85 * g;
     return mix(base * 0.62, min(base * 1.15, vec3(1.0)), g);
   }
+  if (m == 18) {
+    // a themed surface: soft, a gentle shade down its face, faint ripples
+    float ripple = sin(u * 0.021) * sin(v * 0.017 + u * 0.004);
+    float fall = clamp(0.5 + 0.5 * n.z, 0.0, 1.0);
+    return base * (0.88 + 0.12 * fall) * (0.97 + 0.04 * ripple);
+  }
+  if (m == 20) {
+    // the water's surface: ripples, brighter seen from below
+    float r = 0.5 + 0.5 * sin(p.x * 0.004 + uTime * 0.9) * sin(p.y * 0.005 - uTime * 0.7);
+    // from above the sea is deep blue and mostly hides what is under it
+    bool below = uEye.z < uWater;
+    alpha = below ? 0.55 : 0.8;
+    glow = below ? 0.6 : 0.1;
+    return below ? mix(base, vec3(0.85, 0.97, 1.0), 0.55 + 0.2 * r) : mix(base * 0.75, vec3(0.9, 0.98, 1.0), 0.1 * r);
+  }
+  if (m == 21) {
+    glow = 0.75 + 0.25 * sin(uTime * 2.5 + p.x * 0.01);
+    return base;
+  }
+  if (m == 22) {
+    alpha = 0.35;
+    glow = 0.4;
+    return mix(base, vec3(1.0), 0.5);
+  }
   if (m == 13) {
     alpha = 0.38;
     return mix(base, vec3(0.75, 0.90, 1.0), 0.35);
@@ -159,7 +187,19 @@ void main() {
   float diffuse = max(dot(n, SUN), 0.0);
   float sky = 0.5 + 0.5 * n.z;
   float light = 0.42 + 0.38 * diffuse + 0.22 * sky;
+  if (vMat >= 18) {
+    // the soft look: light wrapped round the shape, a sky fill, no hard edge
+    float wrap = dot(n, SUN) * 0.5 + 0.5;
+    light = 0.50 + 0.42 * wrap * wrap + 0.14 * sky;
+  }
   vec3 lit = mix(c * light, c, glow);
+  if (vMat >= 18 && vMat != 20 && vPos.z < uWater) {
+    // sunlight through the waves dances on everything below, fading with depth
+    vec2 q = vPos.xy * 0.006;
+    float k = sin(q.x * 3.1 + uTime * 1.3) * sin(q.y * 2.7 - uTime * 1.1) + sin((q.x + q.y) * 2.3 + uTime * 0.8);
+    float depth = clamp(1.0 - (uWater - vPos.z) / 4000.0, 0.0, 1.0);
+    lit += vec3(0.10, 0.16, 0.18) * max(k, 0.0) * depth * max(n.z, 0.0);
+  }
   if (vMat == 1) {
     // vinyl has a soft sheen
     vec3 view = normalize(uEye - vPos);
@@ -171,6 +211,6 @@ void main() {
     return;
   }
   float d = length(vPos - uEye);
-  float fog = clamp((d - 2500.0) / 42000.0, 0.0, 0.85);
-  outColor = vec4(mix(lit, HAZE, fog), alpha);
+  float fog = clamp((d - 2500.0) / max(uFogFar - 2500.0, 1.0), 0.0, uFogMax);
+  outColor = vec4(mix(lit, uFog, fog), alpha);
 }

@@ -4,12 +4,12 @@
 //! maple boards, painted block, foam cubes...); the shader holds no rule, only
 //! the patterns.
 
-use crate::course::{Course, Role};
+use crate::course::{Course, Role, Theme};
 use crate::map::{
-    face_polygon, grid_colour, neon_colour, BrushKind, Map, Plane, TriggerKind, HINT_GLASS, HINT_LIGHT,
-    HINT_METAL, HINT_TERRAIN, NO_FILTER,
+    face_polygon, grid_colour, neon_colour, Blob, BrushKind, Map, Plane, TriggerKind, HINT_GLASS, HINT_LIGHT,
+    HINT_METAL, HINT_TERRAIN, HINT_THEME, NO_FILTER,
 };
-use crate::vec3::{v3, V3};
+use crate::vec3::{sin_cos_deg, v3, V3};
 
 pub const FLOATS_PER_VERTEX: usize = 10;
 
@@ -31,6 +31,16 @@ pub const M_HAND: f32 = 14.0;
 pub const M_DOOR_EARLY: f32 = 15.0;
 pub const M_GRID: f32 = 16.0;
 pub const M_SAND: f32 = 17.0;
+/// A themed course's surfaces: soft, in its palette's colours.
+pub const M_SOFT: f32 = 18.0;
+/// A themed course's scenery: smooth ellipsoids.
+pub const M_BLOB: f32 = 19.0;
+/// The water's surface, seen from above or below.
+pub const M_WATER: f32 = 20.0;
+/// Scenery that glows (an anglerfish's lure, a vent's embers).
+pub const M_GLOW: f32 = 21.0;
+/// See-through scenery (bubbles).
+pub const M_BUBBLE: f32 = 22.0;
 
 /// Gym mat vinyl: the colours of the mats in a school gym. One ramp (all
 /// the brushes that touch along it) is one mat colour.
@@ -118,6 +128,9 @@ fn scramble(x: u32) -> u32 {
 /// The static world: opaque triangles first, then see-through ones. Returns
 /// the vertices and how many of them are opaque.
 pub fn world(map: &Map, course: &Course) -> (Vec<f32>, usize) {
+    if let Some(theme) = &course.theme {
+        return themed_world(map, course, theme);
+    }
     let mut opaque = Vec::new();
     let mut clear = Vec::new();
     let mats = ramp_mats(map);
@@ -247,6 +260,155 @@ pub fn world(map: &Map, course: &Course) -> (Vec<f32>, usize) {
     let count = opaque.len() / FLOATS_PER_VERTEX;
     opaque.extend(clear);
     (opaque, count)
+}
+
+/// A themed course: every face in its palette role's colour, soft; its
+/// scenery as smooth ellipsoids; its water's surface; its finish. Falls are
+/// not shown (a drop-in point is not a door), nor is any gym around it.
+fn themed_world(map: &Map, course: &Course, theme: &Theme) -> (Vec<f32>, usize) {
+    let mut opaque = Vec::new();
+    let mut clear = Vec::new();
+    for b in &map.brushes {
+        if b.kind == BrushKind::Clip {
+            continue;
+        }
+        let planes: Vec<Plane> = b.sides.iter().map(|s| s.plane).collect();
+        for (i, s) in b.sides.iter().enumerate() {
+            if !s.drawn {
+                continue;
+            }
+            let poly = poly_of(&planes, i);
+            if poly.is_empty() {
+                continue;
+            }
+            let c = theme.colour(s.hint.saturating_sub(HINT_THEME) as usize);
+            push_polygon(&mut opaque, &poly, s.plane.n, c, M_SOFT);
+        }
+    }
+    for b in &map.blobs {
+        let c = theme.colour(b.role as usize);
+        if b.clear {
+            blob(&mut clear, b, c, M_BUBBLE);
+        } else {
+            blob(&mut opaque, b, c, if b.glow { M_GLOW } else { M_BLOB });
+        }
+    }
+    // the surfers getting ready on the shore: every place named pal...
+    for (name, p, yaw) in &map.destinations {
+        if map.name(*name).starts_with("pal") {
+            let look = crate::models::Look {
+                scuba: true,
+                ..crate::models::Look::from_seed(*name as u32 * 7 + 3)
+            };
+            crate::models::kid(&mut opaque, *p, *yaw, 0.0, false, &look, false);
+        }
+    }
+    if let Some(z) = &course.finish_zone {
+        let (lo, hi) = (z.mins, z.maxs);
+        let quad = [
+            v3(lo.x, lo.y, lo.z + 1.0),
+            v3(hi.x, lo.y, lo.z + 1.0),
+            v3(hi.x, hi.y, lo.z + 1.0),
+            v3(lo.x, hi.y, lo.z + 1.0),
+        ];
+        push_polygon(&mut opaque, &quad, v3(0.0, 0.0, 1.0), FINISH, M_FINISH);
+    }
+    if let Some(w) = theme.water {
+        // the surface, far past the course both ways, seen from either side
+        let lo = map.mins - v3(60000.0, 60000.0, 0.0);
+        let hi = map.maxs + v3(60000.0, 60000.0, 0.0);
+        let quad = [
+            v3(lo.x, lo.y, w),
+            v3(hi.x, lo.y, w),
+            v3(hi.x, hi.y, w),
+            v3(lo.x, hi.y, w),
+        ];
+        push_polygon(&mut clear, &quad, v3(0.0, 0.0, 1.0), theme.colour(0), M_WATER);
+    }
+    let count = opaque.len() / FLOATS_PER_VERTEX;
+    opaque.extend(clear);
+    (opaque, count)
+}
+
+/// The unit sphere as triangles: an icosahedron split `level` times.
+pub fn sphere(level: u32) -> Vec<[V3; 3]> {
+    let t = (1.0 + 5.0f32.sqrt()) / 2.0;
+    let p = [
+        v3(-1.0, t, 0.0),
+        v3(1.0, t, 0.0),
+        v3(-1.0, -t, 0.0),
+        v3(1.0, -t, 0.0),
+        v3(0.0, -1.0, t),
+        v3(0.0, 1.0, t),
+        v3(0.0, -1.0, -t),
+        v3(0.0, 1.0, -t),
+        v3(t, 0.0, -1.0),
+        v3(t, 0.0, 1.0),
+        v3(-t, 0.0, -1.0),
+        v3(-t, 0.0, 1.0),
+    ]
+    .map(|q| q.normalized());
+    let faces: [[usize; 3]; 20] = [
+        [0, 11, 5],
+        [0, 5, 1],
+        [0, 1, 7],
+        [0, 7, 10],
+        [0, 10, 11],
+        [1, 5, 9],
+        [5, 11, 4],
+        [11, 10, 2],
+        [10, 7, 6],
+        [7, 1, 8],
+        [3, 9, 4],
+        [3, 4, 2],
+        [3, 2, 6],
+        [3, 6, 8],
+        [3, 8, 9],
+        [4, 9, 5],
+        [2, 4, 11],
+        [6, 2, 10],
+        [8, 6, 7],
+        [9, 8, 1],
+    ];
+    let mut tris: Vec<[V3; 3]> = faces.iter().map(|f| [p[f[0]], p[f[1]], p[f[2]]]).collect();
+    for _ in 0..level {
+        let mut next = Vec::with_capacity(tris.len() * 4);
+        for [a, b, c] in tris {
+            let ab = (a + b).normalized();
+            let bc = (b + c).normalized();
+            let ca = (c + a).normalized();
+            next.extend([[a, ab, ca], [ab, b, bc], [ca, bc, c], [ab, bc, ca]]);
+        }
+        tris = next;
+    }
+    tris
+}
+
+/// A scenery blob: an ellipsoid with smooth normals, turned by its angles
+/// (yaw about z, then pitch, then roll), finer the bigger it is.
+pub fn blob(out: &mut Vec<f32>, b: &Blob, c: [f32; 3], m: f32) {
+    let level = if b.radii.x.max(b.radii.y).max(b.radii.z) > 160.0 {
+        2
+    } else {
+        1
+    };
+    let (sy, cy) = sin_cos_deg(b.angles.x as f64);
+    let (sp, cp) = sin_cos_deg(b.angles.y as f64);
+    let (sr, cr) = sin_cos_deg(b.angles.z as f64);
+    let (sy, cy, sp, cp, sr, cr) = (sy as f32, cy as f32, sp as f32, cp as f32, sr as f32, cr as f32);
+    // the blob's own axes in the world (Source's AngleMatrix)
+    let fx = v3(cp * cy, cp * sy, -sp);
+    let fy = v3(sr * sp * cy - cr * sy, sr * sp * sy + cr * cy, sr * cp);
+    let fz = v3(cr * sp * cy + sr * sy, cr * sp * sy - sr * cy, cr * cp);
+    let r = b.radii;
+    let place = |q: V3| b.centre + fx * (q.x * r.x) + fy * (q.y * r.y) + fz * (q.z * r.z);
+    // an ellipsoid's normal: the unit sphere's, divided by the radii
+    let normal = |q: V3| (fx * (q.x / r.x) + fy * (q.y / r.y) + fz * (q.z / r.z)).normalized();
+    for [a, bb, cc] in sphere(level) {
+        for q in [a, bb, cc] {
+            push_vertex(out, place(q), normal(q), c, m);
+        }
+    }
 }
 
 /// Kitsune's glass ramps are thin plates over nothing, so from a ramp's end
@@ -528,6 +690,36 @@ mod tests {
             caps >= 6,
             "its ends are closed, not open onto the pit ({caps} cap vertices)"
         );
+    }
+
+    #[test]
+    fn a_themed_course_is_drawn_in_its_palette_with_its_creatures_and_sea_and_no_gym() {
+        let (m, c) = load("surf_100_leagues");
+        let theme = c.theme.as_ref().expect("a theme");
+        let (v, opaque) = world(&m, &c);
+        let verts: Vec<&[f32]> = v.chunks(FLOATS_PER_VERTEX).collect();
+        let mats: Vec<f32> = verts.iter().map(|p| p[9]).collect();
+        for want in [M_SOFT, M_BLOB, M_GLOW, M_BUBBLE, M_WATER, M_FINISH] {
+            assert!(mats.contains(&want), "material {want} missing");
+        }
+        for gym in [M_HALL, M_MAT, M_WOOD, M_BLOCK, M_FOAM] {
+            assert!(!mats.contains(&gym), "no gym look ({gym})");
+        }
+        // every themed face is one of its palette's colours
+        let palette: Vec<[f32; 3]> = theme.palette.clone();
+        for p in verts[..opaque].iter().filter(|p| p[9] == M_SOFT) {
+            assert!(palette
+                .iter()
+                .any(|c| (0..3).all(|k| (c[k] - p[6 + k]).abs() < 1e-6)));
+        }
+        // the sea's surface lies at the water's height, see-through
+        let w = theme.water.unwrap();
+        assert!(verts[opaque..].iter().any(|p| p[9] == M_WATER && p[2] == w));
+        // the friends on the shore wear the scuba helmet's brass
+        let brass = [0.86f32, 0.66, 0.26];
+        assert!(verts[..opaque]
+            .iter()
+            .any(|p| (0..3).all(|k| (p[6 + k] - brass[k]).abs() < 1e-6)));
     }
 
     #[test]

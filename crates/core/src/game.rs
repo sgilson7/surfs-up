@@ -8,7 +8,7 @@ use crate::camera::Camera;
 use crate::course::{self, Course};
 use crate::map::Map;
 use crate::mesh::{self, FLOATS_PER_VERTEX};
-use crate::models::{hands, kid, thing, Held, Look, Xf};
+use crate::models::{hands, kid, thing, Held, Look, Pose, Xf};
 use crate::movement::{Body, Cmd, Mover, B_BACK, B_DUCK, B_FORWARD, B_JUMP, B_LEFT, B_RIGHT, B_USE};
 use crate::online::{
     self, clean_name, Ghost, Live, Peer, RunRecord, LIVE_BATCH, MAX_PEERS, PROTOCOL, SNAPSHOT_EVERY,
@@ -50,6 +50,8 @@ pub struct Settings {
     pub own_ghost: bool,
     pub volume: f32,
     pub seed: u32,
+    /// Wearing surf_100_leagues' old-time scuba gear (once earned).
+    pub scuba: bool,
 }
 
 impl Default for Settings {
@@ -63,6 +65,7 @@ impl Default for Settings {
             own_ghost: true,
             volume: 0.7,
             seed: 0,
+            scuba: false,
         }
     }
 }
@@ -112,6 +115,11 @@ pub struct Game {
     pub held: Held,
     pub unlocked: Vec<Held>,
     squeeze: u32,
+    /// Ticks into an inspect (F), whether it is a rare one, and whether F is
+    /// still held; held past `JUGGLE_AFTER`, the inspect becomes a juggle.
+    inspecting: Option<(u32, bool)>,
+    inspect_held: bool,
+    juggling: Option<u32>,
     sway: (f32, f32),
     bob_phase: f32,
     last_stats: Option<Stats>,
@@ -193,6 +201,9 @@ impl Game {
             held: Held::Prayer,
             unlocked: vec![Held::Prayer],
             squeeze: 0,
+            inspecting: None,
+            inspect_held: false,
+            juggling: None,
             sway: (0.0, 0.0),
             bob_phase: 0.0,
             last_stats: None,
@@ -322,6 +333,7 @@ impl Game {
         s.ghosts = v["ghosts"].as_bool().unwrap_or(true);
         s.own_ghost = v["own_ghost"].as_bool().unwrap_or(true);
         s.seed = v["seed"].as_u64().unwrap_or(0) as u32;
+        s.scuba = v["scuba"].as_bool().unwrap_or(false);
         if let Some(list) = v["unlocked"].as_array() {
             for id in list.iter().filter_map(|x| x.as_str()) {
                 if let Some(h) = Held::from_id(id) {
@@ -362,6 +374,7 @@ impl Game {
         json!({
             "name": s.name, "sens": s.sens, "fov": s.fov, "volume": s.volume,
             "live": s.live, "ghosts": s.ghosts, "own_ghost": s.own_ghost, "seed": s.seed,
+            "scuba": s.scuba,
             "unlocked": self.unlocked.iter().map(|h| h.id()).collect::<Vec<_>>(),
             "held": self.held.id(),
             "finishes": self.finishes,
@@ -602,8 +615,80 @@ impl Game {
         }
     }
 
+    /// Whether surf_100_leagues' scuba gear is earned: by finishing it (the
+    /// finish earns its first thing, the goldfish).
+    pub fn scuba_earned(&self) -> bool {
+        self.unlocked.contains(&Held::Goldfish)
+    }
+
+    /// How you look to others and on your ghost: your shirt's colours, and
+    /// the scuba gear if you wear it.
+    pub fn my_look(&self) -> Look {
+        Look {
+            scuba: self.settings.scuba && self.scuba_earned(),
+            ..Look::from_seed(self.settings.seed)
+        }
+    }
+
+    /// F pressed (`down`) or let go: a press inspects the thing you hold, as
+    /// CS:GO's inspect does; held on, it juggles it until let go. One
+    /// inspect in `RARE_EVERY`, picked from the clock, plays its rare trick.
+    pub fn inspect(&mut self, down: bool) {
+        if self.held == Held::Prayer {
+            return;
+        }
+        if down {
+            let rare = (self.tick / 3).is_multiple_of(RARE_EVERY);
+            self.inspecting = Some((0, rare));
+            self.inspect_held = true;
+            self.juggling = None;
+        } else {
+            self.inspect_held = false;
+            if self.juggling.take().is_some() {
+                self.inspecting = None;
+            }
+        }
+    }
+
+    /// What the hands are doing with the thing this frame.
+    pub fn pose(&self) -> Pose {
+        if let Some(ticks) = self.juggling {
+            Pose::Juggle { ticks }
+        } else if let Some((ticks, rare)) = self.inspecting {
+            Pose::Inspect {
+                t: ticks as f32 / INSPECT_TICKS as f32,
+                rare,
+            }
+        } else {
+            Pose::Hold
+        }
+    }
+
+    fn stop_inspecting(&mut self) {
+        self.inspecting = None;
+        self.juggling = None;
+    }
+
+    /// One tick of an inspect or a juggle.
+    fn inspect_tick(&mut self) {
+        if let Some(j) = &mut self.juggling {
+            *j += 1;
+            return;
+        }
+        if let Some((ticks, _)) = &mut self.inspecting {
+            *ticks += 1;
+            if self.inspect_held && *ticks >= JUGGLE_AFTER {
+                self.inspecting = None;
+                self.juggling = Some(0);
+            } else if *ticks >= INSPECT_TICKS {
+                self.inspecting = None;
+            }
+        }
+    }
+
     /// Cycle to the next thing you have (the scroll wheel or Q).
     pub fn next_held(&mut self) {
+        self.stop_inspecting();
         let have: Vec<Held> = Held::ALL
             .iter()
             .copied()
@@ -623,7 +708,11 @@ impl Game {
             "live" => s.live = value != 0.0,
             "ghosts" => s.ghosts = value != 0.0,
             "own_ghost" => s.own_ghost = value != 0.0,
+            "scuba" => s.scuba = value != 0.0,
             _ => {}
+        }
+        if key == "scuba" {
+            self.say_hello(None);
         }
         if key == "ghosts" || key == "own_ghost" {
             self.rebuild_ghosts();
@@ -769,8 +858,10 @@ impl Game {
                 gain: 0.6,
             });
         }
+        self.inspect_tick();
         if cmd.has(B_USE) && !was_use {
             self.squeeze = 12;
+            self.stop_inspecting();
             if self.held != Held::Prayer {
                 self.events.push(Event {
                     sound: squeak_sound(self.held),
@@ -816,8 +907,14 @@ impl Game {
                 sound: "pit",
                 gain: 1.0,
             });
-            let key = if self.me.phase == Phase::Running && !self.course.stages.is_empty() {
+            let running = self.me.phase == Phase::Running;
+            let key = if running && !self.course.stages.is_empty() {
                 "banner_fell_stage"
+            } else if running && self.course.fall_reset {
+                // a linear course's drop-in points (surf_100_leagues' buoys)
+                "banner_fell_drop_in"
+            } else if self.course.theme.is_some() {
+                "banner_fell_shore"
             } else {
                 "banner_fell"
             };
@@ -1112,6 +1209,7 @@ impl Game {
                         }
                         p.name = clean_name(v["name"].as_str().unwrap_or(""));
                         p.seed = v["seed"].as_u64().unwrap_or(0) as u32;
+                        p.scuba = v["scuba"].as_bool().unwrap_or(false);
                         let h = v["held"].as_str().unwrap_or("prayer");
                         p.held = Held::from_id(h).map(|h| h.id()).unwrap_or("prayer").to_string();
                         let m: String = v["m"].as_str().unwrap_or("").chars().take(40).collect();
@@ -1191,6 +1289,7 @@ impl Game {
         let text = json!({
             "t": "hi", "v": PROTOCOL, "name": self.settings.name,
             "seed": self.settings.seed, "held": self.held.id(), "m": self.loaded,
+            "scuba": self.my_look().scuba,
         })
         .to_string();
         self.send(to, text);
@@ -1304,10 +1403,13 @@ impl Game {
         ]
     }
 
-    /// The matrix (16), the eye (3), the clock in seconds (1), the speed (1).
+    /// The matrix (16), the eye (3), the clock in seconds (1), the speed
+    /// (1), then what the eye sees through: the fog's colour (3), how far
+    /// it sees (1), how much the fog may hide (1), the water's height (1,
+    /// far below when none), and whether the course is themed (1).
     pub fn view(&self) -> Vec<f32> {
         let Some(c) = &self.camera else {
-            return vec![0.0; 21];
+            return vec![0.0; VIEW_LEN];
         };
         let mut v = c.matrix().to_vec();
         v.extend([
@@ -1317,6 +1419,17 @@ impl Game {
             self.tick as f32 / 64.0,
             self.me.body.velocity.length(),
         ]);
+        match &self.course.theme {
+            Some(t) => {
+                let (fog, far) = t.fog_at(c.eye.z);
+                v.extend(fog);
+                v.extend([far, 1.0, t.water.unwrap_or(-1.0e9), 1.0]);
+            }
+            None => {
+                v.extend(GYM_HAZE);
+                v.extend([GYM_FOG_FAR, 0.85, -1.0e9, 0.0]);
+            }
+        }
         v
     }
 
@@ -1340,7 +1453,10 @@ impl Game {
                         yaw,
                         lean,
                         l.shown.body.ducked,
-                        &Look::from_seed(p.seed),
+                        &Look {
+                            scuba: p.scuba,
+                            ..Look::from_seed(p.seed)
+                        },
                         false,
                     );
                     held_on_kid(&mut out, o, yaw, &p.held, false);
@@ -1360,7 +1476,12 @@ impl Game {
                 yaw,
                 lean_of(g.surfer.last_cmd),
                 g.surfer.body.ducked,
-                &Look::from_seed(g.run.seed),
+                // your own ghost wears what you wear now
+                &if g.mine {
+                    self.my_look()
+                } else {
+                    Look::from_seed(g.run.seed)
+                },
                 true,
             );
         }
@@ -1392,6 +1513,7 @@ impl Game {
             bob + self.bob_phase,
             look.skin,
             look.shirt,
+            self.pose(),
         );
         out
     }
@@ -1565,7 +1687,8 @@ impl Game {
             "settings": {"name": s.name, "sens": format!("{:.2}", s.sens), "fov": s.fov as u32,
                 "live": s.live, "ghosts": s.ghosts, "own_ghost": s.own_ghost, "volume": s.volume,
                 "volume_pct": (s.volume * 100.0).round() as u32, "seed": s.seed,
-                "shirt": hex(Look::from_seed(s.seed).shirt)},
+                "shirt": hex(Look::from_seed(s.seed).shirt),
+                "scuba": self.my_look().scuba, "scuba_earned": self.scuba_earned()},
             "backup": self.backup_note.as_ref().map(|(k, a)| json!({"key": k, "args": a})),
         })
         .to_string()
@@ -1629,6 +1752,10 @@ fn hex(c: [f32; 3]) -> String {
 
 fn squeak_sound(h: Held) -> &'static str {
     match h {
+        Held::Goldfish | Held::Squishmallow => "squeak",
+        Held::Eel => "swish",
+        Held::Pufferfish => "boing",
+        Held::Balisong => "clack",
         Held::Prayer => "clap",
         Held::Noodle => "noodle",
         Held::Kickball => "boing",
@@ -1740,13 +1867,25 @@ fn held_on_kid(out: &mut Vec<f32>, origin: V3, yaw: f32, id: &str, ghost: bool) 
 /// The numbers the page needs to lay out what the core returns: the vertex
 /// layout, the action bits, and the material numbers the shader paints. The
 /// page holds none of these itself.
+/// An inspect's length in ticks (2.5 s), how long F is held before an
+/// inspect turns into a juggle, and how rare the rare trick is.
+pub const INSPECT_TICKS: u32 = 160;
+pub const JUGGLE_AFTER: u32 = 24;
+pub const RARE_EVERY: u64 = 20;
+
+/// How many numbers `view` returns.
+pub const VIEW_LEN: usize = 28;
+/// The gym's haze, and how far into it you see.
+const GYM_HAZE: [f32; 3] = [0.86, 0.88, 0.90];
+const GYM_FOG_FAR: f32 = 44500.0;
+
 pub fn numbers() -> String {
     use crate::mesh::*;
     json!({
         "floats_per_vertex": FLOATS_PER_VERTEX,
         "stride": FLOATS_PER_VERTEX * 4,
         "attributes": [["aPos", 3, 0], ["aNormal", 3, 12], ["aColor", 3, 24], ["aMat", 1, 36]],
-        "view": {"matrix": [0, 16], "eye": [16, 19], "time": 19, "speed": 20},
+        "view": {"matrix": [0, 16], "eye": [16, 19], "time": 19, "speed": 20, "fog": [21, 24], "fog_far": 24, "fog_max": 25, "water": 26, "themed": 27},
         "actions": {
             "forward": B_FORWARD, "back": B_BACK, "left": B_LEFT, "right": B_RIGHT,
             "jump": B_JUMP, "duck": B_DUCK, "use": B_USE, "reset": crate::movement::B_RESET,
@@ -1806,7 +1945,8 @@ mod tests {
         assert!(g.me.body.on_ground);
         assert!(g.tick > 100);
         let v = g.view();
-        assert_eq!(v.len(), 21);
+        assert_eq!(v.len(), VIEW_LEN);
+        assert_eq!(&v[21..24], &GYM_HAZE, "the gym's haze");
         let hud: Value = serde_json::from_str(&g.hud()).unwrap();
         assert_eq!(hud["running"], false);
         let s: Value = serde_json::from_str(&g.screen()).unwrap();
@@ -1947,6 +2087,67 @@ mod tests {
         );
     }
 
+    /// Whether a drawing holds the scuba helmet's brass (or a ghost's pale
+    /// brass).
+    fn wears_brass(v: &[f32]) -> bool {
+        let brass = [
+            [0.86f32, 0.66, 0.26],
+            [0.86 * 0.6 + 0.4, 0.66 * 0.6 + 0.4, 0.26 * 0.6 + 0.4],
+        ];
+        v.chunks(FLOATS_PER_VERTEX).any(|c| {
+            brass
+                .iter()
+                .any(|b| (0..3).all(|k| (c[6 + k] - b[k]).abs() < 1e-4))
+        })
+    }
+
+    #[test]
+    fn finishing_100_leagues_earns_the_scuba_gear_and_the_room_and_your_ghost_see_it() {
+        let id = "surf_100_leagues";
+        let bytes = map_bytes(id);
+        let mut a = game();
+        let mut b = game();
+        a.load_map(id, bytes).unwrap();
+        b.load_map(id, bytes).unwrap();
+        a.set_setting("scuba", 1.0);
+        assert!(!a.my_look().scuba, "not worn before it is earned");
+        let s: Value = serde_json::from_str(&a.screen()).unwrap();
+        assert_eq!(s["settings"]["scuba_earned"], false);
+        finish_in(&mut a, 64 * 200);
+        assert!(a.scuba_earned(), "finishing the course earns it");
+        assert!(a.my_look().scuba, "and it is worn, as chosen");
+        // your ghost wears it
+        a.rebuild_ghosts();
+        assert!(a.ghosts.iter().any(|g| g.mine), "your best is your ghost");
+        a.play();
+        a.advance(0.0, 0, 0.0, 0.0);
+        assert!(wears_brass(&a.others().0), "your ghost wears the helmet");
+        // and someone in your room sees it on you
+        a.host_online(42.0);
+        b.join_online(&a.room_code());
+        b.play();
+        b.net_peer("a", true);
+        a.net_peer("b", false);
+        let mut t = 0.0;
+        for _ in 0..80 {
+            t += 1000.0 / 64.0;
+            a.advance(t, B_FORWARD as u32, 0.0, 0.0);
+            b.advance(t, 0, 0.0, 0.0);
+            let out_a: Value = serde_json::from_str(&a.net_outbox()).unwrap();
+            for m in out_a.as_array().unwrap() {
+                b.net_message("a", m[1].as_str().unwrap());
+            }
+            let out_b: Value = serde_json::from_str(&b.net_outbox()).unwrap();
+            for m in out_b.as_array().unwrap() {
+                a.net_message("b", m[1].as_str().unwrap());
+            }
+        }
+        assert!(b.room.as_ref().unwrap().peers[0].scuba, "a's hello says so");
+        b.set_setting("ghosts", 0.0);
+        assert!(wears_brass(&b.others().0), "b draws a in the scuba gear");
+        assert!(!wears_brass(&a.hands()), "your own view shows no helmet");
+    }
+
     #[test]
     fn what_is_kept_comes_back() {
         let mut g = game();
@@ -2074,6 +2275,7 @@ mod tests {
             "bhop_lego" => include_bytes!("../../../data/maps/bhop_lego.bin"),
             "surf_beginner" => include_bytes!("../../../data/maps/surf_beginner.bin"),
             "surf_summit" => include_bytes!("../../../data/maps/surf_summit.bin"),
+            "surf_100_leagues" => include_bytes!("../../../data/maps/surf_100_leagues.bin"),
             "bhop_japan" => include_bytes!("../../../data/maps/bhop_japan.bin"),
             "bhop_cartoons" => include_bytes!("../../../data/maps/bhop_cartoons.bin"),
             _ => UTOPIA,

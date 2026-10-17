@@ -115,6 +115,7 @@ input {
 .tier.t5 { background: #ff9d4d; }
 .tier.t7 { background: #ff6b6b; }
 .tier.bhop { background: #7cc4ff; }
+.tier.themed { background: #ff9ec7; }
 .map-tab .tier { font-size: 0.85rem; padding: 0.1rem 0.7rem; }
 .map-card .tier { color: #10141c; }
 .map-card .band { font-size: 0.68rem; }

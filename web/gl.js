@@ -41,8 +41,10 @@ export function makeRenderer(canvas, N, shaders, display) {
   const uEye = gl.getUniformLocation(program, "uEye");
   const uTime = gl.getUniformLocation(program, "uTime");
   const uPass = gl.getUniformLocation(program, "uPass");
-  const [hr, hg, hb] = display.haze;
-  gl.clearColor(hr, hg, hb, 1);
+  const uFog = gl.getUniformLocation(program, "uFog");
+  const uFogFar = gl.getUniformLocation(program, "uFogFar");
+  const uFogMax = gl.getUniformLocation(program, "uFogMax");
+  const uWater = gl.getUniformLocation(program, "uWater");
 
   const world = gl.createBuffer();
   const others = gl.createBuffer();
@@ -90,7 +92,15 @@ export function makeRenderer(canvas, N, shaders, display) {
       gl.bufferData(gl.ARRAY_BUFFER, handsVertices, gl.STREAM_DRAW);
       handsCount = handsVertices.length / N.floats_per_vertex;
 
+      // the canvas clears to the fog the core says the eye is in
+      const fog = view.subarray(...N.view.fog);
+      const [fr, fg, fb] = fog;
+      gl.clearColor(fr, fg, fb, 1);
       gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+      gl.uniform3fv(uFog, fog);
+      gl.uniform1f(uFogFar, view[N.view.fog_far]);
+      gl.uniform1f(uFogMax, view[N.view.fog_max]);
+      gl.uniform1f(uWater, view[N.view.water]);
       gl.uniformMatrix4fv(uVP, false, view.subarray(...N.view.matrix));
       gl.uniform3fv(uEye, view.subarray(...N.view.eye));
       gl.uniform1f(uTime, view[N.view.time]);

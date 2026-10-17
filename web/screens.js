@@ -90,6 +90,8 @@ export function makeScreens(copy) {
     el("s-live").checked = st.live;
     el("s-ghosts").checked = st.ghosts;
     el("s-own-ghost").checked = st.own_ghost;
+    el("s-scuba").checked = st.scuba;
+    el("s-scuba").disabled = !st.scuba_earned;
     el("s-shirt").style.background = st.shirt;
     // what the last times file did
     el("s-backup-note").textContent = s.backup ? fill(copy[s.backup.key], s.backup.args) : "";

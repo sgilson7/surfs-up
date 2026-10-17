@@ -31,8 +31,9 @@ pub const PROTOCOL: u32 = 2;
 /// 1: the first version. 2: teleports keep velocity, two air sub-steps a
 /// tick, no slow-rise air cut, CS2's snag offset (PLAN.md P10). 3: CS:S's
 /// ducked hull (45), triggers reach under the feet only to the ground, and
-/// delayed renames queue and land on the tick at or after their time.
-pub const PHYSICS: u32 = 3;
+/// delayed renames queue and land on the tick at or after their time. 4: a
+/// push upward lifts a stander off the ground (Source's CTriggerPush).
+pub const PHYSICS: u32 = 4;
 /// The room holds eight surfers: you and seven others.
 pub const MAX_PEERS: usize = 7;
 /// Inputs go out every this many ticks.
@@ -210,6 +211,8 @@ pub struct Peer {
     pub name: String,
     pub seed: u32,
     pub held: String,
+    /// Wearing the scuba gear (as their hello says).
+    pub scuba: bool,
     pub host: bool,
     /// The course they are on.
     pub map: String,
@@ -317,6 +320,7 @@ impl Peer {
             name: "Surfer".into(),
             seed: 0,
             held: "prayer".into(),
+            scuba: false,
             host,
             map: String::new(),
             live: None,

@@ -122,3 +122,17 @@ Checks: `tests/browser/online.py` in chromium PASSED locally (the eight-browser 
 ## Eighteenth request (15 October 2026): summer's stage doors carry your speed
 
 "summer needs you to be able to transfer your momentum through door" (the stage doors). Summer's doors into the next stage now turn your speed to face the new stage, as Momentum Mod's "redirect" teleport mode does (`redirect_doors` in maps.json, row 118); plain Source and Momentum's default keep the velocity as it was, which sent you on backwards out of stage 1's door. Falls are unchanged.
+
+## Nineteenth request (16 October 2026): surf_100_leagues, the first themed course
+
+"ok, just put in the filled in prompt, please create the map and then deploy it to live for me to test." Sami's brief (the design log's "Your first map" tab) is kept word for word in `briefs/surf_100_leagues.md`, with the defaults chosen for what it left open.
+
+- **The course** is built by hand, not read from a BSP: `tools/coursekit.py` (the piece kit), `tools/themes/surf_100_leagues.py` (the course: beach, dunes, reef, turtle, second reef, drop, anglerfish, speedy ramp, oil-platform b-hops, a vent chimney, shark, container ship, whale, fishing line, boat), `tools/themes/sealife.py` (creatures of blobs) and `tools/make_course.py` (writes `data/maps/surf_100_leagues.bin` and its maps.json entry). Map format v4 carries scenery blobs (row 119). Falls stop you on the last buoy (`fall_reset`). Bent ridges ride clean (row 120).
+- **Its look** comes from a `theme` in maps.json: palette, water, fog by depth (row 122). The sixteen original courses keep the gym.
+- **Physics 4:** an upward push lifts a stander off the ground, as Source does (row 121); it touches bhop_lego's, bhop_japan's and surf_aircontrol's pushes too.
+- **Five things** with a fishing-line inspect (F) and a juggle (hold F); every other thing inspects and juggles too (row 123). **The scuba gear** is earned by finishing and seen by the room and on your ghost (row 124). A **Themed** tab leads the title (row 125).
+- **The themed-map skill** is in `.claude/skills/themed-map/` for the next brief.
+
+Not checked by a person: how it surfs with a mouse, and whether the medal times are fair (row 126).
+
+`BUILDER_ONLINE=0 ./scripts/check.sh` (17 October 2026): BUILDER CHECK PASSED: format, clippy, every Rust test (the kept runs, surf_100_leagues' included), the surface sweep on all seventeen courses, the WebAssembly build and audit, and the browser check in chromium, firefox and webkit (five tabs, seventeen courses, eighty-six things).

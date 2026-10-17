@@ -148,6 +148,10 @@ impl Game {
         self.inner.next_held()
     }
 
+    pub fn inspect(&mut self, down: bool) {
+        self.inner.inspect(down)
+    }
+
     pub fn watch(&mut self) -> bool {
         self.inner.watch()
     }

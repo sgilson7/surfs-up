@@ -313,12 +313,31 @@ fn grid(m: &Map) -> Grid {
             .collect();
         hs.into_iter().map(|h| h.join().unwrap()).collect()
     });
-    Grid {
-        lo,
-        g,
-        n,
-        open: layers.concat(),
+    let mut open = layers.concat();
+    // a push upward (surf_100_leagues' vents) climbs with no ground under
+    // you: inside it, and above it as far as its blast can carry you
+    // (sv_maxvelocity 3500 rises 3500^2 / (2 * 800) units)
+    for t in &m.triggers {
+        let TriggerKind::Push(dir, _) = t.kind else {
+            continue;
+        };
+        if dir.z < 0.5 {
+            continue;
+        }
+        let top = t.maxs.z + 3500.0 * 3500.0 / 1600.0;
+        let cell = |v: f32, o: f32, k: usize| (((v - o) / g).floor().max(0.0) as usize).min(k - 1);
+        for z in cell(t.mins.z, lo.z, n[2])..=cell(top, lo.z, n[2]) {
+            for y in cell(t.mins.y, lo.y, n[1])..=cell(t.maxs.y, lo.y, n[1]) {
+                for x in cell(t.mins.x, lo.x, n[0])..=cell(t.maxs.x, lo.x, n[0]) {
+                    let i = (z * n[1] + y) * n[0] + x;
+                    if open[i] & 1 != 0 {
+                        open[i] |= 16;
+                    }
+                }
+            }
+        }
     }
+    Grid { lo, g, n, open }
 }
 
 /// The goals of each stage, and the triggers that end a try on it.

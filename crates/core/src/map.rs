@@ -76,6 +76,24 @@ pub struct Trigger {
     pub maxs: V3,
 }
 
+/// Scenery drawn and never collided with: an ellipsoid (a themed course's
+/// creatures, coral and bubbles are made of them), coloured by its palette
+/// role in the course's theme.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Blob {
+    pub role: u8,
+    pub glow: bool,
+    pub clear: bool,
+    pub centre: V3,
+    pub radii: V3,
+    /// yaw, pitch, roll in degrees
+    pub angles: V3,
+}
+
+/// A themed course's face is coloured by palette role `hint - HINT_THEME`
+/// (tools/coursekit.py writes them).
+pub const HINT_THEME: u8 = 64;
+
 pub const HINT_GLASS: u8 = 1;
 pub const HINT_LIGHT: u8 = 2;
 pub const HINT_BLACK: u8 = 3;
@@ -207,6 +225,8 @@ pub struct Map {
     pub names: Vec<String>,
     /// Teleport destinations: name, position, yaw.
     pub destinations: Vec<(u16, V3, f32)>,
+    /// Scenery (map format v4, a hand-built course's).
+    pub blobs: Vec<Blob>,
     /// Where a surfer starts (the course chooses the destination).
     pub spawn: V3,
     pub spawn_yaw: f32,
@@ -343,8 +363,8 @@ impl Map {
             return Err("not a Surfs Up! map".into());
         }
         let version = r.u32()?;
-        if version != 2 && version != 3 {
-            return Err(format!("map version {version} is not 2 or 3"));
+        if !(2..=4).contains(&version) {
+            return Err(format!("map version {version} is not 2, 3 or 4"));
         }
         let nb = r.u32()? as usize;
         let mut brushes = Vec::with_capacity(nb);
@@ -445,7 +465,27 @@ impl Map {
                 terrain_wedges(&grid, n, face, &mut brushes);
             }
         }
+        let mut blobs = Vec::new();
+        if version >= 4 {
+            let nb = r.u32()? as usize;
+            for _ in 0..nb {
+                let role = r.u8()?;
+                let flags = r.u8()?;
+                let centre = v3(r.f32()?, r.f32()?, r.f32()?);
+                let radii = v3(r.f32()?, r.f32()?, r.f32()?);
+                let angles = v3(r.f32()?, r.f32()?, r.f32()?);
+                blobs.push(Blob {
+                    role,
+                    glow: flags & 1 != 0,
+                    clear: flags & 2 != 0,
+                    centre,
+                    radii,
+                    angles,
+                });
+            }
+        }
         let mut map = Map::build(brushes, triggers, names, destinations);
+        map.blobs = blobs;
         if let Some((p, yaw)) = map.destination_named("start") {
             map.spawn = p;
             map.spawn_yaw = yaw;
@@ -481,6 +521,7 @@ impl Map {
             triggers,
             names,
             destinations,
+            blobs: Vec::new(),
             spawn: V3::default(),
             spawn_yaw: 0.0,
             mins,

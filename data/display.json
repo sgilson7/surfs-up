@@ -1,10 +1,5 @@
 {
- "_about": "Numbers the page uses to present, none of them game rules: the haze colour the gym fades into (and the canvas clears to), the shader pass number for the hands, how often the page writes what is kept to browser storage (in frames), and, after Raiders of the Lost Mart, how a machine without a graphics card draws: a renderer whose name contains one of `software` is a CPU drawing in place of a GPU (CI runners, some school machines), and there the canvas is drawn at `software_scale` of its size.",
- "haze": [
-  0.86,
-  0.88,
-  0.9
- ],
+ "_about": "Numbers the page uses to present, none of them game rules: the shader pass number for the hands, how often the page writes what is kept to browser storage (in frames), and, after Raiders of the Lost Mart, how a machine without a graphics card draws: a renderer whose name contains one of `software` is a CPU drawing in place of a GPU (CI runners, some school machines), and there the canvas is drawn at `software_scale` of its size.",
  "hands_pass": 2,
  "save_every": 120,
  "software": [

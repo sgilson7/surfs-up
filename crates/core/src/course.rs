@@ -56,6 +56,75 @@ pub struct Medals {
     pub bronze: u32,
 }
 
+/// A themed course's look (maps.json `theme`): the colour of each palette
+/// role its faces and scenery name, the water's surface, and the fog the
+/// eye sees by its height (stops from high to low: height, colour, and how
+/// far you see).
+#[derive(Clone, Debug, PartialEq)]
+pub struct Theme {
+    pub palette: Vec<[f32; 3]>,
+    pub water: Option<f32>,
+    pub fog: Vec<(f32, [f32; 3], f32)>,
+}
+
+impl Theme {
+    pub fn colour(&self, role: usize) -> [f32; 3] {
+        self.palette.get(role).copied().unwrap_or([1.0, 0.0, 1.0])
+    }
+
+    /// The fog colour and how far the eye sees, at eye height `z`: between
+    /// two stops, part of each.
+    pub fn fog_at(&self, z: f32) -> ([f32; 3], f32) {
+        let Some(first) = self.fog.first() else {
+            return ([0.86, 0.88, 0.90], 44500.0);
+        };
+        if z >= first.0 {
+            return (first.1, first.2);
+        }
+        for w in self.fog.windows(2) {
+            let (hi, lo) = (&w[0], &w[1]);
+            if z >= lo.0 {
+                let t = (hi.0 - z) / (hi.0 - lo.0).max(1e-3);
+                let c = [0, 1, 2].map(|k| hi.1[k] + (lo.1[k] - hi.1[k]) * t);
+                return (c, hi.2 + (lo.2 - hi.2) * t);
+            }
+        }
+        let last = self.fog.last().unwrap();
+        (last.1, last.2)
+    }
+}
+
+fn colour_of(v: &Value) -> Result<[f32; 3], String> {
+    let s = v.as_str().ok_or("a colour is \"#rrggbb\"")?;
+    let h = s.trim_start_matches('#');
+    let n = u32::from_str_radix(h, 16).map_err(|_| format!("not a colour: {s}"))?;
+    if h.len() != 6 {
+        return Err(format!("not a colour: {s}"));
+    }
+    Ok([(n >> 16) & 255, (n >> 8) & 255, n & 255].map(|c| c as f32 / 255.0))
+}
+
+fn theme_of(v: &Value) -> Result<Option<Theme>, String> {
+    if v.is_null() {
+        return Ok(None);
+    }
+    let mut palette = Vec::new();
+    for r in v["palette"].as_array().map(|a| a.as_slice()).unwrap_or(&[]) {
+        palette.push(colour_of(&r[1])?);
+    }
+    let mut fog = Vec::new();
+    for f in v["fog"].as_array().map(|a| a.as_slice()).unwrap_or(&[]) {
+        let z = f[0].as_f64().ok_or("a fog stop's height")? as f32;
+        let far = f[2].as_f64().ok_or("a fog stop's distance")? as f32;
+        fog.push((z, colour_of(&f[1])?, far));
+    }
+    Ok(Some(Theme {
+        palette,
+        water: v["water"].as_f64().map(|w| w as f32),
+        fog,
+    }))
+}
+
 #[derive(Clone, Debug)]
 pub struct Course {
     pub id: String,
@@ -88,6 +157,13 @@ pub struct Course {
     /// A finish that is a timer zone rather than a teleport (a box the clock
     /// stops in), as staged maps built for a timer plugin mark their end.
     pub finish_zone: Option<Zone>,
+    /// A fall (a teleport that starts no stage) stops you where it puts
+    /// you, as Momentum Mod's "reset" teleport mode does (TELEPORT_RESET,
+    /// mom_triggers.cpp): a linear course's drop-in points, where the speed
+    /// you fell with would throw you off again.
+    pub fall_reset: bool,
+    /// A themed course's own look; the gym's when none.
+    pub theme: Option<Theme>,
 }
 
 /// What each place in a course's `things` asks: finish it, the three medal
@@ -175,6 +251,9 @@ pub struct Listed {
     pub tier: u8,
     /// "surf", or "bhop" for a bunnyhop course.
     pub mode: String,
+    /// Made for Surfs Up! from a brief, with its own theme (not a map
+    /// rebuilt from a server's): these have their own tab.
+    pub themed: bool,
 }
 
 impl Listed {
@@ -194,6 +273,9 @@ impl Listed {
     /// have their own (where beginners start), every harder surf course is
     /// "advanced", and bunnyhop courses are kept apart whatever their tier.
     pub fn group(&self) -> &'static str {
+        if self.themed {
+            return "themed";
+        }
         if self.mode == "bhop" {
             return "bhop";
         }
@@ -223,8 +305,8 @@ impl Listed {
     }
 }
 
-/// The title's tabs, in the order shown.
-pub const GROUPS: [&str; 4] = ["tier1", "tier2", "advanced", "bhop"];
+/// The title's tabs, in the order shown: the themed courses first.
+pub const GROUPS: [&str; 5] = ["themed", "tier1", "tier2", "advanced", "bhop"];
 
 /// The colour a tab's tier mark is in: its tier's, the middle of the
 /// harder ones for advanced, and bhop's own.
@@ -233,6 +315,7 @@ pub fn group_shade(group: &str) -> &'static str {
         "tier1" => "t1",
         "tier2" => "t2",
         "advanced" => "t5",
+        "themed" => "themed",
         _ => "bhop",
     }
 }
@@ -251,6 +334,7 @@ pub fn listed(maps_json: &str) -> Result<Vec<Listed>, String> {
                 author: s("author"),
                 tier: m["tier"].as_u64().unwrap_or(0).min(255) as u8,
                 mode: m["mode"].as_str().unwrap_or("surf").to_string(),
+                themed: !m["theme"].is_null(),
             }
         })
         .collect())
@@ -276,6 +360,8 @@ impl Course {
             things: Vec::new(),
             fall_damage: false,
             finish_zone: None,
+            fall_reset: false,
+            theme: None,
             medals: Medals {
                 record: never,
                 gold: never,
@@ -361,6 +447,8 @@ impl Course {
                 let (lo, hi) = box_of(&m["finish_zone"])?;
                 Some(Zone { mins: lo, maxs: hi })
             },
+            fall_reset: m["fall_reset"].as_bool().unwrap_or(false),
+            theme: theme_of(&m["theme"])?,
         })
     }
 
@@ -417,6 +505,7 @@ pub mod tests {
             "bhop_lego" => include_bytes!("../../../data/maps/bhop_lego.bin"),
             "surf_beginner" => include_bytes!("../../../data/maps/surf_beginner.bin"),
             "surf_summit" => include_bytes!("../../../data/maps/surf_summit.bin"),
+            "surf_100_leagues" => include_bytes!("../../../data/maps/surf_100_leagues.bin"),
             "bhop_japan" => include_bytes!("../../../data/maps/bhop_japan.bin"),
             "bhop_cartoons" => include_bytes!("../../../data/maps/bhop_cartoons.bin"),
             _ => include_bytes!("../../../data/maps/surf_utopia.bin"),
